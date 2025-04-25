@@ -14,6 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Create tasks directory
+RUN mkdir -p app/tasks
+
 # Expose port
 EXPOSE 8000
 

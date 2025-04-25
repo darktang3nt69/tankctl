@@ -9,18 +9,22 @@ from app.core.config import settings
 
 celery_app = Celery(
     "tankctl",
-    broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
-    backend=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
-    include=["app.tasks.commands", "app.tasks.notifications"]
+    broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0",
+    backend=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/1",
+    include=["app.tasks.commands"]
 )
 
-# Celery configuration
+# Optional configuration
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+)
+
+# Celery configuration
+celery_app.conf.update(
     task_track_started=True,
     task_time_limit=300,  # 5 minutes
     task_soft_time_limit=240,  # 4 minutes

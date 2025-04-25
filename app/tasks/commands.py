@@ -4,7 +4,7 @@ Command tasks for TankCTL.
 This module contains Celery tasks for handling tank commands with retry logic.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 from celery import shared_task
 from sqlalchemy.orm import Session
@@ -69,34 +69,22 @@ def process_command(self, command_id: int) -> None:
     finally:
         db.close()
 
-@shared_task(queue="commands")
-def schedule_command(tank_id: int, command: str, parameters: Optional[dict] = None) -> int:
-    """
-    Schedule a new command for a tank.
-    
-    Args:
-        tank_id: The ID of the tank
-        command: The command type
-        parameters: Optional command parameters
-        
-    Returns:
-        The ID of the created command
-    """
-    db: Session = next(get_db())
+@shared_task
+def schedule_command(tank_id: int, command: str, parameters: dict = None) -> int:
+    """Schedule a command for a tank."""
+    db = next(get_db())
     try:
         # Create new command
         new_command = Command(
             tank_id=tank_id,
             command=command,
-            parameters=parameters or {}
+            parameters=parameters,
+            created_at=datetime.now(UTC),
+            acknowledged=False
         )
         db.add(new_command)
         db.commit()
         db.refresh(new_command)
-        
-        # Start processing task
-        process_command.delay(new_command.id)
-        
         return new_command.id
     finally:
         db.close() 

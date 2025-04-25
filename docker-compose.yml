@@ -1,14 +1,10 @@
-version: '3.8'
-
 services:
   app:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+    env_file:
+      - .env
     depends_on:
       - db
       - redis
@@ -19,10 +15,8 @@ services:
   celery_worker:
     build: .
     command: celery -A app.core.celery worker --loglevel=info -Q commands,notifications
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+    env_file:
+      - .env
     depends_on:
       - app
       - redis
@@ -32,10 +26,8 @@ services:
   celery_beat:
     build: .
     command: celery -A app.core.celery beat --loglevel=info
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+    env_file:
+      - .env
     depends_on:
       - app
       - redis
@@ -44,12 +36,11 @@ services:
 
   flower:
     build: .
-    command: celery -A app.core.celery flower --port=5555
+    command: celery -A app.core.celery flower --port=5555 --basic_auth=admin:admin --unauthenticated_api=true
     ports:
       - "5555:5555"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+    env_file:
+      - .env
     depends_on:
       - redis
 

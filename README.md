@@ -130,4 +130,26 @@ MIT License © 2024 [Your Name or Org]
 ## 🤝 Contribute
 
 Pull requests and issues are welcome!  
-Want to collaborate on the firmware or build a plug-n-play enclosure? Let’s make it happen.
+Want to collaborate on the firmware or build a plug-n-play enclosure? Let's make it happen.
+
+## Environment Variables
+
+The following environment variables are required for the application to function:
+
+```env
+# Database
+DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# Security
+SECRET_KEY=your-secret-key-here
+PRE_SHARED_KEY=your-pre-shared-key-here
+JWT_SECRET_KEY=your-jwt-secret-key-here
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
+```
+
+Create a `.env` file in the project root with these variables set to appropriate values.

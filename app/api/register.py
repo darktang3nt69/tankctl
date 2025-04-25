@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import Tank
 from app.core.auth import create_access_token
+from app.core.settings import settings
 from pydantic import BaseModel
 from datetime import datetime, UTC
 
@@ -18,7 +19,7 @@ def register_tank(
     db: Session = Depends(get_db)
 ):
     # Verify pre-shared key
-    if registration.key != "your-secret-key":  # TODO: Move to settings
+    if registration.key != settings.PRE_SHARED_KEY:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid registration key"
@@ -32,18 +33,19 @@ def register_tank(
             detail="Tank name already registered"
         )
     
-    # Create new tank
+    # Create JWT token first
+    token = create_access_token({"sub": registration.name})
+    
+    # Create new tank with token
     new_tank = Tank(
         name=registration.name,
+        token=token,
         last_seen=datetime.now(UTC),
         is_active=True
     )
     db.add(new_tank)
     db.commit()
     db.refresh(new_tank)
-    
-    # Create JWT token
-    token = create_access_token({"sub": new_tank.id})
     
     return {
         "message": "Tank registered successfully",

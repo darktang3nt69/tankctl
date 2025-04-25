@@ -49,22 +49,22 @@ def get_all_statuses(
         .all()
     return statuses
 
-@router.get("/status/{tank_id}", response_model=List[TankStatusResponse])
+@router.get("/status/{tank_name}", response_model=List[TankStatusResponse])
 def get_tank_status(
-    tank_id: int,
+    tank_name: str,
     limit: Optional[int] = 100,
     tank: Tank = Depends(get_current_tank),
     db: Session = Depends(get_db)
 ):
-    # Verify tank_id matches authenticated tank
-    if tank.id != tank_id:
+    # Verify tank_name matches authenticated tank
+    if tank.name != tank_name:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this tank's status"
         )
     
     statuses = db.query(TankStatus)\
-        .filter(TankStatus.tank_id == tank_id)\
+        .filter(TankStatus.tank_id == tank.id)\
         .order_by(TankStatus.timestamp.desc())\
         .limit(limit)\
         .all()
