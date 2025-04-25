@@ -1,0 +1,52 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.db.models import Tank
+from app.core.auth import create_access_token
+from pydantic import BaseModel
+from datetime import datetime, UTC
+
+router = APIRouter()
+
+class TankRegistration(BaseModel):
+    name: str
+    key: str  # Pre-shared key for registration
+
+@router.post("/register")
+def register_tank(
+    registration: TankRegistration,
+    db: Session = Depends(get_db)
+):
+    # Verify pre-shared key
+    if registration.key != "your-secret-key":  # TODO: Move to settings
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid registration key"
+        )
+    
+    # Check if tank name is already taken
+    existing_tank = db.query(Tank).filter(Tank.name == registration.name).first()
+    if existing_tank:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tank name already registered"
+        )
+    
+    # Create new tank
+    new_tank = Tank(
+        name=registration.name,
+        last_seen=datetime.now(UTC),
+        is_active=True
+    )
+    db.add(new_tank)
+    db.commit()
+    db.refresh(new_tank)
+    
+    # Create JWT token
+    token = create_access_token({"sub": new_tank.id})
+    
+    return {
+        "message": "Tank registered successfully",
+        "tank_id": new_tank.id,
+        "token": token
+    }

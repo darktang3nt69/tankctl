@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build: .
+    command: celery -A app.core.celery worker --loglevel=info -Q commands,notifications
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - app
+      - redis
+    volumes:
+      - .:/app
+
+  celery_beat:
+    build: .
+    command: celery -A app.core.celery beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/tankctl
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - app
+      - redis
+    volumes:
+      - .:/app
+
+  flower:
+    build: .
+    command: celery -A app.core.celery flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=tankctl
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
