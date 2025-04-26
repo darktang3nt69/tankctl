@@ -14,7 +14,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@tankctl_db:5432/tankctl
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl
       - REDIS_HOST=tankctl_redis
       - REDIS_PORT=6379
       - REDIS_DB=0
@@ -35,7 +35,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@tankctl_db:5432/tankctl
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl
       - REDIS_HOST=tankctl_redis
       - REDIS_PORT=6379
       - REDIS_DB=0
@@ -55,7 +55,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@tankctl_db:5432/tankctl
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl
       - REDIS_HOST=tankctl_redis
       - REDIS_PORT=6379
       - REDIS_DB=0
@@ -106,13 +106,16 @@ services:
     <<: *common-settings
     container_name: tankctl_redis
     image: redis:7
-    command: redis-server --appendonly yes
+    command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
       - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=tankctl_redis_password
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "tankctl_redis_password", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5

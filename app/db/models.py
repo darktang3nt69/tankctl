@@ -17,12 +17,20 @@ Best Practices:
 - Include timestamps for auditing
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, Boolean, Index
+from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, Boolean, Index, Enum as SQLEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from enum import Enum
+
+class CommandStatus(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    TIMED_OUT = "timed_out"
 
 class Tank(Base):
     """
@@ -96,9 +104,13 @@ class Command(Base):
         command: Command type
         parameters: Command parameters
         created_at: Command creation timestamp
+        status: Current status of the command
         acknowledged: Whether command was acknowledged
         ack_time: Acknowledgment timestamp
         retry_count: Number of retry attempts
+        last_retry: Last retry timestamp
+        error_message: Last error message if any
+        timeout: Command timeout in seconds
     """
     __tablename__ = "commands"
 
@@ -107,9 +119,13 @@ class Command(Base):
     command = Column(String(50), nullable=False)
     parameters = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    status = Column(SQLEnum(CommandStatus), default=CommandStatus.PENDING, nullable=False)
     acknowledged = Column(Boolean, default=False, nullable=False)
     ack_time = Column(DateTime(timezone=True))
     retry_count = Column(Integer, default=0, nullable=False)
+    last_retry = Column(DateTime(timezone=True))
+    error_message = Column(String(500))
+    timeout = Column(Integer, default=300)  # Default 5 minutes timeout
     
     # Relationships
     tank = relationship("Tank", back_populates="commands")
@@ -117,6 +133,7 @@ class Command(Base):
     # Indexes
     __table_args__ = (
         Index('ix_commands_tank_acknowledged', 'tank_id', 'acknowledged'),
+        Index('ix_commands_status', 'status'),
     )
 
     def __repr__(self) -> str:
@@ -182,7 +199,7 @@ class EventLog(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<EventLog {self.id} for Tank {self.tank_id}>"
+        return f"<EventLog {self.id} for Tank {self.tank_id}>" 
 
 class Metric(Base):
     """

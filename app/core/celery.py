@@ -14,7 +14,7 @@ if settings.REDIS_PASSWORD:
 celery_app = Celery(
     "tankctl",
     broker=redis_url,
-    backend="db+postgresql://postgres:postgres@tankctl_db:5432/tankctl",
+    backend="db+postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl",
     include=["app.tasks.commands", "app.tasks.notifications"]
 )
 

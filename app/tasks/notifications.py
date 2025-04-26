@@ -4,9 +4,14 @@ Notification tasks for TankCTL.
 This module contains Celery tasks for sending notifications via Discord.
 """
 
-import httpx
+import asyncio
 from celery import shared_task
 from app.core.config import settings
+from app.utils.discord import discord_notifier
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.db.models import Tank, EventLog
 
 @shared_task(queue="notifications")
 def send_discord_notification(message: str) -> None:
@@ -20,19 +25,19 @@ def send_discord_notification(message: str) -> None:
         return
     
     try:
-        payload = {
-            "content": message,
-            "username": "TankCTL",
-            "avatar_url": "https://raw.githubusercontent.com/yourusername/tankctl/main/assets/logo.png"
-        }
-        
-        with httpx.Client() as client:
-            response = client.post(
-                settings.DISCORD_WEBHOOK_URL,
-                json=payload,
-                timeout=10.0
+        # Run the async notification in the event loop
+        loop = asyncio.get_event_loop()
+        success = loop.run_until_complete(
+            discord_notifier.send_alert(
+                title="TankCTL Notification",
+                description=message,
+                color=0x00FF00,  # Green for normal notifications
+                timestamp=datetime.utcnow()
             )
-            response.raise_for_status()
+        )
+        
+        if not success:
+            print("Failed to send Discord notification after retries")
             
     except Exception as e:
         # Log the error but don't retry - we don't want to spam notifications
@@ -43,11 +48,6 @@ def check_tank_health() -> None:
     """
     Check tank health and send notifications for offline tanks.
     """
-    from datetime import datetime, timedelta
-    from sqlalchemy.orm import Session
-    from app.db.session import get_db
-    from app.db.models import Tank, EventLog
-    
     db: Session = next(get_db())
     try:
         # Find tanks that haven't been seen in over 60 seconds
@@ -69,10 +69,14 @@ def check_tank_health() -> None:
             )
             db.add(event)
             
-            # Send notification
-            send_discord_notification.delay(
-                f"🚨 Tank {tank.name} (ID: {tank.id}) is offline! "
-                f"Last seen: {tank.last_seen.isoformat()}"
+            # Send notification using the async notifier
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(
+                discord_notifier.tank_offline(
+                    tank_name=tank.name,
+                    last_seen=tank.last_seen,
+                    timestamp=datetime.utcnow()
+                )
             )
         
         db.commit()

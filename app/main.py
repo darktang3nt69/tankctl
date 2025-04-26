@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from app.api import register, status, commands, config, tanks, schedules, events
 from app.core.config import settings
 from app.core.auth import get_current_tank
 from app.core.rate_limit import RateLimitMiddleware
-from app.db.init_db import init_db
+from app.db.init_db import init_db_async
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 import logging
@@ -34,14 +34,16 @@ logger = logging.getLogger(__name__)
 # Print settings for debugging
 logger.info(f"Settings loaded: PRE_SHARED_KEY={settings.PRE_SHARED_KEY}")
 
-# Initialize the database
-init_db()
-
 app = FastAPI(
     title="TankCTL - Aquarium Control API",
     description="A Kubernetes-Inspired Control Plane for Smart Aquariums",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the database on startup."""
+    await init_db_async()
 
 # Add rate limiting middleware
 app.add_middleware(RateLimitMiddleware)
@@ -93,13 +95,13 @@ def root():
         "documentation": "/docs"
     }
 
-@app.get("/health")
+@app.get("/api/v1/health")
 async def health_check():
     return {"status": "healthy"}
 
 @app.get("/metrics")
 async def metrics():
-    return get_metrics()
+    return Response(content=get_metrics(), media_type="text/plain")
 
 @app.on_event("startup")
 async def startup_event():
