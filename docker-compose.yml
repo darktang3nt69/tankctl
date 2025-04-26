@@ -1,5 +1,12 @@
+x-common-settings: &common-settings
+  labels:
+    - "com.centurylinklabs.watchtower.enable=false"
+
+
+
 services:
   app:
+    <<: *common-settings
     container_name: tankctl_app
     build: .
     ports:
@@ -12,13 +19,16 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - .:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery_worker:
+    <<: *common-settings
     container_name: tankctl_celery_worker
     build: .
     command: celery -A app.core.celery worker --loglevel=info -Q commands,notifications
@@ -30,12 +40,15 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
     depends_on:
-      - app
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - .:/app
 
   celery_beat:
+    <<: *common-settings
     container_name: tankctl_celery_beat
     build: .
     command: celery -A app.core.celery beat --loglevel=info
@@ -47,12 +60,15 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
     depends_on:
-      - app
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - .:/app
 
   flower:
+    <<: *common-settings
     container_name: tankctl_flower
     build: .
     command: celery -A app.core.celery flower --port=5555 --basic_auth=admin:admin --unauthenticated_api=true
@@ -65,9 +81,11 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
     depends_on:
-      - redis
+      redis:
+        condition: service_started
 
   db:
+    <<: *common-settings
     container_name: tankctl_db
     image: postgres:15
     environment:
@@ -78,17 +96,63 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
+    <<: *common-settings
     container_name: tankctl_redis
     image: redis:7
-    ports:
-      - "6379:6379"
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf
-    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    container_name: tankctl_prometheus
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    depends_on:
+      - app
+      - celery_worker
+      - redis
+      - db
+
+  grafana:
+    container_name: tankctl_grafana
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
 
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:

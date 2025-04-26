@@ -42,7 +42,7 @@ def create_command(
             parameters=command.parameters
         )
         logging.info(f"Command scheduled with ID {command_id}")
-        return {"message": "Command scheduled", "command_id": command_id}
+        return {"message": "Command scheduled successfully"}
     except Exception as e:
         logging.error(f"Error scheduling command: {str(e)}")
         raise HTTPException(
@@ -93,5 +93,14 @@ def acknowledge_command(
         )
     
     command.acknowledged = True
+    command.ack_time = datetime.now(UTC)
     db.commit()
+
+    # Send Discord notification
+    from app.tasks.notifications import send_discord_notification
+    send_discord_notification.delay(
+        f"✅ Command {command.command} for tank {tank.name} (ID: {tank.id}) "
+        f"was successfully acknowledged"
+    )
+    
     return {"message": "Command acknowledged"}

@@ -52,6 +52,8 @@ class Tank(Base):
     commands = relationship("Command", back_populates="tank", cascade="all, delete-orphan")
     schedules = relationship("Schedule", back_populates="tank", cascade="all, delete-orphan")
     events = relationship("EventLog", back_populates="tank", cascade="all, delete-orphan")
+    metrics = relationship("Metric", back_populates="tank", cascade="all, delete-orphan")
+    alerts = relationship("Alert", back_populates="tank", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Tank {self.name} (ID: {self.id})>"
@@ -180,4 +182,70 @@ class EventLog(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<EventLog {self.id} for Tank {self.tank_id}>" 
+        return f"<EventLog {self.id} for Tank {self.tank_id}>"
+
+class Metric(Base):
+    """
+    Metric model for tracking tank measurements and statistics.
+    
+    Attributes:
+        id: Unique identifier
+        tank_id: Foreign key to Tank
+        name: Metric name (e.g., temperature, ph_level)
+        value: Metric value
+        timestamp: Measurement timestamp
+    """
+    __tablename__ = "metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(50), nullable=False)
+    value = Column(JSON, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    tank = relationship("Tank", back_populates="metrics")
+    
+    # Indexes
+    __table_args__ = (
+        Index('ix_metrics_tank_name_timestamp', 'tank_id', 'name', 'timestamp'),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Metric {self.name}={self.value} for Tank {self.tank_id}>"
+
+class Alert(Base):
+    """
+    Alert model for tracking system alerts and notifications.
+    
+    Attributes:
+        id: Unique identifier
+        tank_id: Foreign key to Tank
+        alert_type: Type of alert
+        message: Alert message
+        severity: Alert severity level
+        created_at: Alert creation timestamp
+        resolved: Whether alert is resolved
+        resolved_at: Resolution timestamp
+    """
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="CASCADE"), nullable=False)
+    alert_type = Column(String(50), nullable=False)
+    message = Column(String(500), nullable=False)
+    severity = Column(String(20), nullable=False)  # INFO, WARNING, ERROR, CRITICAL
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    resolved = Column(Boolean, default=False, nullable=False)
+    resolved_at = Column(DateTime(timezone=True))
+    
+    # Relationships
+    tank = relationship("Tank", back_populates="alerts")
+    
+    # Indexes
+    __table_args__ = (
+        Index('ix_alerts_tank_created', 'tank_id', 'created_at'),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Alert {self.alert_type} for Tank {self.tank_id}>" 

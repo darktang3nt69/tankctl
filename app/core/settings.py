@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional, List
 
 class Settings(BaseSettings):
@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
     # Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = 60
-    RATE_LIMIT_PER_HOUR: int = 1000
+    RATE_LIMIT_PER_MINUTE: int = 600
+    RATE_LIMIT_PER_HOUR: int = 10000
     
     # Discord
     DISCORD_WEBHOOK_URL: Optional[str] = None
@@ -36,9 +36,10 @@ class Settings(BaseSettings):
     FLOWER_UNAUTHENTICATED_API: bool = True
     FLOWER_URL_PREFIX: str = "flower"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "allow"  # Allow extra fields in the .env file
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="allow"  # Allow extra fields in the .env file
+    )
 
 settings = Settings() 

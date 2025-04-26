@@ -11,18 +11,14 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import Command, EventLog
 from app.tasks.notifications import send_discord_notification
-from app.core.config import settings
+from app.core.celery import celery_app
+from app.core.metrics import command_counter, command_queue_size, node_health
 
-redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-if settings.REDIS_PASSWORD:
-    redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-
-@shared_task(
+@celery_app.task(
     bind=True,
     max_retries=3,
     default_retry_delay=60,  # 1 minute
-    queue="commands",
-    broker_url=redis_url
+    queue="commands"
 )
 def process_command(self, command_id: int) -> None:
     """
@@ -56,6 +52,13 @@ def process_command(self, command_id: int) -> None:
             db.add(event)
             db.commit()
             
+            # Update metrics
+            command_counter.labels(
+                tank_id=str(command.tank_id),
+                command=command.command,
+                status="failed"
+            ).inc()
+            
             # Send Discord notification
             send_discord_notification.delay(
                 f"Command {command.command} for tank {command.tank_id} failed after 3 retries"
@@ -66,6 +69,13 @@ def process_command(self, command_id: int) -> None:
         command.retry_count += 1
         db.commit()
         
+        # Update metrics
+        command_counter.labels(
+            tank_id=str(command.tank_id),
+            command=command.command,
+            status="retry"
+        ).inc()
+        
         # Schedule next retry with exponential backoff
         next_retry = 60 * (2 ** (command.retry_count - 1))  # 1m, 2m, 4m
         self.retry(countdown=next_retry)
@@ -75,7 +85,7 @@ def process_command(self, command_id: int) -> None:
     finally:
         db.close()
 
-@shared_task(queue="commands", broker_url=redis_url)
+@celery_app.task(queue="commands")
 def schedule_command(tank_id: int, command: str, parameters: dict = None) -> int:
     """Schedule a command for a tank."""
     db = next(get_db())
@@ -91,6 +101,20 @@ def schedule_command(tank_id: int, command: str, parameters: dict = None) -> int
         db.add(new_command)
         db.commit()
         db.refresh(new_command)
+        
+        # Update metrics
+        command_queue_size.labels(tank_id=str(tank_id)).inc()
+        command_counter.labels(
+            tank_id=str(tank_id),
+            command=command,
+            status="queued"
+        ).inc()
+        
         return new_command.id
     finally:
-        db.close() 
+        db.close()
+
+@celery_app.task(queue="commands")
+def update_node_health(tank_id: int, is_healthy: bool) -> None:
+    """Update the health status of a tank node."""
+    node_health.labels(tank_id=str(tank_id)).set(1 if is_healthy else 0) 
