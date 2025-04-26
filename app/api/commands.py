@@ -7,6 +7,7 @@ from app.tasks.commands import schedule_command
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, UTC
+import logging
 
 router = APIRouter()
 
@@ -33,12 +34,21 @@ def create_command(
     tank: Tank = Depends(get_current_tank),
     db: Session = Depends(get_db)
 ):
-    command_id = schedule_command.delay(
-        tank_id=tank.id,
-        command=command.command,
-        parameters=command.parameters
-    )
-    return {"message": "Command scheduled", "command_id": command_id}
+    logging.info(f"Creating command for tank {tank.id}: {command.command}")
+    try:
+        command_id = schedule_command.delay(
+            tank_id=tank.id,
+            command=command.command,
+            parameters=command.parameters
+        )
+        logging.info(f"Command scheduled with ID {command_id}")
+        return {"message": "Command scheduled", "command_id": command_id}
+    except Exception as e:
+        logging.error(f"Error scheduling command: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error scheduling command: {str(e)}"
+        )
 
 @router.get("/commands/{tank_id}", response_model=List[CommandResponse])
 def get_commands(

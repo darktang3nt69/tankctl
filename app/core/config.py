@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     
     # Database settings
-    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@tankctl_db:5432/tankctl"
     
     # Redis settings
-    REDIS_HOST: str = "localhost"
+    REDIS_HOST: str = "tankctl_redis"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: Optional[str] = None

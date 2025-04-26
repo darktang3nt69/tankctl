@@ -11,12 +11,18 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import Command, EventLog
 from app.tasks.notifications import send_discord_notification
+from app.core.config import settings
+
+redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+if settings.REDIS_PASSWORD:
+    redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
 
 @shared_task(
     bind=True,
     max_retries=3,
     default_retry_delay=60,  # 1 minute
-    queue="commands"
+    queue="commands",
+    broker_url=redis_url
 )
 def process_command(self, command_id: int) -> None:
     """
@@ -69,7 +75,7 @@ def process_command(self, command_id: int) -> None:
     finally:
         db.close()
 
-@shared_task
+@shared_task(queue="commands", broker_url=redis_url)
 def schedule_command(tank_id: int, command: str, parameters: dict = None) -> int:
     """Schedule a command for a tank."""
     db = next(get_db())

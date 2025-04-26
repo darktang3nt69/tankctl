@@ -1,17 +1,21 @@
 """
 Celery configuration for TankCTL.
 
-This module sets up the Celery application with Redis as the broker and backend.
+This module sets up the Celery application with Redis as broker and PostgreSQL as backend.
 """
 
 from celery import Celery
 from app.core.config import settings
 
+redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+if settings.REDIS_PASSWORD:
+    redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+
 celery_app = Celery(
     "tankctl",
-    broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0",
-    backend=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/1",
-    include=["app.tasks.commands"]
+    broker=redis_url,
+    backend="db+postgresql://postgres:postgres@tankctl_db:5432/tankctl",
+    include=["app.tasks.commands", "app.tasks.notifications"]
 )
 
 # Optional configuration
@@ -21,6 +25,15 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    broker_connection_retry=True,
+    broker_connection_retry_on_startup=True,
+    broker_connection_max_retries=10,
+    broker_connection_timeout=30,
+    broker_pool_limit=None,
+    broker_heartbeat=10,
+    broker_transport_options={
+        'visibility_timeout': 43200,  # 12 hours
+    },
 )
 
 # Celery configuration

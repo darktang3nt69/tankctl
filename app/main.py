@@ -64,3 +64,7 @@ def root():
         "version": "1.0.0",
         "documentation": "/docs"
     }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
