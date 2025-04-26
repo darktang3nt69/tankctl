@@ -4,7 +4,6 @@ from app.db.session import get_db
 from app.db.crud import get_all_tanks, get_latest_status, get_latest_metrics, get_latest_alerts
 from app.db.models import Tank
 from typing import List
-from uuid import UUID
 
 router = APIRouter()
 
@@ -27,7 +26,7 @@ async def list_tanks(db: AsyncSession = Depends(get_db)):
     return result
 
 @router.get("/{tank_id}", response_model=dict)
-async def get_tank(tank_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_tank(tank_id: int, db: AsyncSession = Depends(get_db)):
     """Get detailed information about a specific tank."""
     tanks = await get_all_tanks()
     tank = next((t for t in tanks if t.id == tank_id), None)

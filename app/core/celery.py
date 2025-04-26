@@ -4,18 +4,16 @@ Celery configuration for TankCTL.
 This module sets up the Celery application with Redis as broker and PostgreSQL as backend.
 """
 
+import os
 from celery import Celery
 from app.core.config import settings
 
-redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-if settings.REDIS_PASSWORD:
-    redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-
+# Create Celery instance
 celery_app = Celery(
     "tankctl",
-    broker=redis_url,
-    backend="db+postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl",
-    include=["app.tasks.commands", "app.tasks.notifications"]
+    broker=settings.REDIS_URL,
+    backend=settings.REDIS_URL,
+    include=["app.tasks.commands", "app.tasks.notifications", "app.tasks.startup"]
 )
 
 # Optional configuration
@@ -60,4 +58,13 @@ celery_app.conf.update(
             "routing_key": "notifications"
         }
     }
-) 
+)
+
+# Import tasks after celery_app is created
+from app.tasks.startup import check_all_services
+
+# Run startup check when worker starts
+@celery_app.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Run startup check immediately
+    check_all_services.delay() 

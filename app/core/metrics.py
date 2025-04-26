@@ -1,6 +1,8 @@
 from prometheus_client import Counter, Gauge, Histogram
 from prometheus_client.core import CollectorRegistry
 from prometheus_client.exposition import generate_latest
+from typing import Optional, Union
+import logging
 
 # Create a registry
 registry = CollectorRegistry()
@@ -69,6 +71,32 @@ memory_usage = Gauge(
     ['instance'],
     registry=registry
 )
+
+logger = logging.getLogger(__name__)
+
+def safe_float(value: Optional[Union[str, float, int, None]]) -> float:
+    """Safely convert a value to float, returning 0.0 for None or invalid values."""
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
+def update_tank_metrics(tank_id: int, metrics: dict) -> None:
+    """Update tank metrics with safe value conversion."""
+    try:
+        tank_temperature.labels(tank_id=str(tank_id)).set(
+            safe_float(metrics.get('temperature'))
+        )
+        tank_water_level.labels(tank_id=str(tank_id)).set(
+            safe_float(metrics.get('water_level'))
+        )
+        tank_ph_level.labels(tank_id=str(tank_id)).set(
+            safe_float(metrics.get('ph_level'))
+        )
+    except Exception as e:
+        logger.error(f"Error updating metrics for tank {tank_id}: {str(e)}")
 
 def get_metrics():
     """Return the latest metrics in Prometheus format."""

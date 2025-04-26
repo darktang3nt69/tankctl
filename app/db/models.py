@@ -17,11 +17,11 @@ Best Practices:
 - Include timestamps for auditing
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, Boolean, Index, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, Boolean, Index, Enum as SQLEnum, Text, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
@@ -44,6 +44,11 @@ class Tank(Base):
         last_seen: Last communication timestamp
         is_active: Whether the tank is active
         config: JSON configuration
+        temperature: Temperature of the tank
+        humidity: Humidity of the tank
+        water_level: Water level in the tank
+        ph_level: pH level of the tank
+        test_mode: Flag for test mode
     """
     __tablename__ = "tanks"
 
@@ -54,6 +59,13 @@ class Tank(Base):
     last_seen = Column(DateTime(timezone=True))
     is_active = Column(Boolean, default=True, nullable=False)
     config = Column(JSON, default={}, nullable=False)
+    ip_address = Column(String)
+    port = Column(Integer)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    temperature = Column(Float, nullable=True)
+    humidity = Column(Float, nullable=True)
+    water_level = Column(Float, nullable=True)
+    ph_level = Column(Float, nullable=True)
     
     # Relationships
     status_updates = relationship("TankStatus", back_populates="tank", cascade="all, delete-orphan")
@@ -62,6 +74,7 @@ class Tank(Base):
     events = relationship("EventLog", back_populates="tank", cascade="all, delete-orphan")
     metrics = relationship("Metric", back_populates="tank", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="tank", cascade="all, delete-orphan")
+    notifications = relationship("NotificationLog", back_populates="tank", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Tank {self.name} (ID: {self.id})>"
@@ -126,6 +139,7 @@ class Command(Base):
     last_retry = Column(DateTime(timezone=True))
     error_message = Column(String(500))
     timeout = Column(Integer, default=300)  # Default 5 minutes timeout
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
     # Relationships
     tank = relationship("Tank", back_populates="commands")
@@ -199,7 +213,7 @@ class EventLog(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<EventLog {self.id} for Tank {self.tank_id}>" 
+        return f"<EventLog {self.id} for Tank {self.tank_id}>"
 
 class Metric(Base):
     """
@@ -265,4 +279,22 @@ class Alert(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Alert {self.alert_type} for Tank {self.tank_id}>" 
+        return f"<Alert {self.alert_type} for Tank {self.tank_id}>"
+
+class NotificationLog(Base):
+    __tablename__ = "notification_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tank_id = Column(Integer, ForeignKey("tanks.id", ondelete="CASCADE"), nullable=True)
+    message = Column(Text)
+    channel = Column(String)  # e.g., "discord", "email", etc.
+    status = Column(String)  # "success", "failed", "pending"
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Relationships
+    tank = relationship("Tank", back_populates="notifications")
+
+    def __repr__(self) -> str:
+        return f"<NotificationLog {self.id} for Tank {self.tank_id}>" 

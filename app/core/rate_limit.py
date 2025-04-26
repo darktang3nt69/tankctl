@@ -8,8 +8,9 @@ import os
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
-        self.requests_per_minute = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
-        self.requests_per_hour = int(os.getenv("RATE_LIMIT_PER_HOUR", "1000"))
+        # Increased limits for load testing
+        self.requests_per_minute = 1000  # Increased from 60
+        self.requests_per_hour = 50000   # Increased from 1000
         self.minute_requests: Dict[str, list] = {}
         self.hour_requests: Dict[str, list] = {}
 

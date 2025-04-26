@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from app.api import register, status, commands, config, tanks, schedules, events
+from app.api import register, status, commands, config, tanks, schedules, events, health
 from app.core.config import settings
 from app.core.auth import get_current_tank
 from app.core.rate_limit import RateLimitMiddleware
@@ -14,7 +14,10 @@ from app.core.metrics import get_metrics
 import psutil
 import time
 import asyncio
+import httpx
 from prometheus_client import Counter, Gauge, Histogram
+from app.tasks.notifications import send_discord_notification
+from app.api.health import check_service
 
 # Define metrics
 cpu_usage = Gauge('tankctl_cpu_usage_percent', 'CPU usage percentage', ['instance'])
@@ -44,7 +47,90 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """Initialize the database on startup."""
-    await init_db_async()
+    # Wait for database to be ready
+    max_retries = 5
+    retry_delay = 5
+    for i in range(max_retries):
+        try:
+            await init_db_async()
+            logger.info("Database initialized successfully")
+            break
+        except Exception as e:
+            if i == max_retries - 1:
+                logger.error(f"Failed to initialize database after {max_retries} attempts: {str(e)}")
+                raise
+            logger.warning(f"Database initialization attempt {i+1} failed: {str(e)}")
+            await asyncio.sleep(retry_delay)
+    
+    # Start background task for metrics collection
+    asyncio.create_task(collect_metrics())
+    
+    # Send startup notification
+    try:
+        # Get system metrics for the notification
+        cpu_percent = psutil.cpu_percent()
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        message = "🚀 **TankCTL API Started**\n\n"
+        
+        # Check service health
+        message += "🔍 **Service Health**\n"
+        
+        # Check Redis
+        try:
+            from app.core.redis import redis_client
+            redis_client.ping()
+            message += "✅ Redis: Healthy\n"
+        except Exception as e:
+            message += f"❌ Redis: Unhealthy ({str(e)})\n"
+        
+        # Check Database
+        try:
+            from sqlalchemy import text
+            from app.db.session import get_sync_db
+            db = next(get_sync_db())
+            db.execute(text("SELECT 1"))
+            message += "✅ Database: Healthy\n"
+            db.close()
+        except Exception as e:
+            message += f"❌ Database: Unhealthy ({str(e)})\n"
+        
+        # Check Celery
+        try:
+            celery_workers = redis_client.llen("celery")
+            if celery_workers > 0:
+                message += "✅ Celery: Healthy\n"
+            else:
+                message += "❌ Celery: No workers found\n"
+        except Exception as e:
+            message += f"❌ Celery: Unhealthy ({str(e)})\n"
+        
+        # Check Flower
+        flower_status = await check_service("http://flower:5555/healthcheck")
+        if flower_status["status"] == "healthy":
+            message += "✅ Flower: Healthy\n"
+        else:
+            message += f"❌ Flower: {flower_status.get('error', 'Unhealthy')}\n"
+        
+        message += "\n📊 **System Status**\n"
+        message += f"CPU Usage: {cpu_percent:.1f}%\n"
+        message += f"Memory Usage: {memory.percent:.1f}%\n"
+        message += f"Disk Usage: {disk.percent:.1f}%\n\n"
+        
+        # Add warnings for high resource usage
+        if cpu_percent > 80:
+            message += "⚠️ High CPU usage detected!\n"
+        if memory.percent > 80:
+            message += "⚠️ High memory usage detected!\n"
+        if disk.percent > 80:
+            message += "⚠️ High disk usage detected!\n"
+        
+        message += "✨ API is ready to accept connections!"
+        
+        send_discord_notification.delay(message)
+    except Exception as e:
+        logger.error(f"Failed to send startup notification: {str(e)}")
 
 # Add rate limiting middleware
 app.add_middleware(RateLimitMiddleware)
@@ -80,13 +166,14 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     )
 
 # Routes
-app.include_router(register.router)
+app.include_router(register.router, prefix="/api", tags=["registration"])
 app.include_router(status.router, dependencies=[Depends(get_current_tank)])
 app.include_router(commands.router, dependencies=[Depends(get_current_tank)])
 app.include_router(config.router, dependencies=[Depends(get_current_tank)])
 app.include_router(tanks.router, prefix="/api/tanks", tags=["tanks"])
 app.include_router(schedules.router, prefix="/api/schedules", tags=["schedules"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
+app.include_router(health.router, tags=["health"])  # No prefix for health check
 
 @app.get("/")
 def root():
@@ -96,18 +183,9 @@ def root():
         "documentation": "/docs"
     }
 
-@app.get("/api/v1/health")
-async def health_check():
-    return {"status": "healthy"}
-
 @app.get("/metrics")
 async def metrics():
     return Response(content=get_metrics(), media_type="text/plain")
-
-@app.on_event("startup")
-async def startup_event():
-    # Start background task for metrics collection
-    asyncio.create_task(collect_metrics())
 
 async def collect_metrics():
     """Background task to collect and update metrics."""

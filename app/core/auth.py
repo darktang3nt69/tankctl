@@ -3,7 +3,8 @@ from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.db.session import get_db
 from app.db.models import Tank
 from app.core.settings import settings
@@ -33,7 +34,7 @@ def verify_token(token: str) -> dict:
 
 async def get_current_tank(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> Tank:
     token = credentials.credentials
     payload = verify_token(token)
@@ -45,7 +46,11 @@ async def get_current_tank(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    tank = db.query(Tank).filter(Tank.name == tank_name).first()
+    result = await db.execute(
+        select(Tank).where(Tank.name == tank_name)
+    )
+    tank = result.scalar_one_or_none()
+    
     if tank is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

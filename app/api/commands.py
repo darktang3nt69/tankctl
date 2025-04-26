@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.db.session import get_db
 from app.db.models import Tank, Command, CommandStatus
 from app.core.auth import get_current_tank
@@ -37,11 +38,15 @@ class CommandCreate(BaseModel):
     parameters: Optional[Dict[str, Any]] = Field(None, description="Command parameters")
     timeout: Optional[int] = Field(300, description="Command timeout in seconds", ge=1, le=3600)
 
+class CommandAck(BaseModel):
+    command_id: int
+    success: bool = True
+
 @router.post("/commands", response_model=CommandResponse)
-def create_command(
+async def create_command(
     command: CommandCreate,
     tank: Tank = Depends(get_current_tank),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Create and schedule a new command for execution.
@@ -52,20 +57,24 @@ def create_command(
     """
     logger.info(f"Creating command for tank {tank.id}: {command.command}")
     try:
-        command_id = schedule_command.delay(
+        # Create the command in the database first
+        db_command = Command(
+            tank_id=tank.id,
+            command=command.command,
+            parameters=command.parameters,
+            timeout=command.timeout
+        )
+        db.add(db_command)
+        await db.commit()
+        await db.refresh(db_command)
+        
+        # Schedule the command for processing
+        schedule_command.delay(
             tank_id=tank.id,
             command=command.command,
             parameters=command.parameters
         )
         
-        # Get the created command
-        db_command = db.query(Command).filter(Command.id == command_id).first()
-        if not db_command:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Command created but not found in database"
-            )
-            
         return db_command
         
     except Exception as e:
@@ -75,57 +84,46 @@ def create_command(
             detail=f"Error scheduling command: {str(e)}"
         )
 
-@router.get("/commands/{tank_id}", response_model=List[CommandResponse])
-def get_commands(
-    tank_id: int,
+@router.get("/commands", response_model=List[CommandResponse])
+async def get_commands(
     status: Optional[CommandStatus] = None,
     unacknowledged_only: bool = Query(False, description="Only return unacknowledged commands"),
     limit: Optional[int] = Query(100, ge=1, le=1000),
     tank: Tank = Depends(get_current_tank),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Get commands for a tank with optional filtering by status and acknowledgment.
+    Get commands for the authenticated tank with optional filtering by status and acknowledgment.
     """
-    # Verify tank_id matches authenticated tank
-    if tank.id != tank_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this tank's commands"
-        )
-    
-    query = db.query(Command).filter(Command.tank_id == tank_id)
+    query = select(Command).where(Command.tank_id == tank.id)
     
     if status:
-        query = query.filter(Command.status == status)
+        query = query.where(Command.status == status)
     
     if unacknowledged_only:
-        query = query.filter(Command.acknowledged == False)
+        query = query.where(Command.acknowledged == False)
     
-    commands = query.order_by(Command.created_at.desc()).limit(limit).all()
+    query = query.order_by(Command.created_at.desc()).limit(limit)
+    result = await db.execute(query)
+    commands = result.scalars().all()
     return commands
 
-@router.get("/commands/{tank_id}/{command_id}", response_model=CommandResponse)
-def get_command(
-    tank_id: int,
+@router.get("/commands/{command_id}", response_model=CommandResponse)
+async def get_command(
     command_id: int,
     tank: Tank = Depends(get_current_tank),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get details of a specific command.
     """
-    # Verify tank_id matches authenticated tank
-    if tank.id != tank_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this tank's commands"
+    result = await db.execute(
+        select(Command).where(
+            Command.id == command_id,
+            Command.tank_id == tank.id
         )
-    
-    command = db.query(Command).filter(
-        Command.id == command_id,
-        Command.tank_id == tank_id
-    ).first()
+    )
+    command = result.scalar_one_or_none()
     
     if not command:
         raise HTTPException(
@@ -135,20 +133,24 @@ def get_command(
     
     return command
 
-@router.post("/commands/{command_id}/ack", response_model=CommandResponse)
-def acknowledge_command(
-    command_id: int,
+@router.post("/commands/ack", response_model=CommandResponse)
+async def acknowledge_command(
+    ack: CommandAck,
     tank: Tank = Depends(get_current_tank),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Acknowledge completion of a command.
     
-    This endpoint should be called by the tank when it has successfully
-    executed the command. This will mark the command as completed and
-    stop any pending retries.
+    This endpoint should be called by the tank when it has completed
+    executing the command. The success parameter indicates whether
+    the command executed successfully or failed.
     """
-    command = db.query(Command).filter(Command.id == command_id).first()
+    result = await db.execute(
+        select(Command).where(Command.id == ack.command_id)
+    )
+    command = result.scalar_one_or_none()
+    
     if not command:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -166,29 +168,34 @@ def acknowledge_command(
     
     command.acknowledged = True
     command.ack_time = datetime.now(UTC)
-    command.status = CommandStatus.COMPLETED
-    db.commit()
-    db.refresh(command)
+    command.status = CommandStatus.COMPLETED if ack.success else CommandStatus.FAILED
+    await db.commit()
+    await db.refresh(command)
 
     # Send Discord notification
     from app.tasks.notifications import send_discord_notification
     send_discord_notification.delay(
-        f"✅ Command {command.command} for tank {tank.name} (ID: {tank.id}) "
-        f"was successfully completed"
+        f"✅ Command {command.command} completed successfully" if ack.success else
+        f"❌ Command {command.command} failed to execute",
+        tank_id=command.tank_id
     )
     
     return command
 
 @router.post("/commands/{command_id}/retry")
-def retry_command(
+async def retry_command(
     command_id: int,
     tank: Tank = Depends(get_current_tank),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Manually retry a failed or timed out command.
     """
-    command = db.query(Command).filter(Command.id == command_id).first()
+    result = await db.execute(
+        select(Command).where(Command.id == command_id)
+    )
+    command = result.scalar_one_or_none()
+    
     if not command:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -201,20 +208,20 @@ def retry_command(
             detail="Not authorized to retry this command"
         )
     
-    if command.status not in [CommandStatus.FAILED, CommandStatus.TIMED_OUT]:
+    if command.status not in [CommandStatus.FAILED, CommandStatus.TIMEOUT]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot retry command in status {command.status}"
+            detail="Can only retry failed or timed out commands"
         )
     
-    # Reset command status and retry count
+    # Reset command status and increment retry count
     command.status = CommandStatus.PENDING
-    command.retry_count = 0
-    command.error_message = None
-    command.last_retry = None
-    db.commit()
+    command.retry_count += 1
+    command.last_retry = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(command)
     
-    # Start processing the command
-    process_command.delay(command.id)
+    # Queue command for processing
+    await process_command.delay(command.id)
     
-    return {"message": "Command scheduled for retry"}
+    return {"message": "Command queued for retry"}
