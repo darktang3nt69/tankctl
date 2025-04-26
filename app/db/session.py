@@ -22,7 +22,7 @@ async_session = sessionmaker(
 async def get_db():
     """Get database session."""
     async with async_session() as session:
-    try:
+        try:
             yield session
-    finally:
+        finally:
             await session.close()

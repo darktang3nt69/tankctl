@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.auth import get_current_tank
 from app.core.rate_limit import RateLimitMiddleware
 from app.db.init_db import init_db_async
+from app.db.crud import get_all_tanks, get_command_queue_size
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 import logging
@@ -16,13 +17,13 @@ import asyncio
 from prometheus_client import Counter, Gauge, Histogram
 
 # Define metrics
-cpu_usage = Gauge('tankctl_cpu_usage_percent', 'CPU usage percentage')
-memory_usage = Gauge('tankctl_memory_usage_bytes', 'Memory usage in bytes')
-tank_temperature = Gauge('tankctl_temperature_celsius', 'Tank temperature in Celsius')
-tank_ph_level = Gauge('tankctl_ph_level', 'Tank pH level')
-tank_water_level = Gauge('tankctl_water_level_percent', 'Tank water level percentage')
-command_queue_size = Gauge('tankctl_command_queue_size', 'Number of pending commands')
-node_health = Gauge('tankctl_node_health', 'Node health status (1=healthy, 0=unhealthy)')
+cpu_usage = Gauge('tankctl_cpu_usage_percent', 'CPU usage percentage', ['instance'])
+memory_usage = Gauge('tankctl_memory_usage_bytes', 'Memory usage in bytes', ['instance'])
+tank_temperature = Gauge('tankctl_temperature_celsius', 'Tank temperature in Celsius', ['tank_id'])
+tank_ph_level = Gauge('tankctl_ph_level', 'Tank pH level', ['tank_id'])
+tank_water_level = Gauge('tankctl_water_level_percent', 'Tank water level percentage', ['tank_id'])
+command_queue_size = Gauge('tankctl_command_queue_size', 'Number of pending commands', ['tank_id'])
+node_health = Gauge('tankctl_node_health', 'Node health status (1=healthy, 0=unhealthy)', ['tank_id'])
 
 # Configure logging
 logging.basicConfig(
