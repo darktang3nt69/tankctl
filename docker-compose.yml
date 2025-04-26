@@ -34,10 +34,6 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl
-      - REDIS_HOST=tankctl_redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
     depends_on:
       db:
@@ -46,6 +42,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+    working_dir: /app
 
   celery_beat:
     <<: *common-settings
@@ -56,10 +53,6 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl
-      - REDIS_HOST=tankctl_redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
     depends_on:
       db:
@@ -68,28 +61,28 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+    working_dir: /app
 
   flower:
     <<: *common-settings
     container_name: tankctl_flower
     build: .
-    command: celery -A app.core.celery flower --port=5555 --basic_auth=admin:admin --unauthenticated_api=true
+    command: celery -A app.core.celery:celery_app flower --port=5555 --basic_auth=admin:admin --unauthenticated_api=true
     ports:
       - "5555:5555"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@tankctl_db:5432/tankctl
-      - REDIS_HOST=tankctl_redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@tankctl_db:5432/tankctl
       - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
     depends_on:
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
 
   db:
     <<: *common-settings
