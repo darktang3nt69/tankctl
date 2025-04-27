@@ -41,7 +41,6 @@ Aquapi/
 ├── README.md             # Project documentation
 └── .env.template         # Environment variable template
 ```
-
 ---
 
 ## ⚡ Quickstart
