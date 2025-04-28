@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Boolean, Float
+from sqlalchemy import Column, String, DateTime, Boolean, Float, func
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -17,7 +17,7 @@ class Tank(Base):
     location = Column(String, nullable=True)
     firmware_version = Column(String, nullable=True)
 
-    last_seen = Column(DateTime, nullable=True)
+    last_seen = Column(DateTime(timezone=True), default=func.now())
     is_online = Column(Boolean, default=True)
 
     token = Column(String, nullable=True)
