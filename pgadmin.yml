@@ -1,0 +1,25 @@
+# docker-compose.pgadmin.yml
+version: '3.8'
+
+networks:
+  default:
+    name: the-arrs
+    external: true
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: aquapi_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    # depends_on:
+    #   - db  # assumes your PostgreSQL container is named "db"
+
+volumes:
+  pgadmin_data:
