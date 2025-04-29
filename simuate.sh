@@ -1,93 +1,177 @@
 #!/bin/bash
 
-# AquaPi Full Feature Tester
-# Tests: Registration ✅ Heartbeat ✅ Command Fetch ✅ Acknowledgement ✅
+# ----------------------------------------------
+# AquaPi Multi-Tank Simulator (FINAL VERSION - HEARTBEAT CHECK AWARE)
+# ----------------------------------------------
 
-API_URL="http://192.168.1.100:8000"  # Change this if needed
-VALID_AUTH_KEY="super_secret_tank_psk"
-TANK_NAME="Simulated Tank Node Tester"
+# CONFIGURATION
+API_URL="http://192.168.1.100:8000"
+AUTH_KEY="super_secret_tank_psk"
+TANK_NAME_PREFIX="StressTank"
+NUM_TANKS=3
+HEARTBEAT_INTERVAL=30         # heartbeat every 30s (must be < 1 min threshold)
+OFFLINE_DURATION=120          # simulate offline for 90s (server marks tank offline after 60s)
+JWT_REFRESH_INTERVAL=3300     # refresh token ~55 minutes
+COMMAND_CREATE_INTERVAL=180   # issue command every 3 min
 
-echo "🛠️ Starting AquaPi Full Feature Tester..."
+# INTERNAL
+declare -a tank_ids
+declare -a access_tokens
+declare -a last_registration_times
+declare -a last_command_creation_times
 
-# 1️⃣ Register Tank
-echo "🚀 Registering tank..."
-REGISTER_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/tank/register" \
-  -H "accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d "{\"auth_key\": \"$VALID_AUTH_KEY\", \"tank_name\": \"$TANK_NAME\"}")
+# FUNCTIONS
 
-TANK_ID=$(echo "$REGISTER_RESPONSE" | jq -r '.tank_id')
-ACCESS_TOKEN=$(echo "$REGISTER_RESPONSE" | jq -r '.access_token')
+register_tank() {
+  local index=$1
+  local tank_name="${TANK_NAME_PREFIX}_${index}"
 
-if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-  echo "❌ Tank registration failed! Response: $REGISTER_RESPONSE"
-  exit 1
-fi
+  echo "🚀 Registering Tank $tank_name..."
 
-echo "✅ Tank registered! tank_id=$TANK_ID"
+  REGISTER_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/tank/register" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{\"auth_key\": \"$AUTH_KEY\", \"tank_name\": \"$tank_name\"}")
 
-# 2️⃣ Send Heartbeat
-echo "🫀 Sending heartbeat..."
-curl -s -X POST "$API_URL/api/v1/tank/status" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "temperature": 27.0,
-        "ph": 7.4,
-        "light_state": true,
-        "firmware_version": "v1.0.2"
-      }' > /dev/null
+  tank_ids[$index]=$(echo "$REGISTER_RESPONSE" | jq -r '.tank_id')
+  access_tokens[$index]=$(echo "$REGISTER_RESPONSE" | jq -r '.access_token')
 
-echo "✅ Heartbeat sent."
+  if [[ "${access_tokens[$index]}" == "null" || -z "${access_tokens[$index]}" ]]; then
+    echo "❌ Registration failed for Tank $tank_name! Response: $REGISTER_RESPONSE"
+    exit 1
+  fi
 
-# 3️⃣ (Admin) Issue a command
-COMMAND_TO_SEND="feed_now"
-echo "📤 Issuing command: $COMMAND_TO_SEND"
+  last_registration_times[$index]=$(date +%s)
+  last_command_creation_times[$index]=$(date +%s)
+  echo "✅ Tank $tank_name registered successfully with ID=${tank_ids[$index]}"
+}
 
-ISSUE_COMMAND_RESPONSE=$(curl -s -X POST "$API_URL/api/v1/tank/$TANK_ID/command" \
-  -H "accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d "{\"command_payload\": \"$COMMAND_TO_SEND\"}")
+send_heartbeat() {
+  local index=$1
+  RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/api/v1/tank/status" \
+    -H "Authorization: Bearer ${access_tokens[$index]}" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{
+          \"temperature\": 26.5,
+          \"ph\": 7.2,
+          \"light_state\": true,
+          \"firmware_version\": \"v1.0.${index}\"
+        }")
 
-COMMAND_ID=$(echo "$ISSUE_COMMAND_RESPONSE" | jq -r '.command_id')
+  if [[ "$RESPONSE" == "401" ]]; then
+    echo "🔴 Tank_$index detected expired token during heartbeat. Re-registering..."
+    register_tank $index
+    return 1
+  fi
+  echo "[$(date)] ❤️ Tank_$index heartbeat sent."
+}
 
-if [ "$COMMAND_ID" == "null" ] || [ -z "$COMMAND_ID" ]; then
-  echo "❌ Command issue failed! Response: $ISSUE_COMMAND_RESPONSE"
-  exit 1
-fi
+fetch_and_ack_command() {
+  local index=$1
 
-echo "✅ Command issued! command_id=$COMMAND_ID"
+  COMMAND_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$API_URL/api/v1/tank/command" \
+    -H "Authorization: Bearer ${access_tokens[$index]}" \
+    -H "accept: application/json")
 
-# 4️⃣ (Node) Fetch Pending Command
-echo "📥 Fetching pending command..."
+  HTTP_CODE=$(echo "$COMMAND_RESPONSE" | tail -n1)
+  COMMAND_BODY=$(echo "$COMMAND_RESPONSE" | sed '$d')
 
-PENDING_COMMAND=$(curl -s -X GET "$API_URL/api/v1/tank/command" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "accept: application/json")
+  if [[ "$HTTP_CODE" == "401" ]]; then
+    echo "🔴 Tank_$index detected expired token during command fetch. Re-registering..."
+    register_tank $index
+    return 1
+  fi
 
-PENDING_COMMAND_ID=$(echo "$PENDING_COMMAND" | jq -r '.command_id')
-PENDING_COMMAND_PAYLOAD=$(echo "$PENDING_COMMAND" | jq -r '.command_payload')
+  command_id=$(echo "$COMMAND_BODY" | jq -r '.command_id')
+  command_payload=$(echo "$COMMAND_BODY" | jq -r '.command_payload')
 
-if [ "$PENDING_COMMAND_ID" == "null" ]; then
-  echo "❌ No pending command found! Response: $PENDING_COMMAND"
-  exit 1
-fi
+  if [[ "$command_id" != "null" && ! -z "$command_id" ]]; then
+    echo "[$(date)] 📥 Tank_$index received command: $command_payload (id=$command_id)"
+    sleep 2
 
-echo "✅ Pending command fetched: $PENDING_COMMAND_PAYLOAD (command_id=$PENDING_COMMAND_ID)"
+    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/command/ack" \
+      -H "Authorization: Bearer ${access_tokens[$index]}" \
+      -H "accept: application/json" \
+      -H "Content-Type: application/json" \
+      -d "{
+            \"command_id\": \"$command_id\",
+            \"success\": true
+          }"
 
-# 5️⃣ (Node) Acknowledge the command as SUCCESS
-echo "📨 Sending ACK for command..."
+    echo "[$(date)] 📤 Tank_$index acknowledged command."
+  fi
+}
 
-curl -s -X POST "$API_URL/api/v1/tank/command/ack" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d "{
-        \"command_id\": \"$PENDING_COMMAND_ID\",
-        \"success\": true
-      }" > /dev/null
+simulate_command_creation() {
+  local index=$1
+  now=$(date +%s)
+  elapsed=$((now - last_command_creation_times[$index]))
 
-echo "✅ Command acknowledged successfully."
+  if (( elapsed > COMMAND_CREATE_INTERVAL )); then
+    RANDOM_COMMAND=$(shuf -n 1 -e "feed_now" "light_on" "light_off" "pump_on" "pump_off")
+    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/${tank_ids[$index]}/command" \
+      -H "accept: application/json" \
+      -H "Content-Type: application/json" \
+      -d "{\"command_payload\": \"$RANDOM_COMMAND\"}"
 
-echo "🎉 All AquaPi Full Features Tested Successfully!"
+    echo "[$(date)] ⚡ Tank_$index issued random command: $RANDOM_COMMAND"
+    last_command_creation_times[$index]=$now
+  fi
+}
+
+simulate_offline_cycle() {
+  local index=$1
+  if (( RANDOM % 25 == 0 )); then
+    echo "[$(date)] 🛑 Tank_$index simulating OFFLINE for $OFFLINE_DURATION seconds..."
+    offline_start=$(date +%s)
+
+    while true; do
+      now=$(date +%s)
+      elapsed=$((now - offline_start))
+      if (( elapsed >= OFFLINE_DURATION )); then
+        break
+      fi
+      echo "[$(date)] 🚫 Tank_$index is OFFLINE... ($elapsed/${OFFLINE_DURATION}s)"
+      sleep $HEARTBEAT_INTERVAL
+    done
+
+    echo "[$(date)] 🟢 Tank_$index coming ONLINE again."
+    send_heartbeat $index
+  fi
+}
+
+refresh_jwt_if_needed() {
+  local index=$1
+  now=$(date +%s)
+  elapsed=$((now - last_registration_times[$index]))
+
+  if (( elapsed > JWT_REFRESH_INTERVAL )); then
+    echo "[$(date)] ♻️ Tank_$index proactively refreshing registration..."
+    register_tank $index
+  fi
+}
+
+node_loop() {
+  local index=$1
+  while true; do
+    send_heartbeat $index
+    fetch_and_ack_command $index
+    simulate_command_creation $index
+    simulate_offline_cycle $index
+    refresh_jwt_if_needed $index
+    sleep $HEARTBEAT_INTERVAL
+  done
+}
+
+# MAIN
+
+echo "🎯 Starting Multi-Tank Simulation..."
+
+for ((i=0; i<NUM_TANKS; i++)); do
+  register_tank $i
+  node_loop $i &
+  sleep 1
+done
+
+wait

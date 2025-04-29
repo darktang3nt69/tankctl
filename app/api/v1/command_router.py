@@ -1,3 +1,5 @@
+# app/api/v1/command_router.py
+
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -62,24 +64,21 @@ def get_my_command(
 # 🛠 Node Route: Tank acknowledges command execution
 @router.post("/tank/command/ack")
 def ack_my_command(
+    background_tasks: BackgroundTasks,  # ✅ First
     request: CommandAcknowledgeRequest,
     db: Session = Depends(get_db),
     tank_id: UUID = Depends(get_current_tank),
-    background_tasks: BackgroundTasks = Depends(),
 ):
     """
     Node sends acknowledgment if it executed command successfully or failed.
     """
     try:
-        # Update DB
         acknowledge_command(db, tank_id, request)
 
-        # Fetch the tank and command info to send notification
         tank = db.query(Tank).filter(Tank.tank_id == tank_id).first()
         command = db.query(TankCommand).filter(TankCommand.command_id == request.command_id).first()
 
         if tank and command:
-            # 🚀 Send notification in background
             background_tasks.add_task(
                 NotificationService.send_command_acknowledgement_notification,
                 tank_name=tank.tank_name,

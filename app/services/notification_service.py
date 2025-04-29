@@ -1,23 +1,18 @@
-import requests
-from app.core.config import settings
+# app/services/notification_service.py
 
-def send_discord_notification(message: str):
-    """
-    Sends a simple message to the Discord webhook.
-    """
-    if not settings.DISCORD_WEBHOOK_URL:
-        print("[Discord] Webhook URL not configured.")
-        return
+from app.utils.discord import send_command_acknowledgement_embed, send_status_embed_notification
 
-    data = {
-        "content": message
-    }
+class NotificationService:
+    @staticmethod
+    def send_command_acknowledgement_notification(tank_name: str, command_payload: str, success: bool):
+        """
+        Sends a Discord embed notification when a tank acknowledges a command.
+        """
+        send_command_acknowledgement_embed(tank_name, command_payload, success)
 
-    try:
-        response = requests.post(settings.DISCORD_WEBHOOK_URL, json=data)
-        if response.status_code == 204:
-            print("[Discord] Notification sent successfully.")
-        else:
-            print(f"[Discord] Failed to send notification: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"[Discord] Error sending notification: {str(e)}")
+    @staticmethod
+    def send_status_notification(status: str, tank_name: str):
+        """
+        Sends a Discord embed notification for tank status updates (online/offline/registration).
+        """
+        send_status_embed_notification(status, tank_name)

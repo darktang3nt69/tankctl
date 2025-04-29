@@ -44,12 +44,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery --app=app.worker.heartbeat_monitor --beat --loglevel=info
+    command: celery -A app.worker.celery_app worker --loglevel=info
     env_file:
       - .env
     depends_on:
       - redis
       - db
+  
+  celery_beat:
+    build: .
+    restart: always
+    env_file: .env
+    depends_on:
+      - web
+      - db
+      - redis
+    command: celery -A app.worker.celery_app beat --loglevel=info
 
 
 volumes:

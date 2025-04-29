@@ -8,7 +8,7 @@ import uuid
 
 from app.models.tank import Tank
 from app.models.tank_command import TankCommand
-from app.utils.discord import send_discord_notification
+from app.utils.discord import send_command_acknowledgement_embed
 from app.utils.timezone import IST
 
 # Configurable retry policy
@@ -18,21 +18,11 @@ BASE_BACKOFF_SECONDS = 60  # 1 minute
 def issue_command(db: Session, tank_id: uuid.UUID, command_payload: str) -> TankCommand:
     """
     Create a new command for the given tank.
+    Allows multiple commands to queue up.
     """
     tank = db.execute(select(Tank).where(Tank.tank_id == tank_id)).scalar_one_or_none()
     if not tank:
         raise ValueError(f"Tank with ID {tank_id} not found")
-
-    # Check if a pending command already exists
-    pending_command = db.execute(
-        select(TankCommand).where(
-            TankCommand.tank_id == tank_id,
-            TankCommand.status.in_(["pending", "in_progress"])
-        )
-    ).scalar_one_or_none()
-
-    if pending_command:
-        raise ValueError(f"A command is already pending for tank '{tank.tank_name}'")
 
     new_command = TankCommand(
         tank_id=tank_id,
@@ -48,10 +38,8 @@ def issue_command(db: Session, tank_id: uuid.UUID, command_payload: str) -> Tank
     return new_command
 
 
-def get_pending_command_for_tank(db: Session, tank_id: uuid.UUID) -> TankCommand | None:
-    """
-    Fetch the pending or in-progress command for a tank.
-    """
+
+def get_pending_command_for_tank(db: Session, tank_id) -> TankCommand | None:
     command = db.execute(
         select(TankCommand)
         .where(
@@ -59,9 +47,10 @@ def get_pending_command_for_tank(db: Session, tank_id: uuid.UUID) -> TankCommand
             TankCommand.status.in_(["pending", "in_progress"])
         )
         .order_by(TankCommand.created_at.asc())
-    ).scalar_one_or_none()
+    ).scalars().first()  # ✅ FIXED
 
     return command
+
 
 
 def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeRequest):
@@ -70,25 +59,28 @@ def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeReques
     """
     command = db.execute(
         select(TankCommand).where(
-            TankCommand.command_id == ack.command_id,
-            TankCommand.tank_id == tank_id
+            TankCommand.command_id == ack.command_id
         )
-    ).scalar_one_or_none()
+    ).scalar_one_or_none()  # ✅ safe
 
     if not command:
-        raise ValueError("Command not found for this tank.")
+        raise ValueError("Command not found.")
+
+    if str(command.tank_id) != str(tank_id):
+        raise ValueError("Command does not belong to this tank.")
 
     command.status = "success" if ack.success else "failed"
-    command.retry_count = 3  # prevent further retries
+    command.retries = 3  # prevent further retries
     command.last_attempt_at = datetime.now(IST)
 
     db.commit()
     db.refresh(command)
 
     return {
-        "message": f"Command {command.command_type} acknowledged as {'SUCCESS' if ack.success else 'FAILED'}",
+        "message": f"Command `{command.command_payload}` acknowledged as {'SUCCESS' if ack.success else 'FAILED'}",
         "timestamp": datetime.now(IST).isoformat()
     }
+
 
 
 def retry_stale_commands(db: Session):
@@ -106,11 +98,16 @@ def retry_stale_commands(db: Session):
     for command in stale_commands:
         if command.retries >= MAX_RETRIES:
             command.status = "failed"
-            send_discord_notification(
-                status="command_failed",
-                tank_name=str(command.tank_id),
-                command_payload=command.command_payload,
-            )
+
+            # ✅ Properly send a command failure embed
+            tank = db.execute(select(Tank).where(Tank.tank_id == command.tank_id)).scalar_one_or_none()
+            if tank:
+                send_command_acknowledgement_embed(
+                    tank_name=tank.tank_name,
+                    command_payload=command.command_payload,
+                    success=False
+                )
+
         else:
             command.retries += 1
             backoff = BASE_BACKOFF_SECONDS * (2 ** (command.retries - 1))
