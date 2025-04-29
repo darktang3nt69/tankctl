@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # Discord (later)
     DISCORD_WEBHOOK_URL: str = ""
 
+    # Admin API key
+    ADMIN_API_KEY:str = ""
+
     class Config:
         env_file = ".env"
 

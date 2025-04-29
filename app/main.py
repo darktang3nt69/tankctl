@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.api.v1.register_router import router as register_router
 from app.api.v1.status_router import router as status_router
 from app.api.v1.command_router import router as command_router
+from app.api.v1.admin_command_router import router as admin_command_router
 from app.core.config import settings
 
 # Import database components
@@ -26,6 +27,7 @@ def on_startup():
 app.include_router(register_router, prefix="/api/v1")
 app.include_router(status_router,   prefix="/api/v1")
 app.include_router(command_router, prefix="/api/v1")
+app.include_router(admin_command_router, prefix="/api/v1")
 
 @app.get("/", tags=["Health Check"])
 def health_check():

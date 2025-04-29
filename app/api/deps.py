@@ -1,11 +1,13 @@
 from typing import Generator
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.utils.jwt import verify_access_token
+
+from app.core.config import settings
 
 security = HTTPBearer()
 
@@ -39,3 +41,8 @@ def get_current_tank(
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def verify_admin_api_key(x_api_key: str = Header(...)):
+    if x_api_key != settings.ADMIN_API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid Admin API Key")
