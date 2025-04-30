@@ -61,6 +61,22 @@ services:
       - redis
     command: celery -A app.worker.celery_app beat --loglevel=info
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aquapi_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./docker/grafana/data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards  # ✅ ADD THIS LINE
+    depends_on:
+      - db
+
 
 volumes:
   postgres_data:

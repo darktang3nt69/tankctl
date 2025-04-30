@@ -24,14 +24,14 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
     ).scalar_one_or_none()
 
     if existing:
-        token = existing.token or create_jwt_token(str(existing.tank_id))
-        if existing.token is None:
-            existing.token = token
-            db.commit()
+    # Always generate a fresh token
+        new_token = create_jwt_token(str(existing.tank_id))
+        existing.token = new_token
+        db.commit()
         return TankRegisterResponse(
-            message="Tank already registered ✅",
+            message="Tank re-registered and token refreshed 🔄",
             tank_id=str(existing.tank_id),
-            access_token=token
+            access_token=new_token
         )
 
     new_id = uuid.uuid4()

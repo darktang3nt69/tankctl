@@ -83,3 +83,9 @@ tmp/
 .cache/
 coverage/
 htmlcov/
+
+
+# ------------------------
+# Docker volumes
+# ------------------------
+docker/*
