@@ -95,9 +95,19 @@ def retry_stale_commands(db: Session):
         )
     ).scalars().all()
 
+    print(f"📦 Commands eligible for retry: {len(stale_commands)}")
+
+    failed, retried = 0, 0
+
     for command in stale_commands:
+
+        tank_name = getattr(command.tank, "tank_name", "<unknown>")
+
         if command.retries >= MAX_RETRIES:
+            failed += 1
             command.status = "failed"
+
+            print(f"❌ Command {command.command_id} FAILED for tank {tank_name} after {command.retries} retries.")
 
             # ✅ Properly send a command failure embed
             tank = db.execute(select(Tank).where(Tank.tank_id == command.tank_id)).scalar_one_or_none()
@@ -112,5 +122,12 @@ def retry_stale_commands(db: Session):
             command.retries += 1
             backoff = BASE_BACKOFF_SECONDS * (2 ** (command.retries - 1))
             command.next_retry_at = now + timedelta(seconds=backoff)
+            retried += 1
+            print(f"🔁 Retrying command {command.command_id} for tank {tank_name} | Retry #{command.retries} | Next retry at {command.next_retry_at.strftime('%H:%M:%S')}")
+
 
     db.commit()
+
+    print("-" * 80)
+    print(f"🔁 Commands retried: {retried} | ❌ Permanently failed: {failed}")
+    print("=" * 80)

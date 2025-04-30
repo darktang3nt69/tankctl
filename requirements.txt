@@ -10,3 +10,4 @@ redis
 PyJWT
 requests
 pytz
+prometheus-fastapi-instrumentator

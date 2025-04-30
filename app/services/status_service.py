@@ -14,6 +14,7 @@ def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) 
     ).scalar_one_or_none()
 
     if not tank:
+        print(f"[ERROR] Tank not found in DB. tank_id={tank_id}")
         raise ValueError(f"Tank with id={tank_id} not found.")
 
     # Update heartbeat
