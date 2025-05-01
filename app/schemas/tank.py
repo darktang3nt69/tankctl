@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import time
 from typing import Optional
 
 class TankRegisterRequest(BaseModel):
@@ -10,3 +11,9 @@ class TankRegisterRequest(BaseModel):
 class TankRegisterResponse(BaseModel):
     tank_id: str
     access_token: str
+
+class TankSettingsResponse(BaseModel):
+    tank_id: str
+    light_on: time
+    light_off: time
+    manual_override_state: Optional[str] = None

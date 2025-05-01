@@ -22,6 +22,11 @@ celery.conf.beat_schedule = {
         "task": "app.worker.celery_app.command_retry_handler",
         "schedule": float(os.getenv("COMMAND_RETRY_INTERVAL_MINUTES", 2)) * 60,
     },
+    "run-schedule-enforcer-every-minute": {
+        "task": "app.worker.schedule_executor.enforce_lighting_schedule",
+        "schedule": 60.0,
+        "schedule": float(os.getenv("SCHEDULE_LIGHTING_INTERVAL_MINUTES")) * 60,
+    }
 }
 
 celery.conf.timezone = "Asia/Kolkata"

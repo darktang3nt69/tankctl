@@ -8,6 +8,8 @@ import uuid
 
 from app.models.tank import Tank
 from app.models.tank_command import TankCommand
+from app.models.tank_settings import TankSettings
+from app.models.tank_schedule_log import TankScheduleLog
 from app.utils.discord import send_command_acknowledgement_embed
 from app.utils.timezone import IST
 
@@ -15,15 +17,29 @@ from app.utils.timezone import IST
 MAX_RETRIES = 3
 BASE_BACKOFF_SECONDS = 60  # 1 minute
 
-def issue_command(db: Session, tank_id: uuid.UUID, command_payload: str) -> TankCommand:
+def issue_command(
+    db: Session,
+    tank_id: uuid.UUID,
+    command_payload: str,
+    source: str = "system"
+) -> TankCommand:
     """
-    Create a new command for the given tank.
-    Allows multiple commands to queue up.
+    Centralized function to create commands for tanks.
+    Supports both manual and scheduled creation.
     """
     tank = db.execute(select(Tank).where(Tank.tank_id == tank_id)).scalar_one_or_none()
     if not tank:
         raise ValueError(f"Tank with ID {tank_id} not found")
 
+    # Check for and update tank settings if override is needed
+    settings = db.execute(select(TankSettings).where(TankSettings.tank_id == tank_id)).scalar_one_or_none()
+    if source == "manual" and settings:
+        if command_payload == "light_on":
+            settings.manual_override_state = "on"
+        elif command_payload == "light_off":
+            settings.manual_override_state = "off"
+
+    # Create command entry
     new_command = TankCommand(
         tank_id=tank_id,
         command_payload=command_payload,
@@ -32,11 +48,19 @@ def issue_command(db: Session, tank_id: uuid.UUID, command_payload: str) -> Tank
         next_retry_at=datetime.now(IST),
     )
     db.add(new_command)
+
+    # Log the command
+    if source in ["manual", "scheduled"]:
+        db.add(TankScheduleLog(
+            tank_id=tank_id,
+            event_type=command_payload,
+            trigger_source=source
+        ))
+
     db.commit()
     db.refresh(new_command)
 
     return new_command
-
 
 
 def get_pending_command_for_tank(db: Session, tank_id) -> TankCommand | None:
