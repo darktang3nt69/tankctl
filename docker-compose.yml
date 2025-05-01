@@ -70,10 +70,12 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - "GF_PLUGINS_PREINSTALL=yesoreyeram-infinity-datasource, volkovlabs-form-panel"
     volumes:
       - ./docker/grafana/data:/var/lib/grafana
       - ./docker/grafana/provisioning:/etc/grafana/provisioning
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards  # ✅ ADD THIS LINE
+      - ./docker/grafana/plugins:/var/lib/grafana/plugins  # ✅ ADD THIS LINE
     depends_on:
       - db
 

@@ -29,5 +29,9 @@ class Tank(Base):
     # 🔥 ADD THIS RELATIONSHIP
     tank_commands = relationship("TankCommand", back_populates="tank", cascade="all, delete-orphan")
 
+    # To store tank settings
+    settings = relationship("TankSettings", uselist=False, back_populates="tank")
+
+
     def __repr__(self):
         return f"<Tank(tank_id={self.tank_id}, is_online={self.is_online})>"

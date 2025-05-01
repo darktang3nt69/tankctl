@@ -9,6 +9,8 @@ from app.utils.timezone import IST
 from celery import Celery
 import time
 
+from app.metrics.tank_metrics import tank_online_status
+
 # Celery app setup
 celery = Celery(
     "heartbeat_monitor",
@@ -48,6 +50,12 @@ def heartbeat_check():
 
             was_online = tank.is_online
             is_online_now = last_seen >= cutoff
+
+            # 👇 Prometheus metric for Grafana time series
+            tank_online_status.labels(
+                tank_id=str(tank.tank_id),
+                tank_name=tank.tank_name
+            ).set(1 if is_online_now else 0)
 
             print(
                 f"🔸 Tank: {tank.tank_name:<30} | Was Online: {str(was_online):<5} | Now Online: {str(is_online_now):<5} | Last Seen: {last_seen.strftime('%Y-%m-%d %H:%M:%S')}"
