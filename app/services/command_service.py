@@ -10,7 +10,7 @@ from app.models.tank import Tank
 from app.models.tank_command import TankCommand
 from app.models.tank_settings import TankSettings
 from app.models.tank_schedule_log import TankScheduleLog
-from app.utils.discord import send_command_acknowledgement_embed
+from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 
 # Configurable retry policy
@@ -124,8 +124,8 @@ def retry_stale_commands(db: Session):
     failed, retried = 0, 0
 
     for command in stale_commands:
-
-        tank_name = getattr(command.tank, "tank_name", "<unknown>")
+        tank = db.execute(select(Tank).where(Tank.tank_id == command.tank_id)).scalar_one_or_none()
+        tank_name = tank.tank_name if tank else "<unknown>"
 
         if command.retries >= MAX_RETRIES:
             failed += 1
@@ -133,21 +133,35 @@ def retry_stale_commands(db: Session):
 
             print(f"❌ Command {command.command_id} FAILED for tank {tank_name} after {command.retries} retries.")
 
-            # ✅ Properly send a command failure embed
-            tank = db.execute(select(Tank).where(Tank.tank_id == command.tank_id)).scalar_one_or_none()
-            if tank:
-                send_command_acknowledgement_embed(
-                    tank_name=tank.tank_name,
-                    command_payload=command.command_payload,
-                    success=False
-                )
+            # ❌ Final failure notification
+            send_discord_embed(
+                status="retry_failed",
+                tank_name=tank_name,
+                command_payload=command.command_payload,
+                extra_fields={
+                    "Retries": str(command.retries),
+                    "Status": "Failed permanently"
+                }
+            )
 
         else:
             command.retries += 1
             backoff = BASE_BACKOFF_SECONDS * (2 ** (command.retries - 1))
             command.next_retry_at = now + timedelta(seconds=backoff)
             retried += 1
+
             print(f"🔁 Retrying command {command.command_id} for tank {tank_name} | Retry #{command.retries} | Next retry at {command.next_retry_at.strftime('%H:%M:%S')}")
+
+            # 🔁 Retry scheduled notification
+            send_discord_embed(
+                status="retry_scheduled",
+                tank_name=tank_name,
+                extra_fields={
+                    "Command": command.command_payload,
+                    "Retry #": str(command.retries),
+                    "Next Retry At": command.next_retry_at.strftime('%d %b %Y %I:%M %p IST')
+                }
+            )
 
 
     db.commit()

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.models.tank import Tank
-from app.utils.discord import send_status_embed_notification
+from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 from celery import Celery
 import time
@@ -65,13 +65,13 @@ def heartbeat_check():
                 print(f"⚠️  Tank '{tank.tank_name}' went OFFLINE!")
                 tank.is_online = False
                 offline_count += 1
-                send_status_embed_notification(status="offline", tank_name=tank.tank_name)
+                send_discord_embed(status="offline", tank_name=tank.tank_name)
 
             elif not was_online and is_online_now:
                 print(f"✅ Tank '{tank.tank_name}' came ONLINE!")
                 tank.is_online = True
                 online_count += 1
-                send_status_embed_notification(status="online", tank_name=tank.tank_name)
+                send_discord_embed(status="online", tank_name=tank.tank_name)
 
         db.commit()
 

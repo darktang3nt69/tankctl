@@ -15,7 +15,7 @@ async def update_tank_metrics():
             tanks = db.execute(select(Tank)).scalars().all()
             for tank in tanks:
                 tank_online_status.labels(
-                    tank_id=str(tank.tank_id),
+                    # tank_id=str(tank.tank_id),
                     tank_name=tank.tank_name
                 ).set(1 if tank.is_online else 0)
         finally:

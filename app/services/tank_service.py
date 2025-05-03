@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.tank import Tank
 from app.schemas.tank import TankRegisterRequest, TankRegisterResponse
 from app.utils.jwt import create_jwt_token
-from app.utils.discord import send_status_embed_notification
+from app.utils.discord import send_discord_embed
 from app.core.config import settings
 from app.utils.timezone import IST
 
@@ -50,7 +50,7 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
     db.commit()
     db.refresh(new_tank)
 
-    send_status_embed_notification(status="new_registration", tank_name=new_tank.tank_name)
+    send_discord_embed(status="new_registration", tank_name=new_tank.tank_name)
 
     return TankRegisterResponse(
         message="Tank registered successfully ✅",

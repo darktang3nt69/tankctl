@@ -8,16 +8,17 @@ from app.models.tank import Tank
 from app.models.tank_settings import TankSettings
 from app.models.tank_schedule_log import TankScheduleLog
 from app.services.command_service import issue_command
-from app.utils.discord import send_discord_notification
+from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 
+# Celery app setup
 celery = Celery(
     "schedule_executor",
     broker=os.getenv("CELERY_BROKER_URL"),
     backend=os.getenv("CELERY_RESULT_BACKEND"),
 )
 
-@celery.task(name="app.worker.schedule_executor.enforce_lighting_schedule")
+@celery.task
 def enforce_lighting_schedule():
     now = datetime.now(IST)
     now_time = now.time()
@@ -54,7 +55,7 @@ def enforce_lighting_schedule():
                     settings.manual_override_state = None
 
                     # Discord + DB log for override cleared
-                    send_discord_notification(
+                    send_discord_embed(
                         status="override_cleared",
                         tank_name=tank.tank_name,
                         command_payload="Manual override cleared — control returned to schedule"
@@ -72,7 +73,7 @@ def enforce_lighting_schedule():
                     issue_command(db, tank.tank_id, "light_on")
                     settings.last_schedule_check_on = now
 
-                    send_discord_notification(
+                    send_discord_embed(
                         status="light_on",
                         tank_name=tank.tank_name,
                         command_payload="light_on (scheduled)"
@@ -89,7 +90,7 @@ def enforce_lighting_schedule():
                     print(f"🔄 Tank {tank.tank_name}: Cleared manual override. Schedule resumes control.")
                     settings.manual_override_state = None
 
-                    send_discord_notification(
+                    send_discord_embed(
                         status="override_cleared",
                         tank_name=tank.tank_name,
                         command_payload="Manual override cleared — control returned to schedule"
@@ -107,7 +108,7 @@ def enforce_lighting_schedule():
                     issue_command(db, tank.tank_id, "light_off")
                     settings.last_schedule_check_off = now
 
-                    send_discord_notification(
+                    send_discord_embed(
                         status="light_off",
                         tank_name=tank.tank_name,
                         command_payload="light_off (scheduled)"
