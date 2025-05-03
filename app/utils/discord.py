@@ -39,7 +39,6 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
         "info": 0x2962FF,
         "retry_scheduled": 0xF9A825,  # Material Amber 800
         "retry_failed": 0xD32F2F     # Material Red 700
-
     }
 
     # 🧱 Status config

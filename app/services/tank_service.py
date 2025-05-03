@@ -14,27 +14,36 @@ from app.utils.discord import send_discord_embed
 from app.core.config import settings
 from app.utils.timezone import IST
 
+
 def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResponse:
-    print(f"[DEBUG] incoming auth_key='{request.auth_key}'  |  settings.TANK_PRESHARED_KEY='{settings.TANK_PRESHARED_KEY}'")
+    print(
+        f"[DEBUG] incoming auth_key='{request.auth_key}'  |  "
+        f"settings.TANK_PRESHARED_KEY='{settings.TANK_PRESHARED_KEY}'"
+    )
 
     if request.auth_key != settings.TANK_PRESHARED_KEY:
         raise HTTPException(status_code=401, detail="Invalid pre-shared key")
 
+    # If the tank already exists, just refresh its token
     existing = db.execute(
         select(Tank).where(Tank.tank_name == request.tank_name)
     ).scalar_one_or_none()
 
     if existing:
-    # Always generate a fresh token
         new_token = create_jwt_token(str(existing.tank_id))
         existing.token = new_token
         db.commit()
         return TankRegisterResponse(
             message="Tank re-registered and token refreshed 🔄",
             tank_id=str(existing.tank_id),
-            access_token=new_token
+            access_token=new_token,
+            firmware_version=existing.firmware_version,
+            light_on=existing.settings.light_on,
+            light_off=existing.settings.light_off,
+            is_schedule_enabled=existing.settings.is_schedule_enabled,
         )
 
+    # 1) Create new Tank
     new_id = uuid.uuid4()
     token = create_jwt_token(str(new_id))
 
@@ -51,34 +60,39 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
     db.commit()
     db.refresh(new_tank)
 
-    # 🔥 Create settings row (defaults kick in if request.light_on/off None)
+    # 2) Create its settings row (IST-aware times from schema)
     tank_settings = TankSettings(
         tank_id=new_tank.tank_id,
         light_on=request.light_on,
-        light_off=request.light_off
+        light_off=request.light_off,
     )
     db.add(tank_settings)
     db.commit()
     db.refresh(tank_settings)
 
+    # 3) Notify via Discord
     extra_fields = {
-        'Tank ID' : new_tank.tank_id,
-        'Tank Name' : new_tank.tank_name,
-        'Tank Location' : new_tank.location,
-        'Tank Light on at' : tank_settings.light_on,
-        'Tank Light off at' : tank_settings.light_off,
-        'Firmware Version' : new_tank.firmware_version,
+        "Tank ID":           str(new_tank.tank_id),
+        "Tank Name":         new_tank.tank_name,
+        "Location":          new_tank.location or "—",
+        "Firmware Version":  new_tank.firmware_version or "—",
+        "Light On (IST)":    tank_settings.light_on.strftime("%H:%M"),
+        "Light Off (IST)":   tank_settings.light_off.strftime("%H:%M"),
+        "Schedule Enabled":  tank_settings.is_schedule_enabled,
     }
+    send_discord_embed(
+        status="new_registration",
+        tank_name=new_tank.tank_name,
+        extra_fields=extra_fields
+    )
 
-    send_discord_embed(status="new_registration", tank_name=new_tank.tank_name, extra_fields=extra_fields)
-
-    # Return schedule in response
+    # 4) Return full response
     return TankRegisterResponse(
         message="Tank registered successfully ✅",
         tank_id=str(new_tank.tank_id),
         access_token=token,
+        firmware_version=new_tank.firmware_version,
         light_on=tank_settings.light_on,
         light_off=tank_settings.light_off,
         is_schedule_enabled=tank_settings.is_schedule_enabled,
-        firmware_version=new_tank.firmware_version,
     )

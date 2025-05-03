@@ -1,6 +1,5 @@
 # app/models/tank_settings.py
 
-import uuid
 from datetime import time
 from sqlalchemy import (
     Column,
@@ -64,5 +63,5 @@ class TankSettings(Base):
         nullable=False,
     )
 
-    # Back‐reference to Tank
+    # Back‐reference to Tank (no need to import TankSettings here)
     tank = relationship("Tank", back_populates="settings")

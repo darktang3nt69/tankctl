@@ -1,5 +1,6 @@
 # app/utils/timezone.py
 
-from datetime import timezone, timedelta
+from datetime import time
+from zoneinfo import ZoneInfo
 
-IST = timezone(timedelta(hours=5, minutes=30))
+IST = ZoneInfo("Asia/Kolkata")

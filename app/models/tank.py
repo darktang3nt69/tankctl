@@ -1,11 +1,10 @@
 # app/models/tank.py
 
 import uuid
-from sqlalchemy import (
-    Column, String, DateTime, Boolean, Float, func
-)
+from sqlalchemy import Column, String, DateTime, Boolean, Float, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 class Tank(Base):
@@ -50,4 +49,4 @@ class Tank(Base):
     )
 
     def __repr__(self):
-        return f"<Tank(tank_id={self.tank_id}, is_online={self.is_online})>"
+        return f"<Tank(tank_id={self.tank_id}, name={self.tank_name}, is_online={self.is_online})>"

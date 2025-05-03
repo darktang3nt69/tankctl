@@ -57,16 +57,16 @@ def read_settings(
 )
 def put_settings(
     *,
-    tank_id: str = Query(..., description="UUID of the tank"),
+    # tank_id: str = Query(..., description="UUID of the tank"),
     payload: TankSettingsUpdateRequest,
     db: Session = Depends(get_db),
 ):
     # 1) guard the tank exists
-    _ensure_tank_exists(db, tank_id)
+    _ensure_tank_exists(db, payload.tank_id)
 
     # 2) apply the update (won't blow up FK now)
     try:
-        updated = update_tank_settings(db, tank_id, payload)
+        updated = update_tank_settings(db, payload.tank_id, payload)
         return updated
 
     except Exception as e:

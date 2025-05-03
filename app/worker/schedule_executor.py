@@ -22,12 +22,11 @@ celery = Celery(
 @celery.task
 def enforce_lighting_schedule():
     now = datetime.now(IST)
-    now_time = now.time()
+    now_time = now.time().replace(tzinfo=None)
 
     db: Session = SessionLocal()
     print("=" * 90)
     print(f"⏰ [{now.strftime('%Y-%m-%d %H:%M:%S')}] Running lighting schedule enforcement...")
-
     try:
         # fetch all tanks with their settings
         tanks = db.execute(
@@ -46,9 +45,10 @@ def enforce_lighting_schedule():
             if not settings.light_on or not settings.light_off:
                 continue
 
-            light_on_time = settings.light_on
-            light_off_time = settings.light_off
-            override = settings.manual_override_state
+            # strip tzinfo so we compare naive HH:MM vs naive HH:MM
+            light_on_time  = settings.light_on.replace(tzinfo=None)
+            light_off_time = settings.light_off.replace(tzinfo=None)
+            override       = settings.manual_override_state
 
             def is_within_schedule():
                 if light_on_time < light_off_time:
