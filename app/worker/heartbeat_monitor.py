@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.models.tank import Tank
+from app.models.tank_alert_status import TankAlertState
 from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 from celery import Celery
@@ -53,7 +54,6 @@ def heartbeat_check():
 
             # 👇 Prometheus metric for Grafana time series
             tank_online_status.labels(
-                tank_id=str(tank.tank_id),
                 tank_name=tank.tank_name
             ).set(1 if is_online_now else 0)
 
@@ -66,6 +66,12 @@ def heartbeat_check():
                 tank.is_online = False
                 offline_count += 1
                 send_discord_embed(status="offline", tank_name=tank.tank_name)
+                # ✅ Clear alert state if it exists
+                existing_alert = db.query(TankAlertState).filter_by(tank_id=tank.tank_id).first()
+                if existing_alert:
+                    db.delete(existing_alert)
+                    db.commit()
+                    print(f"🧹 Cleared alert state for '{tank.tank_name}'")
 
             elif not was_online and is_online_now:
                 print(f"✅ Tank '{tank.tank_name}' came ONLINE!")
@@ -87,3 +93,4 @@ def heartbeat_check():
 
     finally:
         db.close()
+

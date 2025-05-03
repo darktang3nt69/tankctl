@@ -10,7 +10,7 @@ celery = Celery(
     "aquapi",
     broker=os.getenv("CELERY_BROKER_URL"),
     backend=os.getenv("CELERY_BACKEND_URL"),
-    include=["app.worker.heartbeat_monitor", "app.worker.schedule_executor"],
+    include=["app.worker.heartbeat_monitor", "app.worker.schedule_executor", "app.worker.notify_offline_tanks"],
 )
 
 celery.conf.beat_schedule = {
@@ -25,6 +25,10 @@ celery.conf.beat_schedule = {
     "run-schedule-enforcer-every-minute": {
         "task": "app.worker.schedule_executor.enforce_lighting_schedule",
         "schedule": float(os.getenv("SCHEDULE_LIGHTING_INTERVAL_MINUTES")) * 60,
+    },
+    "check-offline-tanks-every-5-min": {
+        "task": "app.worker.notify_offline_tanks.notify_offline_tanks",
+        "schedule": float(os.getenv("CHECK_OFFLINE_TANK_STATUS_INTERVAL_MINUTES")) * 60,  # Every 5 min
     }
 }
 

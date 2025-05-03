@@ -1,26 +1,24 @@
+
 #!/bin/bash
 
 # ----------------------------------------------
-# AquaPi Multi-Tank Simulator (FINAL VERSION - HEARTBEAT CHECK AWARE)
+# AquaPi Multi-Tank Simulator (EXTENDED VERSION)
+# Features: Heartbeat, Offline Simulation, Manual Override, Schedule Testing
 # ----------------------------------------------
 
-# CONFIGURATION
 API_URL="http://192.168.1.100:8000"
 AUTH_KEY="super_secret_tank_psk"
 TANK_NAME_PREFIX="StressTank"
 NUM_TANKS=3
-HEARTBEAT_INTERVAL=30         # heartbeat every 30s (must be < 1 min threshold)
-OFFLINE_DURATION=120          # simulate offline for 90s (server marks tank offline after 60s)
-JWT_REFRESH_INTERVAL=3300     # refresh token ~55 minutes
-COMMAND_CREATE_INTERVAL=180   # issue command every 3 min
+HEARTBEAT_INTERVAL=30
+OFFLINE_DURATION=120
+JWT_REFRESH_INTERVAL=3300
+COMMAND_CREATE_INTERVAL=180
 
-# INTERNAL
 declare -a tank_ids
 declare -a access_tokens
 declare -a last_registration_times
 declare -a last_command_creation_times
-
-# FUNCTIONS
 
 register_tank() {
   local index=$1
@@ -46,7 +44,6 @@ register_tank() {
   echo "✅ Tank $tank_name registered successfully with ID=${tank_ids[$index]}"
 }
 
-
 send_heartbeat() {
   local index=$1
   RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/api/v1/tank/status" \
@@ -70,36 +67,19 @@ send_heartbeat() {
 
 fetch_and_ack_command() {
   local index=$1
+  RESPONSE=$(curl -s -w "
+%{http_code}" -X GET "$API_URL/api/v1/tank/command"     -H "Authorization: Bearer ${access_tokens[$index]}" -H "accept: application/json")
+  HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+  BODY=$(echo "$RESPONSE" | sed '$d')
 
-  COMMAND_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$API_URL/api/v1/tank/command" \
-    -H "Authorization: Bearer ${access_tokens[$index]}" \
-    -H "accept: application/json")
+  [[ "$HTTP_CODE" == "401" ]] && echo "🔴 Token expired. Re-registering Tank_$index..." && register_tank $index && return 1
 
-  HTTP_CODE=$(echo "$COMMAND_RESPONSE" | tail -n1)
-  COMMAND_BODY=$(echo "$COMMAND_RESPONSE" | sed '$d')
-
-  if [[ "$HTTP_CODE" == "401" ]]; then
-    echo "🔴 Tank_$index detected expired token during command fetch. Re-registering..."
-    register_tank $index
-    return 1
-  fi
-
-  command_id=$(echo "$COMMAND_BODY" | jq -r '.command_id')
-  command_payload=$(echo "$COMMAND_BODY" | jq -r '.command_payload')
-
+  command_id=$(echo "$BODY" | jq -r '.command_id')
+  command_payload=$(echo "$BODY" | jq -r '.command_payload')
   if [[ "$command_id" != "null" && ! -z "$command_id" ]]; then
-    echo "[$(date)] 📥 Tank_$index received command: $command_payload (id=$command_id)"
+    echo "[$(date)] 📥 Tank_$index received command: $command_payload"
     sleep 2
-
-    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/command/ack" \
-      -H "Authorization: Bearer ${access_tokens[$index]}" \
-      -H "accept: application/json" \
-      -H "Content-Type: application/json" \
-      -d "{
-            \"command_id\": \"$command_id\",
-            \"success\": true
-          }"
-
+    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/command/ack"       -H "Authorization: Bearer ${access_tokens[$index]}" -H "accept: application/json"       -H "Content-Type: application/json" -d "{"command_id": "$command_id", "success": true}"
     echo "[$(date)] 📤 Tank_$index acknowledged command."
   fi
 }
@@ -111,46 +91,50 @@ simulate_command_creation() {
 
   if (( elapsed > COMMAND_CREATE_INTERVAL )); then
     RANDOM_COMMAND=$(shuf -n 1 -e "feed_now" "light_on" "light_off" "pump_on" "pump_off")
-    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/${tank_ids[$index]}/command" \
-      -H "accept: application/json" \
-      -H "Content-Type: application/json" \
-      -d "{\"command_payload\": \"$RANDOM_COMMAND\"}"
+    curl -s -o /dev/null -X POST "$API_URL/api/v1/admin/send_command_to_tank" \
+  -H "accept: application/json" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: supersecretgrafanakey123" \
+  -d "{
+        \"tank_id\": \"${tank_ids[$index]}\",
+        \"command_payload\": \"$RANDOM_COMMAND\"
+      }"
 
-    echo "[$(date)] ⚡ Tank_$index issued random command: $RANDOM_COMMAND"
+    echo "[$(date)] ⚡ Tank_$index issued command: $RANDOM_COMMAND"
     last_command_creation_times[$index]=$now
   fi
 }
 
+simulate_manual_override() {
+  local index=$1
+  if [[ $((RANDOM % 40)) == 0 ]]; then
+    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/${tank_ids[$index]}/override" \
+      -H "accept: application/json" \
+      -H "Content-Type: application/json" \
+      -d "{\"override_state\": true}" && \
+    echo "[$(date)] 🔧 Manual override ENABLED for Tank_$index"
+  fi
+}
+
+simulate_schedule_toggle() {
+  local index=$1
+  if [[ $((RANDOM % 50)) == 0 ]]; then
+    curl -s -o /dev/null -X POST "$API_URL/api/v1/tank/${tank_ids[$index]}/schedule/toggle" \
+      -H "accept: application/json" && \
+    echo "[$(date)] 🔁 Toggled schedule for Tank_$index"
+  fi
+}
+
+
 simulate_offline_cycle() {
   local index=$1
-  if (( RANDOM % 25 == 0 )); then
-    echo "[$(date)] 🛑 Tank_$index simulating OFFLINE for $OFFLINE_DURATION seconds..."
-    offline_start=$(date +%s)
-
-    while true; do
-      now=$(date +%s)
-      elapsed=$((now - offline_start))
-      if (( elapsed >= OFFLINE_DURATION )); then
-        break
-      fi
-      echo "[$(date)] 🚫 Tank_$index is OFFLINE... ($elapsed/${OFFLINE_DURATION}s)"
-      sleep $HEARTBEAT_INTERVAL
-    done
-
-    echo "[$(date)] 🟢 Tank_$index coming ONLINE again."
-    send_heartbeat $index
-  fi
+  [[ $((RANDOM % 25)) == 0 ]] && echo "[$(date)] 🛑 Tank_$index simulating OFFLINE..." && sleep $OFFLINE_DURATION
 }
 
 refresh_jwt_if_needed() {
   local index=$1
   now=$(date +%s)
-  elapsed=$((now - last_registration_times[$index]))
-
-  if (( elapsed > JWT_REFRESH_INTERVAL )); then
-    echo "[$(date)] ♻️ Tank_$index proactively refreshing registration..."
-    register_tank $index
-  fi
+  (( now - last_registration_times[$index] > JWT_REFRESH_INTERVAL )) && echo "♻️ Refreshing JWT for Tank_$index" && register_tank $index
 }
 
 node_loop() {
@@ -159,16 +143,15 @@ node_loop() {
     send_heartbeat $index
     fetch_and_ack_command $index
     simulate_command_creation $index
+    simulate_manual_override $index
+    simulate_schedule_toggle $index
     simulate_offline_cycle $index
     refresh_jwt_if_needed $index
     sleep $HEARTBEAT_INTERVAL
   done
 }
 
-# MAIN
-
 echo "🎯 Starting Multi-Tank Simulation..."
-
 for ((i=0; i<NUM_TANKS; i++)); do
   register_tank $i
   node_loop $i &
