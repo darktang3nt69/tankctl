@@ -10,11 +10,12 @@ class TankSettingsResponse(BaseModel):
     manual_override_state: Optional[str]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class TankSettingsUpdateRequest(BaseModel):
-    light_on: time = Field(..., description="Time to turn lights on (HH:MM:SS)")
-    light_off: time = Field(..., description="Time to turn lights off (HH:MM:SS)")
+    tank_id: str = Field(..., description="UUID of the tank")
+    light_on: time = Field(..., description="HH:MM lighting start")
+    light_off: time = Field(..., description="HH:MM lighting end")
     is_schedule_enabled: Optional[bool] = Field(
         None, description="Enable or disable scheduled lighting"
     )

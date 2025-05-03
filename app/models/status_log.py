@@ -2,6 +2,10 @@ from sqlalchemy import Column, Float, Boolean, String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from app.core.database import Base
+
+from app.utils.timezone import IST
+
+
 import uuid
 
 class StatusLog(Base):
@@ -22,7 +26,7 @@ class StatusLog(Base):
     firmware_version = Column(String, nullable=True)  # Version of firmware running
 
     # When the status update was sent
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.now(IST))
 
     def __repr__(self):
         return f"<StatusLog(tank_id={self.tank_id}, temperature={self.temperature}, ph={self.ph})>"
