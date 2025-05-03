@@ -30,7 +30,7 @@ class TankSettings(Base):
     light_on = Column(
         Time(timezone=True),
         nullable=False,
-        default=lambda: time(hour=10, minute=0, tzinfo='Asia/Kolkata'),
+        default=lambda: time(hour=10, minute=0),
     )
     light_off = Column(
         Time(timezone=True),
