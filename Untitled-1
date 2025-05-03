@@ -1,7 +1,0 @@
-curl -X POST "http://localhost:8000/api/v1/admin/send_command_to_tank" \
-  -H "X-API-Key: supersecretgrafanakey123" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tank_id": "a3d86ca1-e78f-4621-81c0-381237a15ae8",
-    "command_payload": "light_on"
-}'

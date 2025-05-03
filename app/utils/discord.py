@@ -63,13 +63,13 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
         },
         "light_on": {
             "emoji": "💡",
-            "title": "Lights Turned ON",
+            "title": "Scheduled Light ON",
             "description": f"Tank **{tank_name}**: Lights turned **ON** by scheduled trigger.",
             "footer": "Light ON at"
         },
         "light_off": {
             "emoji": "🌙",
-            "title": "Lights Turned OFF",
+            "title": "Scheduled Lights OFF",
             "description": f"Tank **{tank_name}**: Lights turned **OFF** by scheduled trigger.",
             "footer": "Light OFF at"
         },

@@ -12,7 +12,6 @@ from app.services.command_service import issue_command
 from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 
-# Celery app setup
 celery = Celery(
     "schedule_executor",
     broker=os.getenv("CELERY_BROKER_URL"),
@@ -25,44 +24,48 @@ def enforce_lighting_schedule():
     now_time = now.time().replace(tzinfo=None)
 
     db: Session = SessionLocal()
-    print("=" * 90)
-    print(f"⏰ [{now.strftime('%Y-%m-%d %H:%M:%S')}] Running lighting schedule enforcement...")
+    print("\n" + "=" * 90)
+    print(f"⏰ [{now.strftime('%Y-%m-%d %H:%M:%S %Z')}] Running lighting schedule enforcement...")
     try:
-        # fetch all tanks with their settings
-        tanks = db.execute(
-            select(Tank).join(TankSettings)
-        ).scalars().all()
+        tanks = db.execute(select(Tank).join(TankSettings)).scalars().all()
+        print(f"🔍 Found {len(tanks)} tanks to evaluate.\n")
 
         for tank in tanks:
             settings = tank.settings
 
-            # 🛑 Skip if schedule is disabled
+            # 1. Skip if scheduler paused
             if not settings.is_schedule_enabled:
-                print(f"⏸️  Tank {tank.tank_name}: schedule is paused, skipping")
+                print(f"   ⏸️ Tank {tank.tank_name}: schedule paused; skipping.\n")
                 continue
 
-            # 🛠 sanity check
+            # 2. Sanity: need both times
             if not settings.light_on or not settings.light_off:
+                print(f"   ⚠️ Tank {tank.tank_name}: missing on/off times; skipping.\n")
                 continue
 
-            # strip tzinfo so we compare naive HH:MM vs naive HH:MM
-            light_on_time  = settings.light_on.replace(tzinfo=None)
-            light_off_time = settings.light_off.replace(tzinfo=None)
-            override       = settings.manual_override_state
+            # strip tzinfo so we compare just HH:MM
+            on_t = settings.light_on.replace(tzinfo=None)
+            off_t = settings.light_off.replace(tzinfo=None)
+            ov     = settings.manual_override_state
 
-            def is_within_schedule():
-                if light_on_time < light_off_time:
-                    return light_on_time <= now_time < light_off_time
-                else:
-                    # overnight window (e.g. 20:00→06:00)
-                    return now_time >= light_on_time or now_time < light_off_time
+            print(f"--- Evaluating Tank '{tank.tank_name}' (ID={tank.tank_id}) ---")
+            print(f"    Schedule: ON at {on_t}, OFF at {off_t}")
+            print(f"    Now (naive): {now_time}")
+            print(f"    Manual override: {ov}")
 
-            inside_window = is_within_schedule()
+            def inside_window():
+                if on_t < off_t:
+                    return on_t <= now_time < off_t
+                return now_time >= on_t or now_time < off_t
 
-            # 💡 INSIDE window: schedule wants lights ON
-            if inside_window:
-                # clear a stale manual override
-                if override is not None:
+            inside = inside_window()
+            print(f"    ➡ Inside window? {inside}")
+
+            # ─── INSIDE ───
+            if inside:
+                # 3a. Clear any stale override
+                if ov is not None:
+                    print("    🔄 Clearing manual override; back to schedule")
                     settings.manual_override_state = None
                     send_discord_embed(
                         status="override_cleared",
@@ -75,11 +78,14 @@ def enforce_lighting_schedule():
                         trigger_source="scheduled"
                     ))
 
-                # if not already turned on today
-                if override != "off" and (
-                    not settings.last_schedule_check_on
-                    or settings.last_schedule_check_on.date() != now.date()
-                ):
+                # 3b. Fire ON exactly once per day
+                already_on = (settings.last_schedule_check_on 
+                              and settings.last_schedule_check_on.date() == now.date())
+                if ov != "off" and not already_on:
+                    print("    ✅ Triggering LIGHT ON (scheduled)")
+                    # reset any previous OFF so we can re-fire OFF later
+                    settings.last_schedule_check_off = None
+
                     issue_command(db, tank.tank_id, "light_on")
                     settings.last_schedule_check_on = now
 
@@ -93,10 +99,13 @@ def enforce_lighting_schedule():
                         event_type="light_on",
                         trigger_source="scheduled"
                     ))
-
-            # 🌙 OUTSIDE window: schedule wants lights OFF
+                else:
+                    print("    ℹ️ LIGHT ON already handled for today or override=off")
+            # ─── OUTSIDE ───
             else:
-                if override is not None:
+                # 4a. Clear override if present
+                if ov is not None:
+                    print("    🔄 Clearing manual override; back to schedule")
                     settings.manual_override_state = None
                     send_discord_embed(
                         status="override_cleared",
@@ -109,10 +118,15 @@ def enforce_lighting_schedule():
                         trigger_source="scheduled"
                     ))
 
-                if override != "on" and (
-                    not settings.last_schedule_check_off
-                    or settings.last_schedule_check_off.date() != now.date()
-                ):
+                # 4b. Only OFF after we’ve done ON today
+                on_today = (settings.last_schedule_check_on 
+                            and settings.last_schedule_check_on.date() == now.date())
+                print(f"    Already ON today? {on_today}")
+
+                already_off = (settings.last_schedule_check_off 
+                               and settings.last_schedule_check_off.date() == now.date())
+                if ov != "on" and on_today and not already_off:
+                    print("    🌙 Triggering LIGHT OFF (scheduled)")
                     issue_command(db, tank.tank_id, "light_off")
                     settings.last_schedule_check_off = now
 
@@ -126,10 +140,14 @@ def enforce_lighting_schedule():
                         event_type="light_off",
                         trigger_source="scheduled"
                     ))
+                else:
+                    print("    ℹ️ LIGHT OFF skipped (either not ON yet or already OFF today)")
+
+            print()  # blank line between tanks
 
         db.commit()
         print("✅ Lighting schedule enforcement complete.")
-        print("=" * 90)
+        print("=" * 90 + "\n")
 
     except Exception as e:
         print(f"❌ Schedule executor error: {e}")
