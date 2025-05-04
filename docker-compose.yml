@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:14
+    restart: always
+    container_name: aquapi_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:                 # 🆕 Add healthcheck here
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    restart: always
+    container_name: aquapi_redis
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    container_name: aquapi_fastapi
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    command: >
+      sh -c "sleep 10 && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - db
+  
+  celery_beat:
+    build: .
+    restart: always
+    env_file: .env
+    depends_on:
+      - web
+      - db
+      - redis
+    command: celery -A app.worker.celery_app beat --loglevel=info
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aquapi_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - "GF_PLUGINS_PREINSTALL=yesoreyeram-infinity-datasource, volkovlabs-form-panel"
+    volumes:
+      - ./docker/grafana/data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards  # ✅ ADD THIS LINE
+      - ./docker/grafana/plugins:/var/lib/grafana/plugins  # ✅ ADD THIS LINE
+    depends_on:
+      - db
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aquapi_prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+
+
+volumes:
+  postgres_data:
