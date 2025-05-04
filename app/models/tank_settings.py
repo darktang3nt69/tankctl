@@ -1,5 +1,3 @@
-# app/models/tank_settings.py
-
 from datetime import time
 from sqlalchemy import (
     Column,
@@ -7,7 +5,6 @@ from sqlalchemy import (
     Time,
     DateTime,
     Boolean,
-    String,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -44,10 +41,11 @@ class TankSettings(Base):
         default=True,
     )
 
-    # Manual override: 'on', 'off', or NULL
-    manual_override_state = Column(
-        String,
+    # Pause scheduling until this timestamp (one‐shot override)
+    schedule_paused_until = Column(
+        DateTime(timezone=True),
         nullable=True,
+        comment="Skip scheduling until this timestamp",
     )
 
     # Prevent duplicate triggers within same window
@@ -55,7 +53,11 @@ class TankSettings(Base):
     last_schedule_check_off = Column(DateTime(timezone=True), nullable=True)
 
     # Audit timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
     updated_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -63,5 +65,5 @@ class TankSettings(Base):
         nullable=False,
     )
 
-    # Back‐reference to Tank (no need to import TankSettings here)
+    # Back‐reference to Tank
     tank = relationship("Tank", back_populates="settings")

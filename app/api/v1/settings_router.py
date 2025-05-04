@@ -60,9 +60,13 @@ def put_settings(
 ):
     _ensure_tank_exists(db, str(payload.tank_id))
     try:
+        # update_tank_settings now also clears any outstanding pause
         return update_tank_settings(db, str(payload.tank_id), payload)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
 @router.post(
@@ -76,8 +80,9 @@ def post_manual_override(
     db: Session = Depends(get_db),
 ):
     """
-    Provide {"tank_id": "<uuid>", "override_command": "light_on"|"light_off"}
-    to issue a manual override (and pause schedule until next window).
+    Provide {"tank_id": "<uuid>", "override_command": "on"|"off"}
+    to fire the corresponding light_on/light_off immediately
+    and pause automated scheduling until the next schedule edge.
     """
     tank_id = str(payload.tank_id)
     _ensure_tank_exists(db, tank_id)
@@ -87,33 +92,39 @@ def post_manual_override(
 @router.post(
     "/override/clear",
     response_model=TankSettingsResponse,
-    summary="(Admin) Clear any manual lighting override and resume schedule immediately",
+    summary="(Admin) Clear any manual lighting pause and resume schedule immediately",
 )
 def clear_manual_override(
     *,
     tank_id: UUID = Query(..., description="UUID of the tank"),
     db: Session = Depends(get_db),
 ):
-    _ensure_tank_exists(db, str(tank_id))
+    """
+    Force‑clear any outstanding pause (schedule_paused_until),
+    reset today's schedule markers, and resume normal scheduling.
+    """
+    tid = str(tank_id)
+    _ensure_tank_exists(db, tid)
 
-    settings = get_or_create_settings(db, str(tank_id))
-    if settings.manual_override_state is None:
+    settings = get_or_create_settings(db, tid)
+
+    # nothing to do?
+    if settings.schedule_paused_until is None:
         return settings
 
-    # clear override and allow next window to fire
-    settings.manual_override_state = None
-    settings.last_schedule_check_on = None
+    # clear the pause and today's markers
+    settings.schedule_paused_until   = None
+    settings.last_schedule_check_on  = None
     settings.last_schedule_check_off = None
 
     db.add(settings)
     db.commit()
     db.refresh(settings)
 
-    # Discord notification
     send_discord_embed(
         status="override_cleared",
         tank_name=settings.tank.tank_name,
-        command_payload="Manual override cleared via API"
+        command_payload="Pause cleared via API"
     )
 
     return settings
