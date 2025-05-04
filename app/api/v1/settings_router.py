@@ -2,7 +2,10 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from uuid import UUID
 
+from app.api.deps import get_db, verify_admin_api_key
+from app.models.tank import Tank
 from app.schemas.tank_settings import (
     TankSettingsResponse,
     TankSettingsUpdateRequest,
@@ -11,15 +14,14 @@ from app.schemas.tank_settings import (
 from app.services.tank_settings_service import (
     get_or_create_settings,
     update_tank_settings,
-    set_manual_override,
+    manual_override_command,
 )
-from app.api.deps import get_db, verify_admin_api_key
-from app.models.tank import Tank
+from app.utils.discord import send_discord_embed
 
 router = APIRouter(
     prefix="/tank/settings",
     tags=["tank settings"],
-    dependencies=[Depends(verify_admin_api_key)],  # requires x-api-key header
+    dependencies=[Depends(verify_admin_api_key)],  # require x‑api‑key header
 )
 
 
@@ -39,11 +41,11 @@ def _ensure_tank_exists(db: Session, tank_id: str):
 )
 def read_settings(
     *,
-    tank_id: str = Query(..., description="UUID of the tank"),
+    tank_id: UUID = Query(..., description="UUID of the tank"),
     db: Session = Depends(get_db),
 ):
-    _ensure_tank_exists(db, tank_id)
-    return get_or_create_settings(db, tank_id)
+    _ensure_tank_exists(db, str(tank_id))
+    return get_or_create_settings(db, str(tank_id))
 
 
 @router.put(
@@ -60,7 +62,7 @@ def put_settings(
     try:
         return update_tank_settings(db, str(payload.tank_id), payload)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post(
@@ -74,12 +76,12 @@ def post_manual_override(
     db: Session = Depends(get_db),
 ):
     """
-    Provide {"tank_id": "<uuid>", "override_state": "on"|"off"} to force
-    lights ON or OFF immediately (and pause schedule until next window).
+    Provide {"tank_id": "<uuid>", "override_command": "light_on"|"light_off"}
+    to issue a manual override (and pause schedule until next window).
     """
     tank_id = str(payload.tank_id)
     _ensure_tank_exists(db, tank_id)
-    return set_manual_override(db, tank_id, payload.override_state)
+    return manual_override_command(db, payload)
 
 
 @router.post(
@@ -89,17 +91,17 @@ def post_manual_override(
 )
 def clear_manual_override(
     *,
-    tank_id: str = Query(..., description="UUID of the tank"),
+    tank_id: UUID = Query(..., description="UUID of the tank"),
     db: Session = Depends(get_db),
 ):
-    _ensure_tank_exists(db, tank_id)
+    _ensure_tank_exists(db, str(tank_id))
 
-    settings = get_or_create_settings(db, tank_id)
+    settings = get_or_create_settings(db, str(tank_id))
     if settings.manual_override_state is None:
         return settings
 
+    # clear override and allow next window to fire
     settings.manual_override_state = None
-    # reset today's triggers so schedule can re-fire at next window
     settings.last_schedule_check_on = None
     settings.last_schedule_check_off = None
 
@@ -107,8 +109,7 @@ def clear_manual_override(
     db.commit()
     db.refresh(settings)
 
-    # notify Discord
-    from app.utils.discord import send_discord_embed
+    # Discord notification
     send_discord_embed(
         status="override_cleared",
         tank_name=settings.tank.tank_name,

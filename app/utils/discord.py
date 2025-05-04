@@ -16,7 +16,8 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
     Send a styled embed notification to Discord for any AquaPi event.
     
     Args:
-        status (str): One of: online, offline, new_registration, light_on, light_off, override_cleared, command_ack
+        status (str): One of: online, offline, new_registration, light_on, light_off,
+                      override_cleared, manual_light_on, manual_light_off, command_ack, info, retry_scheduled, retry_failed
         tank_name (str): Tank name shown in embed
         command_payload (str, optional): Used for command acknowledgment messages
         success (bool, optional): Used for command acknowledgment (success/failure)
@@ -28,17 +29,19 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
 
     # 🎨 Material-inspired color palette
     color_map = {
-        "offline": 0xB00020,
-        "online": 0x00C853,
-        "new_registration": 0xFFD600,
-        "light_on": 0x00B0FF,
-        "light_off": 0x1A237E,
-        "override_cleared": 0x757575,
-        "command_ack_success": 0x00FF00,
-        "command_ack_fail": 0xFF0000,
-        "info": 0x2962FF,
-        "retry_scheduled": 0xF9A825,  # Material Amber 800
-        "retry_failed": 0xD32F2F     # Material Red 700
+        "offline":            0xB00020,   # Red 800
+        "online":             0x00C853,   # Green A700
+        "new_registration":   0xFFD600,   # Yellow A400
+        "light_on":           0x00B0FF,   # Light Blue A400
+        "light_off":          0x1A237E,   # Indigo 900
+        "override_cleared":   0x757575,   # Grey 600
+        "manual_light_on":    0x8E24AA,   # Deep Purple 600
+        "manual_light_off":   0xD81B60,   # Pink 600
+        "command_ack_success":0x00E676,   # Green A400
+        "command_ack_fail":   0xFF1744,   # Red A400
+        "info":               0x2962FF,   # Blue 800
+        "retry_scheduled":    0xF9A825,   # Amber 800
+        "retry_failed":       0xD32F2F    # Red 700
     }
 
     # 🧱 Status config
@@ -79,6 +82,18 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
             "description": f"Tank **{tank_name}**: Manual override cleared. Schedule resumed.",
             "footer": "Override cleared at"
         },
+        "manual_light_on": {
+            "emoji": "🖐️",
+            "title": "Manual Command: LIGHT ON",
+            "description": f"Tank **{tank_name}**: Lights **FORCED ON** by manual override.",
+            "footer": "Manual LIGHT ON at"
+        },
+        "manual_light_off": {
+            "emoji": "✋",
+            "title": "Manual Command: LIGHT OFF",
+            "description": f"Tank **{tank_name}**: Lights **FORCED OFF** by manual override.",
+            "footer": "Manual LIGHT OFF at"
+        },
         "command_ack": {
             "emoji": "✅" if success else "❌",
             "title": "Command Acknowledged" if success else "Command Failed",
@@ -90,18 +105,6 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
             "title": "Tank Update",
             "description": f"Tank **{tank_name}** has a status update.",
             "footer": "Update recorded at"
-        },
-        "manual_light_on": {
-            "emoji": "🖐️",
-            "title": "Manual Command: LIGHT ON",
-            "description": f"Tank **{tank_name}**: Received manual command to turn **ON** the lights.",
-            "footer": "Manual LIGHT ON issued at"
-        },
-        "manual_light_off": {
-            "emoji": "✋",
-            "title": "Manual Command: LIGHT OFF",
-            "description": f"Tank **{tank_name}**: Received manual command to turn **OFF** the lights.",
-            "footer": "Manual LIGHT OFF issued at"
         },
         "retry_scheduled": {
             "emoji": "🔁",
@@ -115,24 +118,18 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
             "description": f"Tank **{tank_name}**: Command failed permanently after maximum retries.",
             "footer": "Marked failed at"
         },
-
     }
 
-    # 🎯 Select final status (default to info)
-    resolved_status = "command_ack" if status == "command_ack" else status
-    config = status_config.get(resolved_status, status_config["info"])
-    color = (
-        color_map["command_ack_success"] if resolved_status == "command_ack" and success else
-        color_map["command_ack_fail"] if resolved_status == "command_ack" else
-        color_map.get(resolved_status, color_map["info"])
-    )
+    # 🎯 Choose final status config (default to info)
+    config = status_config.get(status, status_config["info"])
+    color = color_map.get(status, color_map["info"])
 
     # 🛠️ Build embed
     embed = {
-        "title": f"{config['emoji']} {config['title']}",
+        "title":       f"{config['emoji']} {config['title']}",
         "description": config["description"],
-        "color": color,
-        "timestamp": now_ist_iso,
+        "color":       color,
+        "timestamp":   now_ist_iso,
         "footer": {
             "text": f"{config['footer']} {now_ist.strftime('%d %b %Y %I:%M %p IST')}"
         }
@@ -143,7 +140,7 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
         embed["fields"] = []
         for key, value in extra_fields.items():
             embed["fields"].append({
-                "name": str(key),
+                "name":  str(key),
                 "value": str(value),
                 "inline": True
             })
@@ -153,8 +150,8 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
     headers = {"Content-Type": "application/json"}
 
     try:
-        response = requests.post(DISCORD_WEBHOOK_URL, json=payload, headers=headers)
-        if response.status_code not in [200, 204]:
-            print(f"❌ Failed to send Discord embed: {response.status_code} {response.text}")
+        resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, headers=headers)
+        if resp.status_code not in (200, 204):
+            print(f"❌ Failed to send Discord embed: {resp.status_code} {resp.text}")
     except Exception as e:
-        print(f"❌ Discord webhook error: {str(e)}")
+        print(f"❌ Discord webhook error: {e}")
