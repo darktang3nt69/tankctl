@@ -3,8 +3,9 @@
 from datetime import datetime, timedelta
 from app.schemas.command import CommandAcknowledgeRequest
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 import uuid
+import os
 
 from app.models.tank import Tank
 from app.models.tank_command import TankCommand
@@ -14,7 +15,7 @@ from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 
 # Configurable retry policy
-MAX_RETRIES = 3
+MAX_RETRIES = os.getenv("", 3)
 BASE_BACKOFF_SECONDS = 60  # 1 minute
 
 def issue_command(
@@ -62,7 +63,6 @@ def issue_command(
 
     return new_command
 
-
 def get_pending_command_for_tank(db: Session, tank_id) -> TankCommand | None:
     command = db.execute(
         select(TankCommand)
@@ -74,8 +74,6 @@ def get_pending_command_for_tank(db: Session, tank_id) -> TankCommand | None:
     ).scalars().first()  # ✅ FIXED
 
     return command
-
-
 
 def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeRequest):
     """
@@ -106,63 +104,82 @@ def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeReques
     }
 
 
-
 def retry_stale_commands(db: Session):
     """
-    Retry pending commands if next_retry_at has passed.
+    Retry exactly one command per tank: find the oldest pending/in_progress
+    whose next_retry_at <= now, then retry or mark failed.
     """
     now = datetime.now(IST)
-    stale_commands = db.execute(
-        select(TankCommand).where(
+
+    # 1) Identify head‐of‐line per tank
+    subq = (
+        db.query(
+            TankCommand.tank_id,
+            func.min(TankCommand.created_at).label("min_created")
+        )
+        .filter(
             TankCommand.status.in_(["pending", "in_progress"]),
             TankCommand.next_retry_at <= now
         )
-    ).scalars().all()
+        .group_by(TankCommand.tank_id)
+        .subquery()
+    )
 
-    print(f"📦 Commands eligible for retry: {len(stale_commands)}")
+    # 2) Fetch those full command rows
+    head_cmds = (
+        db.query(TankCommand)
+          .join(
+             subq,
+             (TankCommand.tank_id == subq.c.tank_id) &
+             (TankCommand.created_at == subq.c.min_created)
+          )
+          .all()
+    )
+
+    print(f"📦 Head‐of‐line commands eligible for retry: {len(head_cmds)}")
 
     failed, retried = 0, 0
 
-    for command in stale_commands:
-        tank = db.execute(select(Tank).where(Tank.tank_id == command.tank_id)).scalar_one_or_none()
+    for command in head_cmds:
+        tank = db.get(Tank, command.tank_id)
         tank_name = tank.tank_name if tank else "<unknown>"
 
+        # If it’s already hit max retries → mark failed
         if command.retries >= MAX_RETRIES:
             failed += 1
             command.status = "failed"
-
             print(f"❌ Command {command.command_id} FAILED for tank {tank_name} after {command.retries} retries.")
-
-            # ❌ Final failure notification
             send_discord_embed(
                 status="retry_failed",
                 tank_name=tank_name,
                 command_payload=command.command_payload,
                 extra_fields={
                     "Retries": str(command.retries),
-                    "Status": "Failed permanently"
+                    "Status": "Permanently failed"
                 }
             )
-
         else:
+            # Otherwise increment attempts, schedule next retry, and fire it
             command.retries += 1
             backoff = BASE_BACKOFF_SECONDS * (2 ** (command.retries - 1))
             command.next_retry_at = now + timedelta(seconds=backoff)
+            command.status = "delivered"
             retried += 1
 
-            print(f"🔁 Retrying command {command.command_id} for tank {tank_name} | Retry #{command.retries} | Next retry at {command.next_retry_at.strftime('%H:%M:%S')}")
-
-            # 🔁 Retry scheduled notification
+            print(f"🔁 Retrying command {command.command_id} for tank {tank_name} | "
+                  f"Retry #{command.retries} | Next retry at {command.next_retry_at.strftime('%H:%M:%S')}")
             send_discord_embed(
                 status="retry_scheduled",
                 tank_name=tank_name,
                 extra_fields={
-                    "Command": command.command_payload,
-                    "Retry #": str(command.retries),
+                    "Command":       command.command_payload,
+                    "Retry #":       str(command.retries),
                     "Next Retry At": command.next_retry_at.strftime('%d %b %Y %I:%M %p IST')
                 }
             )
 
+        # persist this command’s updated state
+        db.add(command)
 
     db.commit()
 
