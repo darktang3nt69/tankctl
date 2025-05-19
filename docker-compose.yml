@@ -3,8 +3,8 @@ version: "3.9"
 services:
   db:
     image: postgres:14
-    restart: always
-    container_name: aquapi_postgres
+    restart: on-failure
+    container_name: tankctl_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -21,14 +21,14 @@ services:
 
   redis:
     image: redis:7
-    restart: always
-    container_name: aquapi_redis
+    restart: on-failure
+    container_name: tankctl_redis
     ports:
       - "6379:6379"
 
   web:
     build: .
-    container_name: aquapi_fastapi
+    container_name: tankctl_fastapi
     restart: always
     env_file:
       - .env
@@ -44,23 +44,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    command: celery -A app.worker.celery_app worker -P eventlet --loglevel=info
     env_file:
       - .env
     depends_on:
       - redis
       - db
-  
+
   celery_beat:
     build: .
-    restart: always
+    restart: on-failure
     env_file: .env
     depends_on:
       - web
       - db
       - redis
     command: celery -A app.worker.celery_app beat --loglevel=info
-
+    
   grafana:
     image: grafana/grafana:latest
     container_name: aquapi_grafana
@@ -81,7 +81,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: aquapi_prometheus
+    container_name: tankctl_prometheus
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -91,4 +91,4 @@ services:
 
 
 volumes:
-  postgres_data:
+  tankctl_postgres_data:
