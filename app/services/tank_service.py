@@ -16,10 +16,7 @@ from app.utils.timezone import IST
 
 
 def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResponse:
-    print(
-        f"[DEBUG] incoming auth_key='{request.auth_key}'  |  "
-        f"settings.TANK_PRESHARED_KEY='{settings.TANK_PRESHARED_KEY}'"
-    )
+    print("[DEBUG] Authentication attempt received for tank registration.")
 
     if request.auth_key != settings.TANK_PRESHARED_KEY:
         raise HTTPException(status_code=401, detail="Invalid pre-shared key")
