@@ -1,56 +1,183 @@
-# TankCtl Tank API
+# TankCtl - Aquarium Tank Management System
 
-An API to manage and monitor aquarium tanks. This project allows registration of tank nodes, receiving status updates (heartbeats, temperature, pH, light), issuing commands (feed, light on/off), managing lighting schedules and manual overrides, and sending notifications via Discord.
+A comprehensive API system for managing and monitoring aquarium tanks. This system provides real-time monitoring, automated control, and notifications for multiple aquarium tanks.
 
-## Key Features
+## 🌟 Features
 
-- **Tank Registration:** Register new tank nodes and receive a JWT token for authentication.
-- **Status Updates:** Tanks send heartbeat and status updates (temperature, pH, light).
-- **Command Issuance:** Admins can issue commands to specific tanks.
-- **Command Acknowledgment:** Tanks acknowledge command execution success or failure.
-- **Lighting Schedule Management:** Configure and update tank lighting schedules.
-- **Manual Overrides:** Manually turn lights on/off, overriding the schedule temporarily.
-- **Discord Notifications:** Send notifications for various events (tank online/offline, commands, overrides) to Discord via a webhook.
-- **Prometheus Metrics:** Exposes metrics for monitoring tank status.
+### Tank Management
+- **Tank Registration**: Register new tank nodes with secure JWT authentication
+- **Status Monitoring**: Real-time tracking of:
+  - Temperature
+  - pH levels
+  - Light status
+  - Heartbeat monitoring
+- **Command System**:
+  - Issue commands to tanks (feed, light control)
+  - Command acknowledgment tracking
+  - Command history and status
 
-## Technology Stack
+### Lighting Control
+- **Schedule Management**: Configure and update lighting schedules
+- **Manual Overrides**: Temporary manual control of lights
+- **Schedule Execution**: Automated schedule management
 
-- **FastAPI:** Web framework for building the API.
-- **SQLAlchemy:** ORM for database interactions (PostgreSQL).
-- **Celery:** Task queue for background jobs (e.g., heartbeat monitoring, schedule execution, retries).
-- **Pydantic:** Data validation and settings management.
-- **python-jose:** JWT handling.
-- **python-dotenv:** Loading environment variables.
-- **requests:** Making HTTP requests (for Discord webhooks).
-- **prometheus_fastapi_instrumentator, prometheus_client:** Prometheus metrics.
+### Monitoring & Alerts
+- **Discord Integration**: Real-time notifications for:
+  - Tank online/offline status
+  - Command execution
+  - Manual overrides
+  - System alerts
+- **Prometheus Metrics**: Comprehensive monitoring metrics
+- **Grafana Dashboards**: Visual monitoring and analytics
 
-## Project Structure
+### Security
+- JWT-based authentication
+- Secure API endpoints
+- Role-based access control
 
-- `app/api/v1/`: API routers for different functionalities (registration, status, commands, admin commands, settings).
-- `app/core/`: Core components like database connection, configuration settings, audit logging, and Celery configuration.
-- `app/metrics/`: Prometheus metrics related code.
-- `app/models/`: SQLAlchemy models for database tables (tanks, status logs, event logs, commands, settings, etc.).
-- `app/schemas/`: Pydantic schemas for request and response data validation.
-- `app/services/`: Business logic and service functions for handling API requests and interacting with the database.
-- `app/utils/`: Utility functions (Discord notifications, JWT handling, logging, timezone).
-- `app/worker/`: Celery worker tasks (command dispatcher, heartbeat monitor, schedule executor, etc.).
+## 🛠 Technology Stack
 
-## Setup and Installation
+- **Backend**: FastAPI
+- **Database**: PostgreSQL
+- **Task Queue**: Celery with Redis
+- **Monitoring**: Prometheus & Grafana
+- **Containerization**: Docker
+- **Tunneling**: Cloudflare Tunnel
 
-To set up and run the TankCtl Tank API, follow these steps:
+## 🚀 Setup Instructions
 
-1.  **Clone the Repository:**
+### Prerequisites
+- Docker and Docker Compose
+- Git
+- Cloudflare account (for tunneling)
 
+### Environment Variables
+Create a `.env` file in the root directory with the following variables:
 
+```env
+# Database
+POSTGRES_USER=your_db_user
+POSTGRES_PASSWORD=your_db_password
+POSTGRES_DB=tankctl
 
-## API Documentation
+# API Settings
+API_SECRET_KEY=your_secret_key
+API_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-The API is built with FastAPI, which automatically generates interactive API documentation (Swagger UI) at the `/docs` endpoint when the application is running.
+# Discord
+DISCORD_WEBHOOK_URL=your_discord_webhook_url
 
-## Contributing
+# Redis
+REDIS_URL=redis://redis:6379/0
 
-*(Information on how to contribute to this project is not available in the provided code analysis.)*
+# Cloudflare
+CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
+```
 
-## License
+### Installation Steps
 
-*(License information for this project is not available in the provided code analysis.)*
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/yourusername/tankctl.git
+   cd tankctl
+   ```
+
+2. **Create Network**
+   ```bash
+   docker network create tankctl
+   ```
+
+3. **Build and Start Services**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Access Services**
+   - API Documentation: http://localhost:8000/docs
+   - Grafana Dashboard: http://localhost:3000
+   - Prometheus: http://localhost:9090
+
+## 📊 API Endpoints
+
+### Tank Management
+- `POST /api/v1/register` - Register new tank
+- `POST /api/v1/status` - Update tank status
+- `GET /api/v1/status/{tank_id}` - Get tank status
+
+### Commands
+- `POST /api/v1/commands` - Issue command to tank
+- `GET /api/v1/commands/{tank_id}` - Get command history
+
+### Settings
+- `GET /api/v1/settings` - Get tank settings
+- `PUT /api/v1/settings` - Update tank settings
+
+### Overrides
+- `POST /api/v1/overrides` - Create manual override
+- `GET /api/v1/overrides/{tank_id}` - Get override history
+
+## 🔧 Development
+
+### Project Structure
+```
+tankctl/
+├── app/
+│   ├── api/        # API endpoints
+│   ├── core/       # Core functionality
+│   ├── models/     # Database models
+│   ├── schemas/    # Pydantic schemas
+│   ├── services/   # Business logic
+│   ├── utils/      # Utility functions
+│   └── worker/     # Celery tasks
+├── config/         # Configuration files
+├── docker/         # Docker configurations
+├── tests/          # Test files
+└── scripts/        # Utility scripts
+```
+
+### Running Tests
+```bash
+docker-compose run web pytest
+```
+
+## 📈 Monitoring
+
+### Grafana Dashboards
+- Tank Status Overview
+- Command Execution Metrics
+- System Health Metrics
+- Historical Data Analysis
+
+### Prometheus Metrics
+- Tank Status Metrics
+- Command Execution Metrics
+- System Performance Metrics
+
+## 🔐 Security Considerations
+
+1. **API Security**
+   - All endpoints are protected with JWT authentication
+   - Rate limiting implemented
+   - Input validation using Pydantic
+
+2. **Data Security**
+   - Database credentials stored in environment variables
+   - Secure password hashing
+   - Regular security audits
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📝 License
+
+[Add your license information here]
+
+## 🆘 Support
+
+For support, please open an issue in the GitHub repository or contact the maintainers.
