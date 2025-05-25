@@ -95,11 +95,23 @@ services:
     ports:
       - "9090:9090"
 
+  flower:
+    build: .
+    <<: *app-defaults
+    container_name: tankctl_flower
+    ports:
+      - "5555:5555"
+    command: celery -A app.worker.celery_app flower --port=5555
+    depends_on:
+      - redis
+      - celery_worker
+      - celery_beat
 
   cloudflared:
       restart: unless-stopped
       image: cloudflare/cloudflared:latest
-      command: tunnel --no-autoupdate run --token <your token>
+      command: tunnel --no-autoupdate run --token
+          eyJhIjoiMjc3OGFiNGIyMjVkOTQ0NWQ1MTY1ODNjMTU4OTQ5MWUiLCJ0IjoiNzliNTFkOTAtOGU3NS00NjZhLWJhMjctM2JhZGQ3ODU3ODlkIiwicyI6Ik1ETmpOV1ptWVRVdFlXTm1ZUzAwTlRZeUxUbGpNR1V0TkRnNVpEUXhZV1ZoTVRrNCJ9
 
 
 volumes:

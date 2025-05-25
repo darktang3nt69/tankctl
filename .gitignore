@@ -89,3 +89,7 @@ htmlcov/
 # Docker volumes
 # ------------------------
 docker/*
+
+tank_node/prod.py
+
+.env

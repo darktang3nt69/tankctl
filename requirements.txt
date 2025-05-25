@@ -12,3 +12,4 @@ requests
 pytz
 prometheus-fastapi-instrumentator
 prometheus-client
+flower
