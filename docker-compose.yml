@@ -1,9 +1,20 @@
-version: "3.9"
+# ───── YAML ANCHORS FOR COMMON SETTINGS ─────
+# Anchor for application services that share env_file and restart policy
+x-app-defaults: &app-defaults
+  restart: always
+  env_file:
+    - .env
+
+networks:
+  default:
+    name: tankctl
+    external: true
+
 
 services:
   db:
+    <<: *app-defaults
     image: postgres:14
-    restart: on-failure
     container_name: tankctl_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -20,8 +31,8 @@ services:
       retries: 5
 
   redis:
+    <<: *app-defaults
     image: redis:7
-    restart: on-failure
     container_name: tankctl_redis
     ports:
       - "6379:6379"
@@ -29,9 +40,7 @@ services:
   web:
     build: .
     container_name: tankctl_fastapi
-    restart: always
-    env_file:
-      - .env
+    <<: *app-defaults
     ports:
       - "8000:8000"
     depends_on:
@@ -44,27 +53,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.worker.celery_app worker -P eventlet --loglevel=info
-    env_file:
-      - .env
+    <<: *app-defaults
+    command: celery -A app.worker.celery_app worker --loglevel=info
     depends_on:
       - redis
       - db
-
+  
   celery_beat:
     build: .
-    restart: on-failure
-    env_file: .env
+    <<: *app-defaults
     depends_on:
       - web
       - db
       - redis
     command: celery -A app.worker.celery_app beat --loglevel=info
-    
+
   grafana:
-    image: grafana/grafana:latest
-    container_name: aquapi_grafana
-    restart: always
+    image: grafana/grafana-oss:12.0.0
+    <<: *app-defaults
+    container_name: tankctl_grafana
     ports:
       - "3000:3000"
     environment:
@@ -81,14 +88,19 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
+    <<: *app-defaults
     container_name: tankctl_prometheus
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
-    depends_on:
-      - web
+
+
+  cloudflared:
+      restart: unless-stopped
+      image: cloudflare/cloudflared:latest
+      command: tunnel --no-autoupdate run --token <your token>
 
 
 volumes:
-  tankctl_postgres_data:
+  postgres_data:
