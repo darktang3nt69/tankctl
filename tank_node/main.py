@@ -1,5 +1,4 @@
-# main.py — ESP32 MicroPython firmware with self‑healing, offline queues, state persistence,
-#              and SG90‑360 feeder + relay light on D15, servo on D4
+# main.py — ESP32 MicroPython firmware with inverted relay logic
 
 import os
 import network
@@ -11,9 +10,9 @@ import machine
 from machine import WDT, Pin, PWM
 
 # ───── CONFIGURATION ─────
-SSID              = 'xxxxxxx'                # Wi‑Fi SSID
-PASSWORD          = 'xxxxxxxx'                   # Wi‑Fi password
-BASE_URL          = 'https://endpoint.example.domain'
+SSID              = 'xxxx.4G'
+PASSWORD          = 'xxxx'
+BASE_URL          = 'https://xxxx.xxxxx.xxxx'
 
 # API endpoints
 REGISTER_API      = '/api/v1/tank/register'
@@ -22,50 +21,59 @@ COMMAND_API       = '/api/v1/tank/command'
 ACK_API           = '/api/v1/tank/command/ack'
 
 # Auth credentials
-AUTH_KEY          = 'super_secret_tank_psk'
-TANK_NAME         = 'Hyd_tank'
-LOCATION          = 'Hyderabad'
+AUTH_KEY          = 'xxxxx'
+TANK_NAME         = 'xxxx'
+LOCATION          = 'xxxx'
 
 # Files for persistence
-CONFIG_FILE       = 'config.json'                # stores tank_id & token
-STATE_FILE        = 'state.json'                 # stores last known relay state
-STATUS_QUEUE_FILE = 'status_queue.json'          # queued status payloads
-ACK_QUEUE_FILE    = 'ack_queue.json'             # queued ack payloads
+CONFIG_FILE       = 'config.json'
+STATE_FILE        = 'state.json'
+STATUS_QUEUE_FILE = 'status_queue.json'
+ACK_QUEUE_FILE    = 'ack_queue.json'
 
 # Timing parameters
 WIFI_RETRIES      = 5
-WIFI_TIMEOUT      = 10       # seconds per Wi‑Fi attempt
-WDT_TIMEOUT_MS    = 10000    # watchdog timeout in ms
-STATUS_INTERVAL   = 60       # seconds between status updates
-COMMAND_POLL_MS   = 5000     # ms between polling for commands
-FLUSH_INTERVAL_MS = 30000    # ms between queue flush attempts
-MIN_HEAP_BYTES    = 50000    # if free heap < this, trigger self‑heal reboot
+WIFI_TIMEOUT      = 10
+WDT_TIMEOUT_MS    = 10000
+STATUS_INTERVAL   = 60
+COMMAND_POLL_MS   = 5000
+FLUSH_INTERVAL_MS = 30000
+MIN_HEAP_BYTES    = 50000
 
 # GPIO pins
-RELAY_PIN         = 15       # physical D15: light relay switch
-SERVO_PIN         = 4        # physical D4: continuous SG90 servo
+RELAY_PIN         = 15      # D15: light relay (active-low)
+SERVO_PIN         = 4       # D4: continuous SG90 servo
 
-# Servo PWM settings for SG90‑360
-SERV_FREQ         = 50       # 50Hz PWM for servo
-STOP_DUTY         = 77       # ~1.5ms pulse → stop
-FORWARD_DUTY      = 100      # ~2.0ms pulse → forward spin
-REVERSE_DUTY      = 50       # ~1.0ms pulse → reverse spin
+# Relay logic inversion
+RELAY_ON          = 0       # drive low to turn relay/light ON
+RELAY_OFF         = 1       # drive high to turn relay/light OFF
+
+# Servo PWM settings
+SERV_FREQ         = 50
+STOP_DUTY         = 77
+FORWARD_DUTY      = 100
+REVERSE_DUTY      = 50
+
+# Default Tank Lighting schedule
+LIGHT_ON_TIMING   = "10:00"
+LIGHT_OFF_TIMING  = "16:00"
+
+# Firmware Version
+FIRMWARE          = "1.0.0"
 
 # ───── HARDWARE SETUP ─────
-light_relay = Pin(RELAY_PIN, Pin.OUT)             # relay control
+# new: force the relay off state (active‑low) immediately
+light_relay = Pin(RELAY_PIN, Pin.OUT, value=RELAY_OFF)
 # initialize servo
 servo = PWM(Pin(SERVO_PIN), freq=SERV_FREQ)
 
 # ───── WATCHDOG & SELF‑HEALING ─────
 wdt = WDT(timeout=WDT_TIMEOUT_MS)
 def feed():
-    """
-    Feed watchdog, run GC, and reboot on low memory.
-    """
     wdt.feed()
     gc.collect()
     if gc.mem_free() < MIN_HEAP_BYTES:
-        print("⚠️ Low memory, rebooting for self‑healing")
+        print("⚠️ Low memory—rebooting")
         time.sleep(1)
         machine.reset()
 
@@ -86,52 +94,39 @@ def save_json(fname, data):
 
 # ───── OFFLINE QUEUES ─────
 def enqueue_status(payload):
-    q = load_json(STATUS_QUEUE_FILE)
-    q.append(payload)
-    save_json(STATUS_QUEUE_FILE, q)
+    q = load_json(STATUS_QUEUE_FILE); q.append(payload); save_json(STATUS_QUEUE_FILE, q)
 
 def flush_status_queue(token):
-    q = load_json(STATUS_QUEUE_FILE); remain = []
+    q = load_json(STATUS_QUEUE_FILE); rem=[]
     for item in q:
         try:
-            resp = urequests.post(BASE_URL+STATUS_API,
-                                  headers={'Content-Type':'application/json',
-                                           'Authorization':'Bearer '+token},
-                                  data=ujson.dumps(item))
-            if resp.status_code == 200:
-                resp.close(); feed(); continue
+            resp = urequests.post(BASE_URL+STATUS_API, headers={
+                'Content-Type':'application/json','Authorization':'Bearer '+token
+            }, data=ujson.dumps(item))
+            if resp.status_code==200: resp.close(); feed(); continue
             resp.close()
-        except:
-            pass
-        remain.append(item)
-    save_json(STATUS_QUEUE_FILE, remain)
+        except: pass
+        rem.append(item)
+    save_json(STATUS_QUEUE_FILE, rem)
 
 def enqueue_ack(cid, success):
-    q = load_json(ACK_QUEUE_FILE)
-    q.append({'command_id': cid, 'success': success})
-    save_json(ACK_QUEUE_FILE, q)
+    q = load_json(ACK_QUEUE_FILE); q.append({'command_id':cid,'success':success}); save_json(ACK_QUEUE_FILE, q)
 
 def flush_ack_queue(token):
-    q = load_json(ACK_QUEUE_FILE); remain = []
+    q = load_json(ACK_QUEUE_FILE); rem=[]
     for item in q:
         try:
-            resp = urequests.post(BASE_URL+ACK_API,
-                                  headers={'Content-Type':'application/json',
-                                           'Authorization':'Bearer '+token},
-                                  data=ujson.dumps(item))
-            if resp.status_code == 200:
-                resp.close(); feed(); continue
+            resp = urequests.post(BASE_URL+ACK_API, headers={
+                'Content-Type':'application/json','Authorization':'Bearer '+token
+            }, data=ujson.dumps(item))
+            if resp.status_code==200: resp.close(); feed(); continue
             resp.close()
-        except:
-            pass
-        remain.append(item)
-    save_json(ACK_QUEUE_FILE, remain)
+        except: pass
+        rem.append(item)
+    save_json(ACK_QUEUE_FILE, rem)
 
 # ───── STATE PERSISTENCE ─────
 def load_state():
-    """
-    Return {'light_state':0 or 1}
-    """
     try:
         with open(STATE_FILE) as f:
             return ujson.load(f)
@@ -139,9 +134,6 @@ def load_state():
         return {'light_state': 0}
 
 def save_state(state):
-    """
-    Persist state dict to STATE_FILE.
-    """
     try:
         feed()
         with open(STATE_FILE, 'w') as f:
@@ -150,17 +142,15 @@ def save_state(state):
     except Exception as e:
         print("❌ save_state error:", e)
 
-# Restore relay on boot
+# Restore light relay on boot (logical state inverted)
 state = load_state()
-light_relay.value(state.get('light_state', 0))
-print("Restored light_state:", state.get('light_state'))
+logical = state.get('light_state', 0)
+light_relay.value(RELAY_ON if logical else RELAY_OFF)
+print("Restored light_state (logical):", logical)
 
 # ───── SENSOR PLACEHOLDERS ─────
-def get_temperature():
-    return 25.0
-
-def get_ph():
-    return 7.2
+def get_temperature(): return 25.0
+def get_ph(): return 7.2
 
 # ───── WIFI & REGISTRATION ─────
 def connect_wifi():
@@ -174,28 +164,25 @@ def connect_wifi():
         if wlan.isconnected():
             print("✔ Wi‑Fi IP:", wlan.ifconfig()[0]); return
         print("⚠️ Wi‑Fi failed")
-    print("❌ Rebooting..."); time.sleep(2); machine.reset()
+    print("❌ Rebooting"); time.sleep(2); machine.reset()
 
 def register_tank():
-    body = {'auth_key':AUTH_KEY,'tank_name':TANK_NAME,
-            'location':LOCATION,'firmware_version':'1.0.0',
-            'light_on':'22:20','light_off':'22:25'}
-    resp = urequests.post(BASE_URL+REGISTER_API,
-                         headers={'Content-Type':'application/json'},
-                         data=ujson.dumps(body))
-    if resp.status_code != 201:
-        print("❌ Register failed", resp.status_code)
-        resp.close(); time.sleep(5); machine.reset()
-    data = resp.json(); resp.close()
-    tid, tkn = data['tank_id'], data['access_token']
-    with open(CONFIG_FILE,'w') as f:
-        ujson.dump({'tank_id':tid,'token':tkn},f)
+    body = {
+        'auth_key':AUTH_KEY,'tank_name':TANK_NAME,
+        'location':LOCATION,'firmware_version': FIRMWARE,
+        'light_on': LIGHT_ON_TIMING,'light_off': LIGHT_OFF_TIMING
+    }
+    resp = urequests.post(BASE_URL+REGISTER_API, headers={'Content-Type':'application/json'}, data=ujson.dumps(body))
+    if resp.status_code!=201: resp.close(); time.sleep(5); machine.reset()
+    d=resp.json(); resp.close()
+    tid, tkn = d['tank_id'], d['access_token']
+    with open(CONFIG_FILE,'w') as f: ujson.dump({'tank_id':tid,'token':tkn},f)
     return tid, tkn
 
 def load_config():
     try:
         with open(CONFIG_FILE) as f:
-            c = ujson.load(f); return c['tank_id'], c['token']
+            c=ujson.load(f); return c['tank_id'], c['token']
     except:
         return None, None
 
@@ -203,8 +190,8 @@ def load_config():
 def request_with_refresh(fn, *args):
     global token
     code, res = fn(token, *args)
-    if code == 401:
-        print("⚠️ Token expired, re-register")
+    if code==401:
+        print("⚠️ Token expired—re-register")
         _, token = register_tank()
         code, res = fn(token, *args)
     return code, res
@@ -212,75 +199,58 @@ def request_with_refresh(fn, *args):
 # ───── HTTP HELPERS ─────
 def _post_status(tkn, payload):
     try:
-        resp = urequests.post(BASE_URL+STATUS_API,
-                              headers={'Content-Type':'application/json',
-                                       'Authorization':'Bearer '+tkn},
-                              data=ujson.dumps(payload))
-        st = resp.status_code; resp.close(); feed()
-        return st, None
-    except:
-        return None, None
+        r=urequests.post(BASE_URL+STATUS_API, headers={'Content-Type':'application/json','Authorization':'Bearer '+tkn}, data=ujson.dumps(payload))
+        st=r.status_code; r.close(); feed(); return st, None
+    except: return None, None
 
 def _post_ack(tkn, cid, success):
     try:
-        resp = urequests.post(BASE_URL+ACK_API,
-                              headers={'Content-Type':'application/json',
-                                       'Authorization':'Bearer '+tkn},
-                              data=ujson.dumps({'command_id':cid,'success':success}))
-        st = resp.status_code; resp.close(); feed()
-        return st, None
-    except:
-        return None, None
+        r=urequests.post(BASE_URL+ACK_API, headers={'Content-Type':'application/json','Authorization':'Bearer '+tkn}, data=ujson.dumps({'command_id':cid,'success':success}))
+        st=r.status_code; r.close(); feed(); return st, None
+    except: return None, None
 
 def _get_command(tkn):
     try:
-        resp = urequests.get(BASE_URL+COMMAND_API,
-                             headers={'Authorization':'Bearer '+tkn})
-        st = resp.status_code
-        data = resp.json() if st==200 else {}
-        resp.close(); feed()
-        return st, data
-    except:
-        return None, {}
+        r=urequests.get(BASE_URL+COMMAND_API, headers={'Authorization':'Bearer '+tkn})
+        st=r.status_code; d=r.json() if st==200 else {}; r.close(); feed(); return st, d
+    except: return None, {}
 
 # ───── HIGH‑LEVEL WRAPPERS ─────
 def send_status():
     payload = {
-        'temperature': get_temperature(),
-        'ph': get_ph(),
-        'light_state': bool(light_relay.value()),
-        'firmware_version': '1.0.0'
+        'temperature':get_temperature(),
+        'ph':get_ph(),
+        'light_state':state['light_state'],   # logical state
+        'firmware_version': FIRMWARE
     }
-    print("📤 Sending:", payload)
-    code, _ = request_with_refresh(_post_status, payload)
-    print(f"📥 Status→{code}")
+    print("📤 Sending status:", payload)
+    code,_=request_with_refresh(_post_status,payload)
+    print("📥 Status→", code)
     if code==200: flush_status_queue(token)
     else: enqueue_status(payload)
 
 def ack_command(cid, success):
-    code, _ = request_with_refresh(_post_ack, cid, success)
+    code,_=request_with_refresh(_post_ack,cid,success)
     if code==200: flush_ack_queue(token)
     else: enqueue_ack(cid, success)
 
 def poll_command():
-    code, data = request_with_refresh(_get_command)
-    return data if code==200 else {}
+    c,d = request_with_refresh(_get_command)
+    return d if c==200 else {}
 
 # ───── COMMAND HANDLERS ─────
 def handle_light(on):
-    light_relay.value(1 if on else 0)
-    state['light_state'] = light_relay.value()
+    # invert logic: 1=on->low, 0=off->high
+    state['light_state'] = 1 if on else 0
+    light_relay.value(RELAY_ON if state['light_state'] else RELAY_OFF)
     save_state(state)
 
 def handle_feed(params):
-    # spin servo based on params
     dur = params.get('duration', 2)
     dir = params.get('direction','forward').lower()
-    duty = params.get('duty',
-             FORWARD_DUTY if dir=='forward' else REVERSE_DUTY)
+    duty = params.get('duty', FORWARD_DUTY if dir=='forward' else REVERSE_DUTY)
     print(f"▶ Feed: dir={dir}, dur={dur}s")
-    servo.duty(duty); time.sleep(dur)
-    servo.duty(STOP_DUTY)
+    servo.duty(duty); time.sleep(dur); servo.duty(STOP_DUTY)
     print("✔ Feed done")
 
 COMMAND_MAP = {
@@ -297,32 +267,31 @@ def main():
     if not token: tank_id, token = register_tank()
     print("▶ Running, tank_id:", tank_id)
 
-    last_s = time.time() - STATUS_INTERVAL
-    last_p = time.ticks_ms() - COMMAND_POLL_MS
-    last_f = time.ticks_ms() - FLUSH_INTERVAL_MS
+    last_s = time.time()-STATUS_INTERVAL
+    last_p = time.ticks_ms()-COMMAND_POLL_MS
+    last_f = time.ticks_ms()-FLUSH_INTERVAL_MS
 
     while True:
         feed()
-        # status
-        if time.time()-last_s>=STATUS_INTERVAL:
+        if time.time()-last_s >= STATUS_INTERVAL:
             send_status(); last_s = time.time()
-        # commands
-        if time.ticks_diff(time.ticks_ms(), last_p)>=COMMAND_POLL_MS:
+
+        if time.ticks_diff(time.ticks_ms(), last_p) >= COMMAND_POLL_MS:
+            print("Polling for command...")
             cmd = poll_command(); last_p = time.ticks_ms()
             if 'command_id' in cmd:
                 cid = cmd['command_id']; raw = cmd.get('command_payload','')
                 params = cmd.get('params',{}); key = raw.upper()
-                print("Cmd:", raw,"->",key)
-                ok = True
-                try: COMMAND_MAP.get(key, lambda p: print("Unknown",key))(params)
+                print("Cmd:",raw,"->",key)
+                ok=True
+                try: COMMAND_MAP.get(key,lambda p:print("Unknown",key))(params)
                 except Exception as e: ok=False; print("Err:",e)
                 ack_command(cid, ok)
-        # flush queues
-        if time.ticks_diff(time.ticks_ms(), last_f)>=FLUSH_INTERVAL_MS:
-            flush_status_queue(token); flush_ack_queue(token)
-            last_f = time.ticks_ms()
+
+        if time.ticks_diff(time.ticks_ms(), last_f) >= FLUSH_INTERVAL_MS:
+            flush_status_queue(token); flush_ack_queue(token); last_f = time.ticks_ms()
+
         time.sleep(0.1)
 
 if __name__=='__main__':
     main()
-
