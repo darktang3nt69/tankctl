@@ -7,6 +7,7 @@ from app.models.tank import Tank
 from app.models.status_log import StatusLog
 from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
 from app.utils.timezone import IST
+from app.metrics.tank_metrics import tank_temperature
 
 def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) -> StatusUpdateResponse:
     tank = db.execute(
@@ -24,6 +25,11 @@ def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) 
     # Update optional fields
     if request.temperature is not None:
         tank.temperature = request.temperature
+        # Update Prometheus metric with location
+        tank_temperature.labels(
+            tank_name=tank.tank_name,
+            location=tank.location or "unknown"
+        ).set(request.temperature)
     if request.ph is not None:
         tank.ph = request.ph
     if request.light_state is not None:
@@ -47,5 +53,5 @@ def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) 
     return StatusUpdateResponse(
         message="Tank status updated successfully",
         tank_id=str(tank.tank_id),
-        timestamp=now.isoformat()  # ✅ Add timestamp
+        timestamp=now.isoformat()
     )
