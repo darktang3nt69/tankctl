@@ -97,6 +97,7 @@ CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
    - API Documentation: http://localhost:8000/docs
    - Grafana Dashboard: http://localhost:3000
    - Prometheus: http://localhost:9090
+   - Flower (Celery Monitoring): http://localhost:5555
 
 ## 📊 API Endpoints
 
@@ -153,6 +154,13 @@ docker-compose run web pytest
 - Tank Status Metrics
 - Command Execution Metrics
 - System Performance Metrics
+
+### Celery Task Monitoring (Flower)
+- Real-time task monitoring
+- Worker status and statistics
+- Task history and results
+- Task rate limiting and scheduling
+- Worker management and control
 
 ## 🔐 Security Considerations
 

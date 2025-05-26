@@ -8,6 +8,8 @@ import time
 import gc
 import machine
 from machine import WDT, Pin, PWM
+from onewire import OneWire
+from ds18x20 import DS18X20
 
 # ───── CONFIGURATION ─────
 SSID              = 'xxxx.4G'
@@ -43,6 +45,7 @@ MIN_HEAP_BYTES    = 50000
 # GPIO pins
 RELAY_PIN         = 15      # D15: light relay (active-low)
 SERVO_PIN         = 4       # D4: continuous SG90 servo
+DS18B20_PIN       = 22      # D22: DS18B20 temperature sensor
 
 # Relay logic inversion
 RELAY_ON          = 0       # drive low to turn relay/light ON
@@ -66,6 +69,15 @@ FIRMWARE          = "1.0.0"
 light_relay = Pin(RELAY_PIN, Pin.OUT, value=RELAY_OFF)
 # initialize servo
 servo = PWM(Pin(SERVO_PIN), freq=SERV_FREQ)
+# initialize DS18B20
+ds_pin = Pin(DS18B20_PIN)
+ds_sensor = DS18X20(OneWire(ds_pin))
+roms = ds_sensor.scan()
+if not roms:
+    print("⚠️ No DS18B20 sensor found!")
+else:
+    print("✔ DS18B20 sensor found:", roms[0])
+    ds_sensor.convert_temp()  # Initial conversion
 
 # ───── WATCHDOG & SELF‑HEALING ─────
 wdt = WDT(timeout=WDT_TIMEOUT_MS)
@@ -149,7 +161,15 @@ light_relay.value(RELAY_ON if logical else RELAY_OFF)
 print("Restored light_state (logical):", logical)
 
 # ───── SENSOR PLACEHOLDERS ─────
-def get_temperature(): return 25.0
+def get_temperature():
+    try:
+        ds_sensor.convert_temp()
+        time.sleep_ms(750)  # Wait for conversion (12-bit resolution)
+        return ds_sensor.read_temp(roms[0])
+    except Exception as e:  
+        print("❌ Temperature reading error:", e)
+        return None
+
 def get_ph(): return 7.2
 
 # ───── WIFI & REGISTRATION ─────
@@ -217,10 +237,11 @@ def _get_command(tkn):
 
 # ───── HIGH‑LEVEL WRAPPERS ─────
 def send_status():
+    temp = get_temperature()
     payload = {
-        'temperature':get_temperature(),
-        'ph':get_ph(),
-        'light_state':state['light_state'],   # logical state
+        'temperature': temp,
+        'ph': get_ph(),
+        'light_state': state['light_state'],   # logical state
         'firmware_version': FIRMWARE
     }
     print("📤 Sending status:", payload)
