@@ -2,16 +2,18 @@
 # Anchor for application services that share env_file and restart policy
 x-app-defaults: &app-defaults
   restart: always
-  env_file:
-    - .env
+  env_file: [.env]
 
 networks:
   default:
     name: tankctl
-    external: true
-
 
 services:
+  app:
+    build: .
+    image: tankctl:latest
+    container_name: tankctl_app
+
   db:
     <<: *app-defaults
     image: postgres:14
@@ -20,11 +22,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:                 # 🆕 Add healthcheck here
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
       timeout: 5s
@@ -34,95 +34,73 @@ services:
     <<: *app-defaults
     image: redis:7
     container_name: tankctl_redis
-    ports:
-      - "6379:6379"
+    ports: ["6379:6379"]
 
   web:
-    build: .
-    container_name: tankctl_fastapi
     <<: *app-defaults
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-      - redis
-    command: >
-      sh -c "sleep 10 && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    image: tankctl:latest
+    container_name: tankctl_fastapi
+    ports: ["8000:8000"]
+    depends_on: [db, redis]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
     <<: *app-defaults
+    image: tankctl:latest
     command: celery -A app.worker.celery_app worker --loglevel=info
-    depends_on:
-      - redis
-      - db
-  
+    depends_on: [redis, db]
+
   celery_beat:
-    build: .
     <<: *app-defaults
-    depends_on:
-      - web
-      - db
-      - redis
+    image: tankctl:latest
     command: celery -A app.worker.celery_app beat --loglevel=info
-
-  grafana:
-    image: grafana/grafana-oss:12.0.0
-    <<: *app-defaults
-    container_name: tankctl_grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - "GF_PLUGINS_PREINSTALL=yesoreyeram-infinity-datasource, volkovlabs-form-panel"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning
-      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
-      - ./docker/grafana/plugins:/var/lib/grafana/plugins
-    depends_on:
-      - db
-
-  prometheus:
-    image: prom/prometheus:latest
-    <<: *app-defaults
-    container_name: tankctl_prometheus
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
+    depends_on: [web, db, redis]
 
   flower:
-    build: .
     <<: *app-defaults
+    image: tankctl:latest
     container_name: tankctl_flower
-    ports:
-      - "5555:5555"
+    ports: ["5555:5555"]
     command: celery -A app.worker.celery_app flower --port=5555 --address=0.0.0.0
-    depends_on:
-      - redis
-      - celery_worker
-      - celery_beat
+    depends_on: [redis, celery_worker, celery_beat]
     environment:
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_BACKEND_URL}
-      - FLOWER_UNAUTHENTICATED_API=true
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_BACKEND_URL}
+      FLOWER_UNAUTHENTICATED_API: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5555/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  cloudflared:
-      restart: unless-stopped
-      image: cloudflare/cloudflared:latest
-      command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-      env_file:
-        - .env
+  grafana:
+    <<: *app-defaults
+    image: grafana/grafana-oss:12.0.0
+    container_name: tankctl_grafana
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource, volkovlabs-form-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./docker/grafana/plugins:/var/lib/grafana/plugins
+    depends_on: [db]
 
+  prometheus:
+    <<: *app-defaults
+    image: prom/prometheus:latest
+    container_name: tankctl_prometheus
+    ports: ["9090:9090"]
+    volumes: [./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml]
+
+  cloudflared:
+    restart: unless-stopped
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    env_file: [.env]
 
 volumes:
   postgres_data:

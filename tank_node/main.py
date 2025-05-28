@@ -14,7 +14,7 @@ from ds18x20 import DS18X20
 # ───── CONFIGURATION ─────
 SSID              = 'xxx.4G'
 PASSWORD          = 'xxxx'
-BASE_URL          = 'https://xxx.xxxx.xxxx'
+BASE_URL          = 'https://xxx.xxxx.xxx'
 
 # API endpoints
 REGISTER_API      = '/api/v1/tank/register'
@@ -25,10 +25,15 @@ ACK_API           = '/api/v1/tank/command/ack'
 # Auth credentials
 AUTH_KEY          = 'xxx'
 TANK_NAME         = 'xxx'
-LOCATION          = 'xxxx'
+LOCATION          = 'xxx'
+
+# Default Tank Lighting schedule
+LIGHT_ON_TIMING   = "10:00"
+LIGHT_OFF_TIMING  = "18:00"
 
 # Files for persistence
-STATE_FILE        = 'state.json'   # Stores current state (light, etc.)
+CONFIG_FILE       = 'config.json'
+STATE_FILE        = 'state.json'
 STATUS_QUEUE_FILE = 'status_queue.json'
 ACK_QUEUE_FILE    = 'ack_queue.json'
 
@@ -40,7 +45,6 @@ STATUS_INTERVAL   = 60
 COMMAND_POLL_MS   = 5000
 FLUSH_INTERVAL_MS = 30000
 MIN_HEAP_BYTES    = 50000
-TOKEN_REFRESH_MS  = 1500000  # Refresh token every 25 minutes (more conservative than server's 30 min expiry)
 
 # GPIO pins
 RELAY_PIN         = 15      # D15: light relay (active-low)
@@ -57,9 +61,7 @@ STOP_DUTY         = 77
 FORWARD_DUTY      = 100
 REVERSE_DUTY      = 50
 
-# Default Tank Lighting schedule
-LIGHT_ON_TIMING   = "10:00"
-LIGHT_OFF_TIMING  = "18:00"
+
 
 # Firmware Version
 FIRMWARE          = "1.0.0"
@@ -69,6 +71,7 @@ FIRMWARE          = "1.0.0"
 light_relay = Pin(RELAY_PIN, Pin.OUT, value=RELAY_OFF)
 # initialize servo
 servo = PWM(Pin(SERVO_PIN), freq=SERV_FREQ)
+
 # initialize DS18B20
 ds_pin = Pin(DS18B20_PIN)
 ds_sensor = DS18X20(OneWire(ds_pin))
@@ -90,163 +93,52 @@ def feed():
         machine.reset()
 
 # ───── FILESYSTEM UTILITIES ─────
-def safe_remove(fname):
-    """Safely remove a file with error handling."""
-    try:
-        os.remove(fname)
-        return True
-    except:
-        return False
-
-def safe_rename(src, dst):
-    """Safely rename a file with error handling."""
-    try:
-        os.rename(src, dst)
-        return True
-    except:
-        return False
-
-def load_json(fname, default=None):
-    """Load JSON with simple fallback to default."""
+def load_json(fname):
     try:
         with open(fname) as f:
             return ujson.load(f)
     except:
-        return default
+        return []
 
 def save_json(fname, data):
-    """Save JSON with atomic write and proper cleanup."""
-    temp = fname + '.tmp'
-    backup = fname + '.bak'
-    
-    # First, try to create backup of existing file
     try:
-        if fname in os.listdir():
-            safe_rename(fname, backup)
+        with open(fname, 'w') as f:
+            ujson.dump(data, f)
     except:
         pass
-    
-    # Write to temp file
-    try:
-        with open(temp, 'w') as f:
-            ujson.dump(data, f)
-            f.flush()
-            os.sync()
-        
-        # Atomic rename
-        if safe_rename(temp, fname):
-            # Clean up backup if everything succeeded
-            safe_remove(backup)
-            return True
-    except:
-        # If anything fails, try to restore from backup
-        try:
-            if backup in os.listdir():
-                safe_rename(backup, fname)
-        except:
-            pass
-    
-    # Clean up temp file if it exists
-    safe_remove(temp)
-    return False
-
-def cleanup_files():
-    """Clean up temporary and backup files."""
-    files_to_clean = [
-        '*.tmp',
-        '*.bak',
-        '*.old',
-        '*.new'
-    ]
-    
-    for pattern in files_to_clean:
-        try:
-            for f in os.listdir():
-                if f.endswith(pattern[1:]):  # Remove the * from pattern
-                    safe_remove(f)
-        except:
-            pass
 
 # ───── OFFLINE QUEUES ─────
 def enqueue_status(payload):
-    """Add status to queue with proper file handling."""
-    try:
-        q = load_json(STATUS_QUEUE_FILE, [])
-        q.append(payload)
-        return save_json(STATUS_QUEUE_FILE, q)
-    except:
-        return False
+    q = load_json(STATUS_QUEUE_FILE); q.append(payload); save_json(STATUS_QUEUE_FILE, q)
 
 def flush_status_queue(token):
-    """Flush status queue with proper error handling."""
-    try:
-        q = load_json(STATUS_QUEUE_FILE, [])
-        if not q:
-            return True
-            
-        rem = []
-        for item in q:
-            try:
-                resp = urequests.post(
-                    BASE_URL+STATUS_API,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer '+token
-                    },
-                    data=ujson.dumps(item)
-                )
-                if resp.status_code == 200:
-                    resp.close()
-                    feed()
-                    continue
-                resp.close()
-            except:
-                pass
-            rem.append(item)
-        
-        return save_json(STATUS_QUEUE_FILE, rem)
-    except:
-        return False
+    q = load_json(STATUS_QUEUE_FILE); rem=[]
+    for item in q:
+        try:
+            resp = urequests.post(BASE_URL+STATUS_API, headers={
+                'Content-Type':'application/json','Authorization':'Bearer '+token
+            }, data=ujson.dumps(item))
+            if resp.status_code==200: resp.close(); feed(); continue
+            resp.close()
+        except: pass
+        rem.append(item)
+    save_json(STATUS_QUEUE_FILE, rem)
 
 def enqueue_ack(cid, success):
-    """Add acknowledgment to queue with proper file handling."""
-    try:
-        q = load_json(ACK_QUEUE_FILE, [])
-        q.append({'command_id': cid, 'success': success})
-        return save_json(ACK_QUEUE_FILE, q)
-    except:
-        return False
+    q = load_json(ACK_QUEUE_FILE); q.append({'command_id':cid,'success':success}); save_json(ACK_QUEUE_FILE, q)
 
 def flush_ack_queue(token):
-    """Flush acknowledgment queue with proper error handling."""
-    try:
-        q = load_json(ACK_QUEUE_FILE, [])
-        if not q:
-            return True
-            
-        rem = []
-        for item in q:
-            try:
-                resp = urequests.post(
-                    BASE_URL+ACK_API,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer '+token
-                    },
-                    data=ujson.dumps(item)
-                )
-                if resp.status_code == 200:
-                    resp.close()
-                    feed()
-                    continue
-                resp.close()
-            except:
-                pass
-            rem.append(item)
-        
-        return save_json(ACK_QUEUE_FILE, rem)
-    except:
-        return False
+    q = load_json(ACK_QUEUE_FILE); rem=[]
+    for item in q:
+        try:
+            resp = urequests.post(BASE_URL+ACK_API, headers={
+                'Content-Type':'application/json','Authorization':'Bearer '+token
+            }, data=ujson.dumps(item))
+            if resp.status_code==200: resp.close(); feed(); continue
+            resp.close()
+        except: pass
+        rem.append(item)
+    save_json(ACK_QUEUE_FILE, rem)
 
 # ───── STATE PERSISTENCE ─────
 def load_state():
@@ -259,7 +151,8 @@ def load_state():
 def save_state(state):
     try:
         feed()
-        save_json(STATE_FILE, state)
+        with open(STATE_FILE, 'w') as f:
+            ujson.dump(state, f)
         feed()
     except Exception as e:
         print("❌ save_state error:", e)
@@ -270,141 +163,60 @@ logical = state.get('light_state', 0)
 light_relay.value(RELAY_ON if logical else RELAY_OFF)
 print("Restored light_state (logical):", logical)
 
-# ───── SENSOR FUNCTIONS ─────
+# ───── SENSOR PLACEHOLDERS ─────
 def get_temperature():
     try:
         ds_sensor.convert_temp()
         time.sleep_ms(750)  # Wait for conversion (12-bit resolution)
-        temp = ds_sensor.read_temp(roms[0])
-        if temp is not None:
-            print(f"📊 Temperature: {temp}°C")
-            return temp
-        print("⚠️ Temperature read returned None")
-        return 0.0
+        return ds_sensor.read_temp(roms[0])
     except Exception as e:  
         print("❌ Temperature reading error:", e)
-        return 0.0
-
+        return None
 def get_ph(): return 7.2
 
 # ───── WIFI & REGISTRATION ─────
 def connect_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    
-    # Check if already connected
-    if wlan.isconnected():
-        print("✔ Already connected to Wi-Fi")
-        return
-    
+    wlan = network.WLAN(network.STA_IF); wlan.active(True)
     for i in range(1, WIFI_RETRIES+1):
         print(f"Wi‑Fi attempt {i}/{WIFI_RETRIES}")
-        try:
-            wlan.connect(SSID, PASSWORD)
-            start = time.time()
-            while not wlan.isconnected() and time.time()-start < WIFI_TIMEOUT:
-                feed()
-                time.sleep(0.2)
-            
-            if wlan.isconnected():
-                print("✔ Wi‑Fi IP:", wlan.ifconfig()[0])
-                return
-        except Exception as e:
-            print(f"⚠️ Wi‑Fi error: {e}")
-        
+        wlan.connect(SSID, PASSWORD)
+        start = time.time()
+        while not wlan.isconnected() and time.time()-start < WIFI_TIMEOUT:
+            feed(); time.sleep(0.2)
+        if wlan.isconnected():
+            print("✔ Wi‑Fi IP:", wlan.ifconfig()[0]); return
         print("⚠️ Wi‑Fi failed")
-        time.sleep(2)  # Wait before retry
-    
-    print("❌ Rebooting after Wi-Fi failure")
-    time.sleep(2)
-    machine.reset()
+    print("❌ Rebooting"); time.sleep(2); machine.reset()
 
 def register_tank():
-    max_retries = 3
-    retry_count = 0
-    
-    while retry_count < max_retries:
-        try:
-            body = {
-                'auth_key': AUTH_KEY,
-                'tank_name': TANK_NAME,
-                'location': LOCATION,
-                'firmware_version': FIRMWARE,
-                'light_on': LIGHT_ON_TIMING,
-                'light_off': LIGHT_OFF_TIMING
-            }
-            
-            resp = urequests.post(
-                BASE_URL+REGISTER_API,
-                headers={'Content-Type': 'application/json'},
-                data=ujson.dumps(body)
-            )
-            
-            if resp.status_code == 201:
-                d = resp.json()
-                resp.close()
-                tid, tkn = d['tank_id'], d['access_token']
-                print("✔ Registration successful")
-                return tid, tkn
-            else:
-                print(f"❌ Registration failed: {resp.status_code}")
-                resp.close()
-        except Exception as e:
-            print(f"❌ Registration error: {e}")
-        
-        retry_count += 1
-        if retry_count < max_retries:
-            print(f"Retrying registration... ({retry_count}/{max_retries})")
-            time.sleep(2)
-    
-    print("❌ Max registration retries reached")
-    time.sleep(2)
-    machine.reset()
+    body = {
+        'auth_key':AUTH_KEY,'tank_name':TANK_NAME,
+        'location':LOCATION,'firmware_version': FIRMWARE,
+        'light_on': LIGHT_ON_TIMING,'light_off': LIGHT_OFF_TIMING
+    }
+    resp = urequests.post(BASE_URL+REGISTER_API, headers={'Content-Type':'application/json'}, data=ujson.dumps(body))
+    if resp.status_code!=201: resp.close(); time.sleep(5); machine.reset()
+    d=resp.json(); resp.close()
+    tid, tkn = d['tank_id'], d['access_token']
+    with open(CONFIG_FILE,'w') as f: ujson.dump({'tank_id':tid,'token':tkn},f)
+    return tid, tkn
 
 def load_config():
-    """Always return None to force fresh registration on boot."""
-    return None, None
+    try:
+        with open(CONFIG_FILE) as f:
+            c=ujson.load(f); return c['tank_id'], c['token']
+    except:
+        return None, None
 
 # ───── TOKEN REFRESH ─────
 def request_with_refresh(fn, *args):
     global token
-    max_retries = 3
-    retry_count = 0
-    
-    while retry_count < max_retries:
-        try:
-            code, res = fn(token, *args)
-            if code == 401:
-                print("⚠️ Token expired—attempting re-registration")
-                try:
-                    _, new_token = register_tank()
-                    if new_token:
-                        token = new_token
-                        code, res = fn(token, *args)
-                        if code == 200:
-                            print("✔ Token refresh successful")
-                            return code, res
-                        else:
-                            print(f"❌ Request failed after token refresh: {code}")
-                    else:
-                        print("❌ Registration failed")
-                except Exception as e:
-                    print(f"❌ Registration error: {e}")
-            elif code == 200:
-                return code, res
-            else:
-                print(f"❌ Request failed with code: {code}")
-        except Exception as e:
-            print(f"❌ Request error: {e}")
-        
-        retry_count += 1
-        if retry_count < max_retries:
-            print(f"Retrying... ({retry_count}/{max_retries})")
-            time.sleep(2)  # Wait before retry
-    
-    print("❌ Max retries reached, rebooting...")
-    time.sleep(2)
-    machine.reset()
+    code, res = fn(token, *args)
+    if code==401:
+        print("⚠️ Token expired—re-register")
+        _, token = register_tank()
+        code, res = fn(token, *args)
+    return code, res
 
 # ───── HTTP HELPERS ─────
 def _post_status(tkn, payload):
@@ -427,11 +239,10 @@ def _get_command(tkn):
 
 # ───── HIGH‑LEVEL WRAPPERS ─────
 def send_status():
-    temp = get_temperature()
     payload = {
-        'temperature': temp,
-        'ph': get_ph(),
-        'light_state': state['light_state'],   # logical state
+        'temperature':get_temperature(),
+        'ph':get_ph(),
+        'light_state':state['light_state'],   # logical state
         'firmware_version': FIRMWARE
     }
     print("📤 Sending status:", payload)
@@ -470,17 +281,17 @@ COMMAND_MAP = {
     'FEED_NOW':  handle_feed,
 }
 
+# ───── MAIN LOOP ─────
 def main():
     global tank_id, token, state
     connect_wifi()
-    tank_id, token = register_tank()  # Always register on boot
+    tank_id, token = load_config()
+    if not token: tank_id, token = register_tank()
     print("▶ Running, tank_id:", tank_id)
 
     last_s = time.time()-STATUS_INTERVAL
     last_p = time.ticks_ms()-COMMAND_POLL_MS
     last_f = time.ticks_ms()-FLUSH_INTERVAL_MS
-    last_c = time.ticks_ms()  # For cleanup
-    last_t = time.ticks_ms()  # For token refresh
 
     while True:
         feed()
@@ -502,34 +313,7 @@ def main():
         if time.ticks_diff(time.ticks_ms(), last_f) >= FLUSH_INTERVAL_MS:
             flush_status_queue(token); flush_ack_queue(token); last_f = time.ticks_ms()
 
-        # Proactively refresh token before expiry (every 25 minutes)
-        if time.ticks_diff(time.ticks_ms(), last_t) >= TOKEN_REFRESH_MS:
-            print("🔄 Proactively refreshing token...")
-            try:
-                _, new_token = register_tank()
-                if new_token:
-                    token = new_token
-                    last_t = time.ticks_ms()
-                    print("✔ Token refresh successful")
-                else:
-                    print("❌ Token refresh failed")
-                    # If refresh fails, force a reboot to get a fresh token
-                    time.sleep(2)
-                    machine.reset()
-            except Exception as e:
-                print(f"❌ Token refresh error: {e}")
-                # If refresh errors, force a reboot to get a fresh token
-                time.sleep(2)
-                machine.reset()
-
-        # Clean up temporary files every hour
-        if time.ticks_diff(time.ticks_ms(), last_c) >= 3600000:  # 1 hour in milliseconds
-            cleanup_files()
-            last_c = time.ticks_ms()
-
         time.sleep(0.1)
 
 if __name__=='__main__':
     main()
-
-
