@@ -1,6 +1,5 @@
 # main.py — ESP32 MicroPython firmware with inverted relay logic
 
-import os
 import network
 import urequests
 import ujson
@@ -8,13 +7,11 @@ import time
 import gc
 import machine
 from machine import WDT, Pin, PWM
-from onewire import OneWire
-from ds18x20 import DS18X20
 
 # ───── CONFIGURATION ─────
-SSID              = 'xxx.4G'
-PASSWORD          = 'xxxx'
-BASE_URL          = 'https://xxx.xxxx.xxx'
+SSID              = 'EMPIRE_2.4G'
+PASSWORD          = '30379718'
+BASE_URL          = 'https://api.darktang3nt.cloud'
 
 # API endpoints
 REGISTER_API      = '/api/v1/tank/register'
@@ -23,9 +20,9 @@ COMMAND_API       = '/api/v1/tank/command'
 ACK_API           = '/api/v1/tank/command/ack'
 
 # Auth credentials
-AUTH_KEY          = 'xxx'
-TANK_NAME         = 'xxx'
-LOCATION          = 'xxx'
+AUTH_KEY          = 'pJf8YZ1gLfOi5Gzmu1H6ldu7q3TaRBZc2iBuwg8xshIKtRYU'
+TANK_NAME         = 'Hyd_tank'
+LOCATION          = 'Hyderabad'
 
 # Default Tank Lighting schedule
 LIGHT_ON_TIMING   = "10:00"
@@ -49,7 +46,6 @@ MIN_HEAP_BYTES    = 50000
 # GPIO pins
 RELAY_PIN         = 15      # D15: light relay (active-low)
 SERVO_PIN         = 4       # D4: continuous SG90 servo
-DS18B20_PIN       = 22      # D22: DS18B20 temperature sensor
 
 # Relay logic inversion
 RELAY_ON          = 0       # drive low to turn relay/light ON
@@ -71,16 +67,6 @@ FIRMWARE          = "1.0.0"
 light_relay = Pin(RELAY_PIN, Pin.OUT, value=RELAY_OFF)
 # initialize servo
 servo = PWM(Pin(SERVO_PIN), freq=SERV_FREQ)
-
-# initialize DS18B20
-ds_pin = Pin(DS18B20_PIN)
-ds_sensor = DS18X20(OneWire(ds_pin))
-roms = ds_sensor.scan()
-if not roms:
-    print("⚠️ No DS18B20 sensor found!")
-else:
-    print("✔ DS18B20 sensor found:", roms[0])
-    ds_sensor.convert_temp()  # Initial conversion
 
 # ───── WATCHDOG & SELF‑HEALING ─────
 wdt = WDT(timeout=WDT_TIMEOUT_MS)
@@ -164,14 +150,7 @@ light_relay.value(RELAY_ON if logical else RELAY_OFF)
 print("Restored light_state (logical):", logical)
 
 # ───── SENSOR PLACEHOLDERS ─────
-def get_temperature():
-    try:
-        ds_sensor.convert_temp()
-        time.sleep_ms(750)  # Wait for conversion (12-bit resolution)
-        return ds_sensor.read_temp(roms[0])
-    except Exception as e:  
-        print("❌ Temperature reading error:", e)
-        return None
+def get_temperature(): return 25.0
 def get_ph(): return 7.2
 
 # ───── WIFI & REGISTRATION ─────
@@ -194,12 +173,24 @@ def register_tank():
         'location':LOCATION,'firmware_version': FIRMWARE,
         'light_on': LIGHT_ON_TIMING,'light_off': LIGHT_OFF_TIMING
     }
-    resp = urequests.post(BASE_URL+REGISTER_API, headers={'Content-Type':'application/json'}, data=ujson.dumps(body))
-    if resp.status_code!=201: resp.close(); time.sleep(5); machine.reset()
-    d=resp.json(); resp.close()
-    tid, tkn = d['tank_id'], d['access_token']
-    with open(CONFIG_FILE,'w') as f: ujson.dump({'tank_id':tid,'token':tkn},f)
-    return tid, tkn
+    print("DEBUG: Attempting tank registration...")
+    try:
+        resp = urequests.post(BASE_URL+REGISTER_API, headers={'Content-Type':'application/json'}, data=ujson.dumps(body))
+        print("DEBUG: Registration response status code:", resp.status_code)
+        if resp.status_code!=201:
+            print("DEBUG: ❌ Registration failed with status:", resp.status_code)
+            resp.close()
+            time.sleep(5)
+            machine.reset()
+        d=resp.json(); resp.close()
+        tid, tkn = d['tank_id'], d['access_token']
+        print("DEBUG: ✔ Registration successful. New tank_id:", tid, "token:", tkn)
+        with open(CONFIG_FILE,'w') as f: ujson.dump({'tank_id':tid,'token':tkn},f)
+        return tid, tkn
+    except Exception as e:
+        print("DEBUG: ❌ Registration request failed:", e)
+        time.sleep(5)
+        machine.reset()
 
 def load_config():
     try:
@@ -211,11 +202,15 @@ def load_config():
 # ───── TOKEN REFRESH ─────
 def request_with_refresh(fn, *args):
     global token
+    print("DEBUG: Attempting request with token...")
     code, res = fn(token, *args)
+    print("DEBUG: Initial request status code:", code)
     if code==401:
-        print("⚠️ Token expired—re-register")
+        print("DEBUG: ⚠️ Token expired—re-registering...")
         _, token = register_tank()
+        print("DEBUG: New token obtained. Retrying request...")
         code, res = fn(token, *args)
+        print("DEBUG: Retried request status code:", code)
     return code, res
 
 # ───── HTTP HELPERS ─────
