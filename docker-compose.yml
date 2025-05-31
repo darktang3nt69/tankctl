@@ -13,6 +13,11 @@ services:
     build: .
     image: tankctl:latest
     container_name: tankctl_app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   db:
     <<: *app-defaults
@@ -41,19 +46,23 @@ services:
     image: tankctl:latest
     container_name: tankctl_fastapi
     ports: ["8000:8000"]
-    depends_on: [db, redis]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   celery_worker:
     <<: *app-defaults
     image: tankctl:latest
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    command: celery -A app.worker.celery_app.celery worker --loglevel=info
     depends_on: [redis, db]
 
   celery_beat:
     <<: *app-defaults
     image: tankctl:latest
-    command: celery -A app.worker.celery_app beat --loglevel=info
+    command: celery -A app.worker.celery_app.celery beat --loglevel=info
     depends_on: [web, db, redis]
 
   flower:
@@ -66,7 +75,7 @@ services:
     environment:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_BACKEND_URL}
-      FLOWER_UNAUTHENTICATED_API: true
+      FLOWER_UNAUTHENTICATED_API: 'true'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5555/healthcheck"]
       interval: 30s
@@ -94,7 +103,7 @@ services:
     image: prom/prometheus:latest
     container_name: tankctl_prometheus
     ports: ["9090:9090"]
-    volumes: [./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml]
+    volumes: [./prometheus.yml:/etc/prometheus/prometheus.yml]
 
   cloudflared:
     restart: unless-stopped

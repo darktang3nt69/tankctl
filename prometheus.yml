@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'tankctl_fastapi'
+    static_configs:
+      - targets: ['tankctl_fastapi:8000'] 
