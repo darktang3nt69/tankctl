@@ -14,6 +14,7 @@
     # Install Python dependencies
     COPY requirements.txt .
     RUN pip install --no-cache-dir -r requirements.txt
+    RUN pip install --no-cache-dir --upgrade structlog
 
     # Copy the application code
     COPY ./app ./app

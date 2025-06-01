@@ -13,3 +13,4 @@ pytz
 prometheus-fastapi-instrumentator
 prometheus-client
 flower
+structlog>=24.0.0

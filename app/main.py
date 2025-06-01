@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from app.api.v1.register_router import router as register_router
 from app.api.v1.status_router import router as status_router
 from app.api.v1.command_router import router as command_router
@@ -33,6 +34,12 @@ from app.models import tank, event_log
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.schemas.error import ErrorResponse
+from app.core.exceptions import TankNotFoundError, InvalidCommandError, DatabaseError
+
+from app.core.logging_config import configure_logging
+from app.core.logging_middleware import LoggingMiddleware
+
 
 
 app = FastAPI(
@@ -49,6 +56,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(LoggingMiddleware)
+
 instrumentator = Instrumentator().instrument(app)
 
 # ✅ Auto-create tables on startup
@@ -56,6 +65,8 @@ instrumentator = Instrumentator().instrument(app)
 def on_startup():
     Base.metadata.create_all(bind=engine)
     instrumentator.expose(app, include_in_schema=False, should_gzip=True, endpoint="/metrics")
+
+configure_logging()
 
 # Include your API routers
 # Mount versioned routes
@@ -79,3 +90,28 @@ from app.metrics.updater import update_tank_metrics
 @app.on_event("startup")
 async def start_metrics_updater():
     asyncio.create_task(update_tank_metrics())
+
+@app.get("/openapi-error-model", response_model=ErrorResponse, include_in_schema=False)
+def _openapi_error_model():
+    return {"detail": "This is a dummy endpoint to include ErrorResponse in OpenAPI."}
+
+@app.exception_handler(TankNotFoundError)
+def tank_not_found_exception_handler(request: Request, exc: TankNotFoundError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(detail=exc.detail).dict(),
+    )
+
+@app.exception_handler(InvalidCommandError)
+def invalid_command_exception_handler(request: Request, exc: InvalidCommandError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(detail=exc.detail).dict(),
+    )
+
+@app.exception_handler(DatabaseError)
+def database_error_exception_handler(request: Request, exc: DatabaseError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(detail=exc.detail).dict(),
+    )

@@ -7,24 +7,24 @@ import re
 
 IST = ZoneInfo("Asia/Kolkata")
 
-# allow “9:05” or “09:05” from 00–23 / 00–59
+# allow "9:05" or "09:05" from 00–23 / 00–59
 _HH = r"(?:[01]?\d|2[0-3])"
 _MM = r"[0-5]\d"
 TIME_RE = re.compile(rf"^{_HH}:{_MM}$")
 
 
 class TankSettingsResponse(BaseModel):
-    tank_id: UUID
-    light_on: time
-    light_off: time
-    is_schedule_enabled: bool
+    tank_id: UUID = Field(..., description="Unique identifier of the tank")
+    light_on: time = Field(..., description="Configured time when tank lights turn on")
+    light_off: time = Field(..., description="Configured time when tank lights turn off")
+    is_schedule_enabled: bool = Field(..., description="Indicates whether the light schedule is enabled")
 
     # New pause‑until marker
-    schedule_paused_until: Optional[datetime]
+    schedule_paused_until: Optional[datetime] = Field(None, description="Timestamp until which the schedule is paused")
 
     # Last scheduled on/off timestamps
-    last_schedule_check_on:  Optional[datetime]
-    last_schedule_check_off: Optional[datetime]
+    last_schedule_check_on: Optional[datetime] = Field(None, description="Last timestamp when the light was turned on according to schedule")
+    last_schedule_check_off: Optional[datetime] = Field(None, description="Last timestamp when the light was turned off according to schedule")
 
     model_config = {"from_attributes": True}
 
@@ -48,12 +48,12 @@ class TankSettingsResponse(BaseModel):
 
 class TankSettingsUpdateRequest(BaseModel):
     # (you can drop tank_id here if your route takes it as a path param)
-    tank_id: UUID
-    light_on:  Optional[str] = Field(None, description="HH:MM (24h), IST")
-    light_off: Optional[str] = Field(None, description="HH:MM (24h), IST")
+    tank_id: UUID = Field(..., description="Unique identifier of the tank to update settings for")
+    light_on: Optional[str] = Field(None, description="New time for lights to turn on in 24-hour format (HH:MM), IST timezone")
+    light_off: Optional[str] = Field(None, description="New time for lights to turn off in 24-hour format (HH:MM), IST timezone")
     is_schedule_enabled: Optional[bool] = Field(
         None,
-        description="Enable or disable automated scheduling"
+        description="Set to true to enable automated light scheduling, false to disable"
     )
 
     @field_validator("light_on", "light_off", mode="before")
@@ -79,11 +79,11 @@ class TankSettingsUpdateRequest(BaseModel):
 
 
 class TankOverrideRequest(BaseModel):
-    tank_id: UUID
+    tank_id: UUID = Field(..., description="Unique identifier of the tank to override")
     override_command: str = Field(
         ...,
         pattern="^(light_on|light_off)$",
-        description="Either 'on' (force light on) or 'off' (force light off)"
+        description="Command to override light state: 'light_on' to force lights on, 'light_off' to force lights off"
     )
 
     model_config = {"from_attributes": True}

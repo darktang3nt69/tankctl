@@ -1,3 +1,16 @@
+"""
+# Settings Router
+
+This module provides API endpoints for administrators to manage tank lighting settings, schedules, and manual overrides.
+
+## Endpoints
+- **GET /tank/settings**: Fetch a tank's lighting settings (admin only, API key required).
+- **PUT /tank/settings**: Update a tank's lighting schedule (admin only, API key required).
+- **POST /tank/settings/override**: Manually override tank lights ON/OFF (admin only, API key required).
+- **POST /tank/settings/override/clear**: Clear manual override and resume schedule (admin only, API key required).
+
+Purpose: Enable fine-grained control and monitoring of tank lighting schedules and manual interventions for maintenance or emergencies.
+"""
 # app/api/v1/settings_router.py
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -26,7 +39,21 @@ router = APIRouter(
 
 
 def _ensure_tank_exists(db: Session, tank_id: str):
-    """Raise 404 if no Tank row with this ID."""
+    """
+    ## Purpose
+    Raise HTTP 404 if no Tank row with this ID exists.
+
+    ## Inputs
+    - **db** (`Session`): SQLAlchemy database session.
+    - **tank_id** (`str`): The unique identifier of the tank.
+
+    ## Logic
+    1. Query the database for the tank by ID.
+    2. If not found, raise HTTP 404.
+
+    ## Outputs
+    - None (raises exception on error).
+    """
     if not db.get(Tank, tank_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -44,6 +71,22 @@ def read_settings(
     tank_id: UUID = Query(..., description="UUID of the tank"),
     db: Session = Depends(get_db),
 ):
+    """
+    ## Purpose
+    Fetch the lighting settings for a specific tank.
+
+    ## Inputs
+    - **tank_id** (`UUID`): The unique identifier of the tank.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+
+    ## Logic
+    1. Ensure the tank exists.
+    2. Retrieve or create the tank's settings.
+
+    ## Outputs
+    - **Success:** `TankSettingsResponse` with current settings.
+    - **Error (404):** If tank not found.
+    """
     _ensure_tank_exists(db, str(tank_id))
     return get_or_create_settings(db, str(tank_id))
 
@@ -52,12 +95,70 @@ def read_settings(
     "",
     response_model=TankSettingsResponse,
     summary="(Admin) Update a tank's lighting schedule",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "default": {
+                            "summary": "Update lighting schedule",
+                            "value": {
+                                "tank_id": "77777777-7777-7777-7777-777777777777",
+                                "light_on": "09:00",
+                                "light_off": "17:00",
+                                "is_schedule_enabled": True
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "200": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "success": {
+                                "summary": "Update success",
+                                "value": {
+                                    "tank_id": "77777777-7777-7777-7777-777777777777",
+                                    "light_on": "09:00",
+                                    "light_off": "17:00",
+                                    "is_schedule_enabled": True,
+                                    "schedule_paused_until": "",
+                                    "last_schedule_check_on": "",
+                                    "last_schedule_check_off": ""
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 def put_settings(
     *,
     payload: TankSettingsUpdateRequest,
     db: Session = Depends(get_db),
 ):
+    """
+    ## Purpose
+    Update the lighting schedule for a specific tank.
+
+    ## Inputs
+    - **payload** (`TankSettingsUpdateRequest`): Contains tank ID and new schedule.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+
+    ## Logic
+    1. Ensure the tank exists.
+    2. Update the tank's settings using the provided payload.
+    3. Handle and report any errors.
+
+    ## Outputs
+    - **Success:** `TankSettingsResponse` with updated settings.
+    - **Error (404/500):** If tank not found or update fails.
+    """
     _ensure_tank_exists(db, str(payload.tank_id))
     try:
         # update_tank_settings now also clears any outstanding pause
@@ -80,9 +181,21 @@ def post_manual_override(
     db: Session = Depends(get_db),
 ):
     """
-    Provide {"tank_id": "<uuid>", "override_command": "on"|"off"}
-    to fire the corresponding light_on/light_off immediately
-    and pause automated scheduling until the next schedule edge.
+    ## Purpose
+    Manually override tank lights ON or OFF and pause automated scheduling.
+
+    ## Inputs
+    - **payload** (`TankOverrideRequest`): Contains tank ID and override command ('on' or 'off').
+    - **db** (`Session`): SQLAlchemy database session (injected).
+
+    ## Logic
+    1. Ensure the tank exists.
+    2. Apply the manual override using the provided payload.
+    3. Pause automated scheduling until the next schedule edge.
+
+    ## Outputs
+    - **Success:** `TankSettingsResponse` with updated settings.
+    - **Error (404):** If tank not found.
     """
     tank_id = str(payload.tank_id)
     _ensure_tank_exists(db, tank_id)
@@ -100,8 +213,22 @@ def clear_manual_override(
     db: Session = Depends(get_db),
 ):
     """
-    Force‑clear any outstanding pause (schedule_paused_until),
-    reset today's schedule markers, and resume normal scheduling.
+    ## Purpose
+    Clear any outstanding manual lighting pause and immediately resume normal scheduling.
+
+    ## Inputs
+    - **tank_id** (`UUID`): The unique identifier of the tank.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+
+    ## Logic
+    1. Ensure the tank exists.
+    2. Retrieve the tank's settings.
+    3. If a pause is set, clear it and reset today's schedule markers.
+    4. Commit changes and send a Discord notification.
+
+    ## Outputs
+    - **Success:** `TankSettingsResponse` with updated settings.
+    - **Error (404):** If tank not found.
     """
     tid = str(tank_id)
     _ensure_tank_exists(db, tid)

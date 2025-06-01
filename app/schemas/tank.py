@@ -8,19 +8,19 @@ import re
 
 IST = ZoneInfo("Asia/Kolkata")
 
-# RegEx: allow “9:05” or “09:05” from 00:00–23:59
+# RegEx: allow "9:05" or "09:05" from 00:00–23:59
 _HH = r"(?:[01]?\d|2[0-3])"
 _MM = r"[0-5]\d"
 TIME_RE = re.compile(rf"^{_HH}:{_MM}$")
 
 class TankRegisterRequest(BaseModel):
-    auth_key: str
-    tank_name: str
-    location: Optional[str] = None
-    firmware_version: Optional[str] = None
+    auth_key: str = Field(..., description="Authentication key required for tank registration")
+    tank_name: str = Field(..., description="Unique name identifier for the tank")
+    location: Optional[str] = Field(None, description="Physical location or description of where the tank is installed")
+    firmware_version: Optional[str] = Field(None, description="Current version of the tank's firmware")
 
-    light_on:  Optional[str] = Field(None, description="HH:MM (24h)")
-    light_off: Optional[str] = Field(None, description="HH:MM (24h)")
+    light_on: Optional[str] = Field(None, description="Time when tank lights turn on in 24-hour format (HH:MM)")
+    light_off: Optional[str] = Field(None, description="Time when tank lights turn off in 24-hour format (HH:MM)")
 
     @field_validator("light_on", "light_off", mode="before")
     def default_and_pad(cls, v, info):
@@ -47,13 +47,13 @@ class TankRegisterRequest(BaseModel):
 
 
 class TankRegisterResponse(BaseModel):
-    message: str
-    tank_id: str
-    access_token: str
-    firmware_version: Optional[str]
-    light_on: time
-    light_off: time
-    is_schedule_enabled: bool
+    message: str = Field(..., description="Status message indicating the result of the registration")
+    tank_id: str = Field(..., description="Unique identifier assigned to the registered tank")
+    access_token: str = Field(..., description="Authentication token for future API requests")
+    firmware_version: Optional[str] = Field(None, description="Current version of the tank's firmware")
+    light_on: time = Field(..., description="Configured time when tank lights turn on")
+    light_off: time = Field(..., description="Configured time when tank lights turn off")
+    is_schedule_enabled: bool = Field(..., description="Indicates whether the light schedule is enabled")
 
     model_config = {"from_attributes": True}
 

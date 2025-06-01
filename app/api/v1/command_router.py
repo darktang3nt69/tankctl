@@ -1,3 +1,15 @@
+"""
+# Command Router
+
+This module provides API endpoints for issuing commands to tanks and for tanks to fetch and acknowledge commands.
+
+## Endpoints
+- **POST /tank/{tank_id}/command**: Admin issues a command to a tank.
+- **GET /tank/command**: Tank fetches its pending command.
+- **POST /tank/command/ack**: Tank acknowledges command execution.
+
+Purpose: Facilitate command-and-control operations between the server and tank nodes.
+"""
 # app/api/v1/command_router.py
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
@@ -18,14 +30,66 @@ from app.models.tank_command import TankCommand
 router = APIRouter()
 
 # 🛠 Admin Route: Issue a command to a tank
-@router.post("/tank/{tank_id}/command", response_model=CommandIssueResponse, status_code=201)
+@router.post("/tank/{tank_id}/command", response_model=CommandIssueResponse, status_code=201,
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "default": {
+                            "summary": "Issue feed_now command",
+                            "value": {"command_payload": "feed_now"}
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "201": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "success": {
+                                "summary": "Command issued",
+                                "value": {
+                                    "command_id": "33333333-3333-3333-3333-333333333333",
+                                    "tank_id": "44444444-4444-4444-4444-444444444444",
+                                    "command_payload": "feed_now",
+                                    "status": "pending",
+                                    "retries": 0,
+                                    "next_retry_at": "2024-06-01T12:05:00+05:30",
+                                    "created_at": "2024-06-01T12:00:00+05:30"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def create_command(
     tank_id: UUID,
     request: CommandIssueRequest,
     db: Session = Depends(get_db),
 ):
     """
-    Admins can issue a command (feed_now, light_on, light_off) to a specific tank.
+    ## Purpose
+    Admin issues a command (e.g., 'feed_now', 'light_on', 'light_off') to a specific tank.
+
+    ## Inputs
+    - **tank_id** (`UUID`): The unique identifier of the target tank.
+    - **request** (`CommandIssueRequest`): Contains the command payload.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+
+    ## Logic
+    1. Call `issue_command` to create and store the command for the specified tank.
+    2. Return a structured response with command details if successful.
+    3. Raise HTTP 400 if the command is invalid.
+
+    ## Outputs
+    - **Success (201):** `CommandIssueResponse` with command details.
+    - **Error (400):** `detail` (str): Error message if the command is invalid.
     """
     try:
         command = issue_command(db, tank_id, request.command_payload)
@@ -49,7 +113,23 @@ def get_my_command(
     tank_id: UUID = Depends(get_current_tank),
 ):
     """
-    Node can fetch its pending command.
+    ## Purpose
+    Tank node fetches its pending command from the server.
+
+    ## Inputs
+    - **db** (`Session`): SQLAlchemy database session (injected).
+    - **tank_id** (`UUID`): The unique identifier of the tank (injected).
+
+    ## Logic
+    1. Call `get_pending_command_for_tank` to retrieve the next command for the tank.
+    2. Return command details if found, or a message if none are pending.
+
+    ## Outputs
+    - **Success:**
+        - `command_id` (str): ID of the pending command.
+        - `command_payload` (str): The command to execute.
+    - **No Pending Command:**
+        - `message` (str): Informational message.
     """
     command = get_pending_command_for_tank(db, tank_id)
     if not command:
@@ -62,7 +142,39 @@ def get_my_command(
 
 
 # 🛠 Node Route: Tank acknowledges command execution
-@router.post("/tank/command/ack")
+@router.post("/tank/command/ack",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "default": {
+                            "summary": "Acknowledge command execution",
+                            "value": {
+                                "command_id": "33333333-3333-3333-3333-333333333333",
+                                "success": True
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "200": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "success": {
+                                "summary": "Acknowledgment success",
+                                "value": {"message": "Command acknowledged successfully"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def ack_my_command(
     background_tasks: BackgroundTasks,  # ✅ First
     request: CommandAcknowledgeRequest,
@@ -70,7 +182,28 @@ def ack_my_command(
     tank_id: UUID = Depends(get_current_tank),
 ):
     """
-    Node sends acknowledgment if it executed command successfully or failed.
+    ## Purpose
+    Tank node acknowledges execution (success or failure) of a command.
+
+    ## Inputs
+    - **background_tasks** (`BackgroundTasks`): For async notification.
+    - **request** (`CommandAcknowledgeRequest`): Contains command ID and success status.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+    - **tank_id** (`UUID`): The unique identifier of the tank (injected).
+
+    ## Logic
+    1. Call `acknowledge_command` to update command status in the database.
+    2. If tank and command exist, schedule a notification via `NotificationService`.
+    3. Return a success message if acknowledged.
+    4. Raise HTTP 404 if the command is not found, or 500 for other errors.
+
+    ## Outputs
+    - **Success:**
+        - `message` (str): Confirmation of acknowledgment.
+    - **Error (404):**
+        - `detail` (str): Error message if the command is not found.
+    - **Error (500):**
+        - `detail` (str): Internal server error message.
     """
     try:
         acknowledge_command(db, tank_id, request)
