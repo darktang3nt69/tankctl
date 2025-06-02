@@ -6,6 +6,7 @@ from app.api.v1.command_router import router as command_router
 from app.api.v1.admin_command_router import router as admin_command_router
 # from app.api.v1.override_router import router as override_router
 from app.api.v1.settings_router import router as settings_router
+from app.api.v1.metrics_router import router as metrics_router
 from app.core.config import settings
 
 
@@ -76,13 +77,14 @@ app.include_router(command_router, prefix="/api/v1")
 app.include_router(admin_command_router, prefix="/api/v1")
 # app.include_router(override_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
+app.include_router(metrics_router, prefix="/api/v1")
 
 @app.get("/", tags=["Health Check"])
 def health_check():
     """
     Health check endpoint to verify API is running.
     """
-    return {"message": "AquaPi API is up and running"}
+    return {"message": "TankCTL API is up and running"}
 
 
 from app.metrics.updater import update_tank_metrics
@@ -115,3 +117,27 @@ def database_error_exception_handler(request: Request, exc: DatabaseError):
         status_code=exc.status_code,
         content=ErrorResponse(detail=exc.detail).dict(),
     )
+
+@app.get("/api/v1/tanks", tags=["Admin", "Debug"])
+def list_tanks():
+    """
+    List all registered tanks and their basic info.
+    """
+    db = SessionLocal()
+    try:
+        tanks = db.query(Tank).all()
+        return {
+            "count": len(tanks),
+            "tanks": [
+                {
+                    "tank_id": str(t.tank_id),
+                    "tank_name": t.tank_name,
+                    "location": t.location,
+                    "is_online": t.is_online,
+                    "last_seen": t.last_seen.isoformat() if t.last_seen else None,
+                }
+                for t in tanks
+            ]
+        }
+    finally:
+        db.close()

@@ -1,6 +1,6 @@
 # app/api/v1/status_router.py
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
@@ -81,9 +81,10 @@ router = APIRouter()
     }
 )
 def tank_status(
-    request: StatusUpdateRequest,
+    request_body: StatusUpdateRequest,
     db: Session = Depends(get_db),
     tank_id: str = Depends(get_current_tank),
+    req: Request = None,
 ) -> StatusUpdateResponse:
     """
     Receive heartbeat/status updates from a tank node.
@@ -91,7 +92,15 @@ def tank_status(
     - Requires Bearer token authentication.
     - Updates tank's last_seen and logs the provided status (temperature, pH, light).
     """
+    # Detailed logging
+    if req is not None:
+        try:
+            client_host = req.client.host
+            headers = dict(req.headers)
+            print(f"[TANK STATUS] From IP: {client_host}\nHeaders: {headers}\nBody: {request_body.dict()}")
+        except Exception as e:
+            print(f"[TANK STATUS] Logging error: {e}")
     try:
-        return update_tank_status(db, tank_id, request)
+        return update_tank_status(db, tank_id, request_body)
     except KeyError:
         raise HTTPException(status_code=404, detail="Tank not found")

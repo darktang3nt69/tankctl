@@ -1,0 +1,242 @@
+# 2.8 Time-Series Database Implementation
+
+Goal: Implement TimescaleDB as a more suitable time-series database solution for metrics storage to better support the planned web app frontend.
+
+## Requirement 2.8.1: Implement TimescaleDB for Tank Metrics Storage
+
+• Description: Replace the current PostgreSQL implementation with TimescaleDB for storing tank metrics (temperature, pH, online status, etc.).
+
+• Details: Utilize TimescaleDB's hypertables for efficient time-series data storage, with appropriate chunking strategies and continuous aggregates for optimized query performance.
+
+## Requirement 2.8.2: Design TimescaleDB Schema for Tank Metrics
+
+• Description: Design an efficient TimescaleDB schema for storing tank metrics, commands, acknowledgments, and schedule data.
+
+• Details: 
+  - Create hypertables with appropriate chunking strategies (1 day chunks)
+  - Implement continuous aggregates for efficient querying at different time resolutions
+  - Design indexes optimized for common query patterns
+  - Configure retention policies for automatic data lifecycle management
+
+## Requirement 2.8.3: Implement Direct Metrics Storage in TimescaleDB
+
+• Description: Modify the FastAPI backend to store tank metrics directly in TimescaleDB.
+
+• Details: Update the tank status endpoint to store metrics in TimescaleDB hypertables while maintaining the existing functionality and API contract.
+
+## Requirement 2.8.4: Create REST API Endpoints for Metrics Retrieval
+
+• Description: Implement REST API endpoints that query TimescaleDB for metrics data to be consumed by the web app frontend.
+
+• Details: Include endpoints for real-time data, historical data with different time ranges and resolutions, and aggregated statistics.
+
+## Requirement 2.8.5: Implement Command and Acknowledgment Tracking
+
+• Description: Utilize TimescaleDB for tracking commands sent to tanks and their acknowledgments.
+
+• Details: Store command history and acknowledgments in hypertables for efficient querying and retention management.
+
+## Requirement 2.8.6: Optimize for Real-Time Updates
+
+• Description: Optimize the API for efficient polling for real-time updates to charts and dashboards in the web app.
+
+• Details: Ensure endpoints are optimized for frequent calls with minimal overhead, using TimescaleDB's efficient time-series query capabilities.
+
+# 3. Acceptance Criteria
+
+This section defines the specific criteria that must be met for each requirement to be considered successfully implemented.
+
+## Acceptance Criteria for Requirement 2.8.1 (Implement TimescaleDB for Tank Metrics Storage)
+
+• TimescaleDB is properly installed and configured in the Docker environment.
+• The database connection in the FastAPI application is updated to use TimescaleDB.
+• Basic TimescaleDB functionality is verified through simple queries.
+• Performance metrics show improved query response times compared to standard PostgreSQL.
+
+## Acceptance Criteria for Requirement 2.8.2 (Design TimescaleDB Schema for Tank Metrics)
+
+• Database schema includes properly defined hypertables for time-series data.
+• Continuous aggregates are created for common time intervals (hourly, daily).
+• Appropriate indexes are created for optimizing query performance.
+• Retention policies are configured for automatic data management.
+• Schema design documentation is updated to reflect the TimescaleDB implementation.
+
+## Acceptance Criteria for Requirement 2.8.3 (Implement Direct Metrics Storage in TimescaleDB)
+
+• Tank status endpoint successfully stores metrics in TimescaleDB hypertables.
+• Existing API functionality continues to work without changes to the API contract.
+• Unit tests verify correct data storage and retrieval.
+• Performance tests show acceptable write performance under load.
+
+## Acceptance Criteria for Requirement 2.8.4 (Create REST API Endpoints for Metrics Retrieval)
+
+• New API endpoints are implemented for retrieving metrics data.
+• Endpoints support parameters for time ranges, resolution, and filtering.
+• Response formats are optimized for web app visualization needs.
+• API documentation is updated to include the new endpoints.
+• Performance tests verify acceptable query response times.
+
+## Acceptance Criteria for Requirement 2.8.5 (Implement Command and Acknowledgment Tracking)
+
+• Commands and acknowledgments are stored in TimescaleDB hypertables.
+• API endpoints for command history retrieval are implemented.
+• Command status tracking works correctly with the new database structure.
+• Performance tests verify acceptable query response times for command history.
+
+## Acceptance Criteria for Requirement 2.8.6 (Optimize for Real-Time Updates)
+
+• API endpoints for real-time data are optimized for frequent polling.
+• Response times for real-time data queries are under 100ms.
+• Load testing verifies the system can handle multiple concurrent clients polling for updates.
+• Memory and CPU usage remain within acceptable limits during sustained polling.
+
+# 4. Implementation Details
+
+This section provides technical specifications for implementing the requirements.
+
+## 4.1 TimescaleDB Schema Design Implementation Steps
+
+### 4.1.1 Tank Data Model
+
+1. Create a regular PostgreSQL table for tank information
+2. Include fields for tank_id, tank_name, location, auth_key, access_token, firmware_version, is_online, last_seen, light_on_time, light_off_time, created_at, updated_at
+3. Create an index on the is_online field for efficient filtering
+
+### 4.1.2 Status Logs Hypertable
+
+1. Create a table for status logs with fields for id, tank_id, temperature, ph, light_state, firmware_version, timestamp
+2. Convert the table to a TimescaleDB hypertable using the timestamp column
+3. Set the chunk time interval to 1 day for optimal performance
+4. Create a compound index on tank_id and timestamp for efficient time-series queries
+
+### 4.1.3 Command Queue Hypertable
+
+1. Create a table for commands with fields for command_id, tank_id, command_type, params, status, created_at, updated_at, executed_at, retry_count, max_retries, error_message
+2. Convert the table to a TimescaleDB hypertable using the created_at column
+3. Set the chunk time interval to 1 day
+4. Create indexes for common query patterns (tank_id + status, status + created_at)
+
+### 4.1.4 Command Acknowledgment Hypertable
+
+1. Create a table for command acknowledgments with fields for ack_id, command_id, tank_id, status, error_message, timestamp
+2. Convert the table to a TimescaleDB hypertable using the timestamp column
+3. Set the chunk time interval to 1 day
+4. Create an index on command_id for efficient lookups
+
+### 4.1.5 Tank Schedule Log Hypertable
+
+1. Create a table for schedule logs with fields for id, tank_id, event_type, trigger_source, timestamp
+2. Convert the table to a TimescaleDB hypertable using the timestamp column
+3. Set the chunk time interval to 1 day
+4. Create a compound index on tank_id and timestamp for efficient time-series queries
+
+### 4.1.6 Continuous Aggregates
+
+1. Create a materialized view for hourly aggregates of temperature and pH data
+2. Create a materialized view for daily aggregates of temperature and pH data
+3. Create a materialized view for daily command execution statistics
+4. Configure refresh policies for each continuous aggregate
+5. Set appropriate refresh intervals based on data update frequency
+
+### 4.1.7 Retention Policies
+
+1. Configure retention policy for status logs (30 days)
+2. Configure retention policy for commands (90 days)
+3. Configure retention policy for command acknowledgments (90 days)
+4. Configure retention policy for schedule logs (90 days)
+
+## 4.2 API Endpoints Implementation Steps
+
+### 4.2.1 Tank Registration and Status
+
+1. Implement tank registration endpoint that accepts tank information and returns tank_id and access_token
+2. Implement status update endpoint that accepts sensor readings and stores them in the status_logs hypertable
+3. Update tank information (last_seen, is_online) when status updates are received
+4. Ensure authentication is handled using the existing mechanism with ADMIN_API_KEY
+
+### 4.2.2 Real-time Data Access
+
+1. Implement endpoint to get latest status for all tanks
+2. Implement endpoint to get latest sensor data for a specific tank
+3. Implement endpoint to get sensor data for a specific tank within a time window
+4. Use TimescaleDB's time_bucket_gapfill function for consistent data points
+5. Implement adaptive time resolution based on the requested time window
+6. Ensure all endpoints use ADMIN_API_KEY for authentication
+
+### 4.2.3 Historical Data Analysis
+
+1. Implement endpoint to get historical sensor data for a specific metric
+2. Implement endpoint to get aggregated sensor data with different time intervals
+3. Use continuous aggregates for efficient querying of historical data
+4. Support flexible time ranges and resolutions
+5. Ensure all endpoints use ADMIN_API_KEY for authentication
+
+### 4.2.4 Command Execution
+
+1. Implement endpoint to create a new command for a specific tank
+2. Implement endpoint for tanks to poll for pending commands
+3. Implement endpoint for tanks to acknowledge command execution
+4. Store command execution history in the command_acks hypertable
+5. Log scheduled events in the tank_schedule_log hypertable
+6. Ensure appropriate authentication for each endpoint type
+
+## 4.3 Docker Configuration Steps
+
+### 4.3.1 Docker Compose Update
+
+1. Replace the PostgreSQL service with TimescaleDB in the docker-compose.yml file
+2. Configure environment variables for database connection
+3. Set up volume for persistent data storage
+4. Configure initialization scripts for database setup
+5. Update API service to depend on TimescaleDB
+
+### 4.3.2 Database Initialization
+
+1. Create initialization script to set up TimescaleDB extensions
+2. Include schema creation statements in the initialization script
+3. Configure the script to run automatically when the container starts
+4. Ensure idempotent execution to prevent errors on container restart
+
+## 4.4 Performance Optimization Steps
+
+### 4.4.1 Query Optimization
+
+1. Use TimescaleDB's specialized time-series functions for efficient queries
+2. Leverage continuous aggregates for pre-computed aggregations
+3. Implement appropriate indexes for common query patterns
+4. Configure efficient chunking strategies for hypertables
+5. Use parameterized queries to prevent SQL injection and improve query plan caching
+
+### 4.4.2 Connection Pooling
+
+1. Configure SQLAlchemy connection pool with appropriate settings
+2. Set pool size based on expected concurrent connections
+3. Configure connection recycling to prevent stale connections
+4. Implement connection health checks
+5. Monitor connection usage and adjust as needed
+
+# 5. Testing Strategy
+
+## 5.1 Unit Testing
+
+1. Create unit tests for individual API endpoints
+2. Test database model functionality
+3. Verify data access patterns
+4. Validate command execution logic
+5. Test error handling and edge cases
+
+## 5.2 Integration Testing
+
+1. Test end-to-end data flow
+2. Verify real-time data access
+3. Test command execution and acknowledgment
+4. Validate historical data queries
+5. Test authentication and authorization
+
+## 5.3 Performance Testing
+
+1. Benchmark API response times
+2. Test system under load
+3. Verify database query performance
+4. Validate continuous aggregate refresh performance
+5. Test polling efficiency for real-time updates

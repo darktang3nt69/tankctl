@@ -18,7 +18,8 @@ ENV/
 # ------------------------
 *.log
 docker-compose.override.yml
-.docker/
+.docker/grafana
+.docker/prometheus
 .dockerignore
 
 # ------------------------
