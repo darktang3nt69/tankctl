@@ -22,7 +22,10 @@ services:
 
   db:
     <<: *app-defaults
-    image: postgres:14
+    build:
+      context: ./docker/db
+      dockerfile: Dockerfile
+    image: tankctl-timescaledb:latest
     container_name: tankctl_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}

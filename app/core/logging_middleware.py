@@ -2,6 +2,8 @@ import time
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 import structlog
+from starlette.types import Message
+import json
 
 SENSITIVE_FIELDS = {"password", "token", "access_token", "auth_key"}
 
@@ -22,8 +24,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         logger = structlog.get_logger("request")
         start_time = time.time()
         req_body = await request.body()
+        # Save the body for downstream consumers
+        async def receive() -> Message:
+            return {"type": "http.request", "body": req_body, "more_body": False}
+        request._receive = receive
         try:
-            req_json = request.json() if req_body else None
+            req_json = json.loads(req_body.decode()) if req_body else None
         except Exception:
             req_json = None
         masked_req = mask_sensitive(req_json) if req_json else None

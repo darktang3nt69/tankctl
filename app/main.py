@@ -115,3 +115,27 @@ def database_error_exception_handler(request: Request, exc: DatabaseError):
         status_code=exc.status_code,
         content=ErrorResponse(detail=exc.detail).dict(),
     )
+
+@app.get("/api/v1/tanks", tags=["Admin", "Debug"])
+def list_tanks():
+    """
+    List all registered tanks and their basic info.
+    """
+    db = SessionLocal()
+    try:
+        tanks = db.query(Tank).all()
+        return {
+            "count": len(tanks),
+            "tanks": [
+                {
+                    "tank_id": str(t.tank_id),
+                    "tank_name": t.tank_name,
+                    "location": t.location,
+                    "is_online": t.is_online,
+                    "last_seen": t.last_seen.isoformat() if t.last_seen else None,
+                }
+                for t in tanks
+            ]
+        }
+    finally:
+        db.close()
