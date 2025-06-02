@@ -23,7 +23,7 @@ services:
   db:
     <<: *app-defaults
     build:
-      context: ./docker/db
+      context: ./config/db
       dockerfile: Dockerfile
     image: tankctl-timescaledb:latest
     container_name: tankctl_postgres
