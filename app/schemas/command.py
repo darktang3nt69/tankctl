@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
+from app.utils.timezone import IST # Import IST for serialization
 
 class CommandIssueRequest(BaseModel):
     command_payload: str = Field(..., description="Command to be executed by the tank (e.g., 'feed_now' for feeding, 'light_on' for turning lights on)")
@@ -15,6 +16,11 @@ class CommandIssueResponse(BaseModel):
     retries: int = Field(..., description="Number of times the command has been retried")
     next_retry_at: datetime = Field(..., description="Timestamp when the command will be retried if not acknowledged")
     created_at: datetime = Field(..., description="Timestamp when the command was created")
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(IST).isoformat(timespec='microseconds')
+        }
 
 class CommandAcknowledgeRequest(BaseModel):
     command_id: UUID = Field(..., description="Unique identifier of the command to acknowledge")

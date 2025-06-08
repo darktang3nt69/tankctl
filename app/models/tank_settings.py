@@ -1,15 +1,15 @@
-from datetime import time
+from datetime import time, datetime
 from sqlalchemy import (
     Column,
     ForeignKey,
     Time,
     DateTime,
     Boolean,
-    func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.utils.timezone import IST
 
 class TankSettings(Base):
     __tablename__ = "tank_settings"
@@ -55,13 +55,13 @@ class TankSettings(Base):
     # Audit timestamps
     created_at = Column(
         DateTime(timezone=True),
-        server_default=func.now(),
+        default=lambda: datetime.now(IST),
         nullable=False
     )
     updated_at = Column(
         DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
+        default=lambda: datetime.now(IST),
+        onupdate=lambda: datetime.now(IST),
         nullable=False,
     )
 

@@ -103,6 +103,33 @@ def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeReques
         "timestamp": datetime.now(IST).isoformat()
     }
 
+def get_command_history_for_tank(
+    db: Session,
+    tank_id: uuid.UUID,
+    status: str | None = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
+    limit: int = 100
+) -> list[TankCommand]:
+    """
+    Retrieve command history for a specific tank, with optional filters.
+    """
+    query = select(TankCommand).where(TankCommand.tank_id == tank_id)
+
+    if status:
+        query = query.where(TankCommand.status == status)
+    if start_time:
+        query = query.where(TankCommand.created_at >= start_time)
+    if end_time:
+        query = query.where(TankCommand.created_at <= end_time)
+
+    query = query.order_by(TankCommand.created_at.desc()).limit(limit)
+    commands = db.scalars(query).all()
+
+    for command in commands:
+        print(f"DEBUG: Command ID: {command.command_id}, created_at.tzinfo: {command.created_at.tzinfo}, next_retry_at.tzinfo: {command.next_retry_at.tzinfo if command.next_retry_at else 'None'}")
+
+    return commands
 
 def retry_stale_commands(db: Session):
     """
@@ -144,7 +171,7 @@ def retry_stale_commands(db: Session):
         tank = db.get(Tank, command.tank_id)
         tank_name = tank.tank_name if tank else "<unknown>"
 
-        # If it’s already hit max retries → mark failed
+        # If it's already hit max retries → mark failed
         if command.retries >= MAX_RETRIES:
             failed += 1
             command.status = "failed"
@@ -178,7 +205,7 @@ def retry_stale_commands(db: Session):
                 }
             )
 
-        # persist this command’s updated state
+        # persist this command's updated state
         db.add(command)
 
     db.commit()
