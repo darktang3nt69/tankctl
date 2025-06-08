@@ -23,67 +23,6 @@ router = APIRouter()
     response_model=TankRegisterResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new tank node",
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "application/json": {
-                    "examples": {
-                        "default": {
-                            "summary": "Register tank",
-                            "value": {
-                                "auth_key": "my-secret-key",
-                                "tank_name": "Tank 1",
-                                "location": "Living Room",
-                                "firmware_version": "1.0.0",
-                                "light_on": "10:00",
-                                "light_off": "16:00"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "responses": {
-            "201": {
-                "content": {
-                    "application/json": {
-                        "examples": {
-                            "success": {
-                                "summary": "Registration success",
-                                "value": {
-                                    "message": "Tank registered successfully",
-                                    "tank_id": "55555555-5555-5555-5555-555555555555",
-                                    "access_token": "jwt.token.here",
-                                    "firmware_version": "1.0.0",
-                                    "light_on": "10:00",
-                                    "light_off": "16:00",
-                                    "is_schedule_enabled": True
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "401": {
-                "description": "Unauthorized - Registration failed or tank already exists with different auth key.",
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                        "examples": {
-                            "registration_failed": {
-                                "summary": "Registration Failed",
-                                "value": {"detail": "Invalid authentication key"}
-                            },
-                            "tank_exists": {
-                                "summary": "Tank Already Exists",
-                                "value": {"detail": "Tank with this name already exists and auth key does not match"}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 )
 def tank_register(
     request: TankRegisterRequest,

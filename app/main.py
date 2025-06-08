@@ -17,15 +17,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.models.tank import Tank
-from app.models.tank_settings import TankSettings
-from app.metrics.tank_metrics import tank_online_status
 import asyncio
 
 # Import database components
 from app.core.database import Base, engine
 
 # 🚨 NEW: Explicitly import models
-from app.models import tank, event_log, chart_data
+from app.models import tank, event_log
 
 from fastapi.middleware.cors import CORSMiddleware
 

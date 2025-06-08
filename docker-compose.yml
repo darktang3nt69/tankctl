@@ -1,25 +1,28 @@
 # ───── YAML ANCHORS FOR COMMON SETTINGS ─────
-# Anchor for application services that share env_file and restart policy
+# Define reusable settings: restart policy and environment file
 x-app-defaults: &app-defaults
   restart: always
   env_file: [.env]
 
+# Define the shared network for all services
 networks:
   default:
     name: tankctl
-    external: true
+    external: true  # This assumes a pre-created external Docker network 'tankctl'
 
 services:
+  # ───── FastAPI Application (build and API service) ─────
   app:
-    build: .
+    build: .  # Build the Dockerfile in the current directory
     image: tankctl:latest
     container_name: tankctl_app
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_healthy  # Wait for DB health before starting
       redis:
-        condition: service_started
+        condition: service_started  # Wait for Redis to start
 
+  # ───── TimescaleDB/PostgreSQL Database ─────
   db:
     <<: *app-defaults
     build:
@@ -31,92 +34,112 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports: ["5432:5432"]
-    volumes: [postgres_data:/var/lib/postgresql/data]
+    ports: ["5432:5432"]  # Expose PostgreSQL port
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persistent DB data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD", "pg_isready", "-U", "postgres"]  # Basic Postgres health check
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # ───── Redis (Message Broker for Celery) ─────
   redis:
     <<: *app-defaults
     image: redis:7
     container_name: tankctl_redis
-    ports: ["6379:6379"]
+    ports: ["6379:6379"]  # Expose Redis port
 
+  # ───── FastAPI Web Server (Uvicorn) ─────
   web:
     <<: *app-defaults
     image: tankctl:latest
     container_name: tankctl_fastapi
-    ports: ["8000:8000"]
+    ports: ["8000:8000"]  # API exposed at port 8000
     environment:
-      CHART_API: /api/v1/tank/chart_data
+      CHART_API: /api/v1/tank/chart_data  # Example env var for API path
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000  # Uvicorn command
 
+  # ───── Celery Worker (Background Jobs) ─────
   celery_worker:
     <<: *app-defaults
     image: tankctl:latest
     command: celery -A app.worker.celery_app.celery worker --loglevel=info
-    depends_on: [redis, db]
+    depends_on: 
+      - redis
+      - db
 
+  # ───── Celery Beat (Periodic Tasks Scheduler) ─────
   celery_beat:
     <<: *app-defaults
     image: tankctl:latest
     command: celery -A app.worker.celery_app.celery beat --loglevel=info
-    depends_on: [web, db, redis]
+    depends_on:
+      - web
+      - db
+      - redis
 
+  # ───── Flower (Celery Monitoring Dashboard) ─────
   flower:
     <<: *app-defaults
     image: tankctl:latest
     container_name: tankctl_flower
-    ports: ["5555:5555"]
+    ports: ["5555:5555"]  # Flower UI on port 5555
     command: celery -A app.worker.celery_app flower --port=5555 --address=0.0.0.0
-    depends_on: [redis, celery_worker, celery_beat]
+    depends_on:
+      - redis
+      - celery_worker
+      - celery_beat
     environment:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_BACKEND_URL}
       FLOWER_UNAUTHENTICATED_API: 'true'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5555/healthcheck"]
+      test: ["CMD", "curl", "-f", "http://localhost:5555/healthcheck"]  # Flower healthcheck
       interval: 30s
       timeout: 10s
       retries: 3
 
+  # ───── Grafana (Metrics Dashboard) ─────
   grafana:
     <<: *app-defaults
     image: grafana/grafana-oss:12.0.0
     container_name: tankctl_grafana
-    ports: ["3000:3000"]
+    ports: ["3000:3000"]  # Grafana web interface on port 3000
     environment:
-      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_USER: admin  # Admin credentials
       GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource, volkovlabs-form-panel
+      GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource, volkovlabs-form-panel  # Preinstalled plugins
     volumes:
-      - grafana_data:/var/lib/grafana
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana  # Persist Grafana data
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning  # Provisioning dashboards/datasources
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
       - ./docker/grafana/plugins:/var/lib/grafana/plugins
-    depends_on: [db]
+    depends_on: 
+      - db
 
+  # ───── Prometheus (Metrics Collector) ─────
   prometheus:
     <<: *app-defaults
     image: prom/prometheus:latest
     container_name: tankctl_prometheus
-    ports: ["9090:9090"]
-    volumes: [./prometheus.yml:/etc/prometheus/prometheus.yml]
+    ports: ["9090:9090"]  # Prometheus web UI on port 9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Prometheus configuration
 
+  # ───── Cloudflared (Cloudflare Tunnel) ─────
   cloudflared:
-    restart: unless-stopped
+    restart: unless-stopped  # Persistently restart unless manually stopped
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    env_file: [.env]
+    env_file: [.env]  # Cloudflared environment variables
 
+# ───── Docker Volumes (Persistent Data) ─────
 volumes:
-  postgres_data:
-  grafana_data:
+  postgres_data:  # Volume for PostgreSQL data
+  grafana_data:   # Volume for Grafana data
