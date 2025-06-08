@@ -67,6 +67,20 @@ router = APIRouter()
                         }
                     }
                 }
+            },
+            "400": {
+                "description": "Invalid command payload.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "invalid_command": {
+                                "summary": "Invalid command",
+                                "value": {"detail": "Invalid command payload"}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -110,7 +124,31 @@ def create_command(
 
 
 # 🛠 Node Route: Tank fetches its pending command
-@router.get("/tank/command")
+@router.get("/tank/command",
+    openapi_extra={
+        "responses": {
+            "200": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "success_with_command": {
+                                "summary": "Pending command found",
+                                "value": {
+                                    "command_id": "99999999-9999-9999-9999-999999999999",
+                                    "command_payload": "feed_now"
+                                }
+                            },
+                            "success_no_command": {
+                                "summary": "No pending command",
+                                "value": {"message": "No pending command"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def get_my_command(
     db: Session = Depends(get_db),
     tank_id: UUID = Depends(get_current_tank),
@@ -170,6 +208,34 @@ def get_my_command(
                             "success": {
                                 "summary": "Acknowledgment success",
                                 "value": {"message": "Command acknowledged successfully"}
+                            }
+                        }
+                    }
+                }
+            },
+            "404": {
+                "description": "Command not found.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "not_found": {
+                                "summary": "Command not found",
+                                "value": {"detail": "Command not found"}
+                            }
+                        }
+                    }
+                }
+            },
+            "500": {
+                "description": "Internal server error.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "server_error": {
+                                "summary": "Internal server error",
+                                "value": {"detail": "Internal server error"}
                             }
                         }
                     }

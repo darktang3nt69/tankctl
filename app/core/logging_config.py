@@ -6,7 +6,7 @@ from datetime import datetime
 IST = ZoneInfo("Asia/Kolkata")
 
 
-def ist_timestamper(logger, name, event_dict):
+def ist_timestamper(logger: structlog.stdlib.BoundLogger, name: str, event_dict: dict) -> dict:
     event_dict["timestamp"] = datetime.now(IST).isoformat()
     return event_dict
 

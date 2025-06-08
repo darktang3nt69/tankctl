@@ -14,9 +14,11 @@ from app.models.tank_schedule_log import TankScheduleLog
 from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 
-# Configurable retry policy
-MAX_RETRIES = os.getenv("", 3)
-BASE_BACKOFF_SECONDS = 60  # 1 minute
+# Configurable retry policy for commands.
+# MAX_RETRIES: Maximum number of times a command will be retried before being marked as 'failed'.
+# BASE_BACKOFF_SECONDS: The initial delay for retries. Subsequent retries use exponential backoff.
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", 3))
+BASE_BACKOFF_SECONDS = int(os.getenv("BASE_BACKOFF_SECONDS", 60))
 
 def issue_command(
     db: Session,
@@ -26,13 +28,25 @@ def issue_command(
 ) -> TankCommand:
     """
     Centralized function to create commands for tanks.
-    Supports both manual and scheduled creation.
+    Supports both manual (admin-initiated) and system (scheduled) command creation.
+
+    Business Logic:
+    - Ensures the target tank exists before issuing a command.
+    - For 'manual' source commands, it updates the tank's `manual_override_state`
+      if the command is 'light_on' or 'light_off'. This is a direct override
+      of the scheduled lighting.
+    - Records the command in the `tank_commands` table with a 'pending' status.
+    - Sets the `next_retry_at` to the current time, making it immediately eligible for processing.
+    - Logs manual and scheduled commands in `tank_schedule_log` for historical tracking.
     """
+    # Retrieve the tank from the database.
     tank = db.execute(select(Tank).where(Tank.tank_id == tank_id)).scalar_one_or_none()
     if not tank:
         raise ValueError(f"Tank with ID {tank_id} not found")
 
-    # Check for and update tank settings if override is needed
+    # If the command is from a 'manual' source (admin override) and settings exist,
+    # update the manual override state for lights. This ensures the system respects
+    # immediate human intervention over automated schedules.
     settings = db.execute(select(TankSettings).where(TankSettings.tank_id == tank_id)).scalar_one_or_none()
     if source == "manual" and settings:
         if command_payload == "light_on":
@@ -40,7 +54,7 @@ def issue_command(
         elif command_payload == "light_off":
             settings.manual_override_state = "off"
 
-    # Create command entry
+    # Create a new TankCommand entry.
     new_command = TankCommand(
         tank_id=tank_id,
         command_payload=command_payload,
@@ -50,7 +64,8 @@ def issue_command(
     )
     db.add(new_command)
 
-    # Log the command
+    # Log the command in the tank_schedule_log table if it's a manual or scheduled event.
+    # This provides an audit trail for important commands.
     if source in ["manual", "scheduled"]:
         db.add(TankScheduleLog(
             tank_id=tank_id,
@@ -64,6 +79,10 @@ def issue_command(
     return new_command
 
 def get_pending_command_for_tank(db: Session, tank_id) -> TankCommand | None:
+    """
+    Retrieves the oldest pending or in-progress command for a specific tank.
+    Commands are ordered by creation time to ensure FIFO processing.
+    """
     command = db.execute(
         select(TankCommand)
         .where(
@@ -71,37 +90,59 @@ def get_pending_command_for_tank(db: Session, tank_id) -> TankCommand | None:
             TankCommand.status.in_(["pending", "in_progress"])
         )
         .order_by(TankCommand.created_at.asc())
-    ).scalars().first()  # ✅ FIXED
+    ).scalars().first()
 
     return command
 
 def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeRequest):
     """
-    Handle acknowledgment from tank node for command execution.
+    Handles the acknowledgment of a command execution from a tank node.
+
+    Business Logic:
+    - Fetches the command by its `command_id`.
+    - Verifies that the command belongs to the acknowledging tank (`tank_id`).
+    - Updates the command's status to 'success' or 'failed' based on `ack.success`.
+    - Sets `retries` to `MAX_RETRIES` (3) to prevent further retries for acknowledged commands.
+    - Records the `last_attempt_at` timestamp.
+    - Triggers a Discord notification to inform about the command acknowledgment status.
     """
+    # Fetch the command to be acknowledged.
     command = db.execute(
         select(TankCommand).where(
             TankCommand.command_id == ack.command_id
         )
-    ).scalar_one_or_none()  # ✅ safe
+    ).scalar_one_or_none()
 
     if not command:
         raise ValueError("Command not found.")
 
+    # Ensure the command belongs to the tank acknowledging it for security and data integrity.
     if str(command.tank_id) != str(tank_id):
         raise ValueError("Command does not belong to this tank.")
 
+    # Update the command status based on the acknowledgment result.
     command.status = "success" if ack.success else "failed"
-    command.retries = 3  # prevent further retries
+    command.retries = MAX_RETRIES  # Prevent further retries after acknowledgment.
     command.last_attempt_at = datetime.now(IST)
 
     db.commit()
     db.refresh(command)
 
-    return {
-        "message": f"Command `{command.command_payload}` acknowledged as {'SUCCESS' if ack.success else 'FAILED'}",
-        "timestamp": datetime.now(IST).isoformat()
-    }
+    # Prepare and send a Discord notification about the command acknowledgment.
+    # This provides real-time feedback on tank operations.
+    tank = db.query(Tank).filter(Tank.tank_id == tank_id).first()
+    if tank and command:
+        send_discord_embed(
+            status="command_acknowledgment",
+            tank_name=tank.tank_name,
+            command_payload=command.command_payload,
+            success=ack.success,
+            extra_fields={
+                "Command ID": str(command.command_id),
+                "Status": command.status.capitalize(),
+                "Acknowledged At": datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S %Z%z')
+            }
+        )
 
 def get_command_history_for_tank(
     db: Session,
@@ -113,6 +154,12 @@ def get_command_history_for_tank(
 ) -> list[TankCommand]:
     """
     Retrieve command history for a specific tank, with optional filters.
+
+    Business Logic:
+    - Filters commands by `tank_id`.
+    - Supports optional filtering by `status`, `start_time`, and `end_time`.
+    - Orders results by `created_at` in descending order (most recent first).
+    - Limits the number of returned results to `limit`.
     """
     query = select(TankCommand).where(TankCommand.tank_id == tank_id)
 
@@ -126,19 +173,27 @@ def get_command_history_for_tank(
     query = query.order_by(TankCommand.created_at.desc()).limit(limit)
     commands = db.scalars(query).all()
 
-    for command in commands:
-        print(f"DEBUG: Command ID: {command.command_id}, created_at.tzinfo: {command.created_at.tzinfo}, next_retry_at.tzinfo: {command.next_retry_at.tzinfo if command.next_retry_at else 'None'}")
-
     return commands
 
 def retry_stale_commands(db: Session):
     """
-    Retry exactly one command per tank: find the oldest pending/in_progress
-    whose next_retry_at <= now, then retry or mark failed.
+    Identifies and retries commands that are 'pending' or 'in_progress' and have
+    exceeded their `next_retry_at` timestamp. Commands are retried with an
+    exponential backoff policy.
+
+    Business Logic:
+    - Selects the oldest eligible command for each tank that is due for a retry.
+    - If a command has reached `MAX_RETRIES`, it is marked as 'failed' and a Discord
+      notification is sent.
+    - Otherwise, the command's `retries` count is incremented, `next_retry_at` is
+      calculated using exponential backoff, status is set to 'delivered', and a
+      Discord notification is sent.
+    - All changes are persisted to the database.
     """
     now = datetime.now(IST)
 
-    # 1) Identify head‐of‐line per tank
+    # 1) Identify head-of-line per tank: Find the single oldest pending/in_progress
+    # command for each tank that has passed its next_retry_at time.
     subq = (
         db.query(
             TankCommand.tank_id,
@@ -152,7 +207,7 @@ def retry_stale_commands(db: Session):
         .subquery()
     )
 
-    # 2) Fetch those full command rows
+    # 2) Fetch those full command rows by joining with the subquery results.
     head_cmds = (
         db.query(TankCommand)
           .join(
@@ -163,7 +218,7 @@ def retry_stale_commands(db: Session):
           .all()
     )
 
-    print(f"📦 Head‐of‐line commands eligible for retry: {len(head_cmds)}")
+    print(f"📦 Head-of-line commands eligible for retry: {len(head_cmds)}")
 
     failed, retried = 0, 0
 
@@ -171,7 +226,7 @@ def retry_stale_commands(db: Session):
         tank = db.get(Tank, command.tank_id)
         tank_name = tank.tank_name if tank else "<unknown>"
 
-        # If it's already hit max retries → mark failed
+        # If the command has exhausted its allowed retries, mark it as permanently failed.
         if command.retries >= MAX_RETRIES:
             failed += 1
             command.status = "failed"
@@ -186,11 +241,11 @@ def retry_stale_commands(db: Session):
                 }
             )
         else:
-            # Otherwise increment attempts, schedule next retry, and fire it
+            # Otherwise, increment retry count and schedule the next retry with exponential backoff.
             command.retries += 1
             backoff = BASE_BACKOFF_SECONDS * (2 ** (command.retries - 1))
             command.next_retry_at = now + timedelta(seconds=backoff)
-            command.status = "delivered"
+            command.status = "delivered" # Set status to 'delivered' when retrying
             retried += 1
 
             print(f"🔁 Retrying command {command.command_id} for tank {tank_name} | "
@@ -205,7 +260,7 @@ def retry_stale_commands(db: Session):
                 }
             )
 
-        # persist this command's updated state
+        # Persist the updated state of the command to the database.
         db.add(command)
 
     db.commit()

@@ -146,6 +146,7 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
             })
 
     # 📤 Send
+    # Refer to Discord Webhook documentation for payload structure: https://discord.com/developers/docs/resources/webhook
     payload = {"embeds": [embed]}
     headers = {"Content-Type": "application/json"}
 

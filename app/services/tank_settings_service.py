@@ -8,6 +8,16 @@ from app.utils.discord import send_discord_embed
 from app.utils.timezone import IST
 
 def get_or_create_settings(db: Session, tank_id: str) -> TankSettings:
+    """
+    Retrieves existing tank settings or creates new default settings if none exist.
+    This ensures that every tank has a settings configuration.
+
+    Business Logic:
+    - Attempts to fetch `TankSettings` for the given `tank_id`.
+    - If settings do not exist, a new `TankSettings` instance is created with default values,
+      added to the database, and committed.
+    - The newly created or existing settings object is returned.
+    """
     settings = db.get(TankSettings, tank_id)
     if not settings:
         settings = TankSettings(tank_id=tank_id)
@@ -21,6 +31,21 @@ def update_tank_settings(
     tank_id: str,
     payload: TankSettingsUpdateRequest
 ) -> TankSettings:
+    """
+    Updates the lighting schedule and other settings for a specific tank.
+    Any pending manual override or pause is cleared upon a schedule update.
+
+    Business Logic:
+    - Fetches the tank's settings using `get_or_create_settings`.
+    - Applies updates to `light_on`, `light_off`, and `is_schedule_enabled` based on the payload.
+      Only fields provided in the `payload` are updated.
+    - Crucially, it clears any `schedule_paused_until`, `last_schedule_check_on`,
+      and `last_schedule_check_off` values. This ensures that when an admin updates
+      the schedule, any existing manual overrides or pauses are reset, and the new
+      schedule takes immediate effect from the next check.
+    - Commits the changes to the database and sends a Discord notification
+      about the updated settings.
+    """
     settings = get_or_create_settings(db, tank_id)
 
     # apply only what changed
@@ -58,14 +83,27 @@ def manual_override_command(
     payload: TankOverrideRequest
 ) -> TankSettings:
     """
-    One‑shot override: fire immediate command, then
-    pause scheduling until the *next* opposite edge.
+    Executes a one-shot manual override command for tank lights and pauses
+    the automated schedule until the next opposite light cycle transition.
+
+    Business Logic:
+    - Fetches the tank's settings.
+    - Determines the 'next edge' timestamp: if the command is 'light_off', the schedule
+      is paused until the *next* `light_on` time. If the command is 'light_on', it's
+      paused until the *next* `light_off` time.
+    - If the current time has passed today's scheduled `on_dt` or `off_dt`,
+      the `next_edge` is set for the following day.
+    - Issues the actual `light_on` or `light_off` command via `issue_command`.
+    - Stores the `schedule_paused_until` timestamp in the settings, effectively pausing
+      the automatic scheduler.
+    - Logs the manual event in `TankScheduleLog` and sends a Discord notification
+      detailing the override and when the schedule will resume.
     """
     settings = get_or_create_settings(db, str(payload.tank_id))
     now      = datetime.now(IST)
     today    = now.date()
 
-    # build today’s on/off datetimes as IST‑aware
+    # build today's on/off datetimes as IST‑aware
     on_dt  = datetime.combine(today, settings.light_on).replace(tzinfo=IST)
     off_dt = datetime.combine(today, settings.light_off).replace(tzinfo=IST)
 

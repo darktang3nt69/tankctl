@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.schemas.tank import TankRegisterRequest, TankRegisterResponse
 from app.services.tank_service import register_tank
 from app.api.deps import get_db
+from app.core.exceptions import AuthenticationError
 
 router = APIRouter()
 
@@ -62,6 +63,24 @@ router = APIRouter()
                         }
                     }
                 }
+            },
+            "401": {
+                "description": "Unauthorized - Registration failed or tank already exists with different auth key.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "registration_failed": {
+                                "summary": "Registration Failed",
+                                "value": {"detail": "Invalid authentication key"}
+                            },
+                            "tank_exists": {
+                                "summary": "Tank Already Exists",
+                                "value": {"detail": "Tank with this name already exists and auth key does not match"}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -90,7 +109,4 @@ def tank_register(
     try:
         return register_tank(db, request)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-        )
+        raise AuthenticationError(detail=str(e))

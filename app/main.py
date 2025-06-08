@@ -9,6 +9,7 @@ from app.api.v1.settings_router import router as settings_router
 from app.api.v1.metrics_router import router as metrics_router
 from app.core.config import settings
 
+# Refer to FastAPI documentation: https://fastapi.tiangolo.com/
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from prometheus_client import Gauge
@@ -24,7 +25,7 @@ import asyncio
 from app.core.database import Base, engine
 
 # 🚨 NEW: Explicitly import models
-from app.models import tank, event_log
+from app.models import tank, event_log, chart_data
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -40,7 +41,7 @@ from json import JSONEncoder
 
 
 app = FastAPI(
-    title="AquaPi Tank API",
+    title="TankCtl Tank API",
     description="API to manage and monitor aquarium tanks",
     version="1.0.0"
 )

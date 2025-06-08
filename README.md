@@ -243,63 +243,46 @@ For support, please open an issue in the GitHub repository or contact the mainta
 
 ## Configuration Options
 
-### Network Settings
-```python
-SSID = 'your_wifi_ssid'        # WiFi network name
-PASSWORD = 'your_password'     # WiFi password
-BASE_URL = 'https://api.url'   # API base URL
-```
+This section details all environment variables and configuration options used by the TankCtl application. These variables are primarily loaded from a `.env` file in the project root or directly from the environment.
 
-### Tank Identification
-```python
-AUTH_KEY = 'your_auth_key'     # API authentication key
-TANK_NAME = 'tank_name'        # Unique tank identifier
-LOCATION = 'tank_location'     # Physical location
-```
+### Database Settings
+- `POSTGRES_SERVER`: **(Required)** The hostname or IP address of the PostgreSQL/TimescaleDB server.
+- `POSTGRES_PORT`: **(Required)** The port number for the PostgreSQL/TimescaleDB server (default: `5432`).
+- `POSTGRES_USER`: **(Required)** The username for connecting to the PostgreSQL/TimescaleDB database.
+- `POSTGRES_PASSWORD`: **(Required)** The password for connecting to the PostgreSQL/TimescaleDB database.
+- `POSTGRES_DB`: **(Required)** The name of the database to connect to.
 
-### Timing Parameters
-```python
-WIFI_RETRIES = 5               # WiFi connection attempts
-WIFI_TIMEOUT = 10              # WiFi timeout (seconds)
-WDT_TIMEOUT_MS = 10000         # Watchdog timeout (ms)
-STATUS_INTERVAL = 60           # Status update interval (s)
-COMMAND_POLL_MS = 5000         # Command polling interval (ms)
-MIN_HEAP_BYTES = 50000         # Minimum heap before reboot
-TEMP_CACHE_MS = 5000           # Temperature cache duration (ms)
-```
+### SQLAlchemy Connection Pool Settings
+- `SQLALCHEMY_POOL_SIZE`: The number of connections to keep in the SQLAlchemy connection pool (default: `10`).
+- `SQLALCHEMY_MAX_OVERFLOW`: The maximum overflow size of the SQLAlchemy connection pool (default: `20`).
+- `SQLALCHEMY_POOL_RECYCLE`: The number of seconds after which a connection is automatically recycled (default: `1800` seconds / `30` minutes).
+- `SQLALCHEMY_POOL_TIMEOUT`: The number of seconds to wait for a connection to become available (default: `30` seconds).
 
-### Hardware Configuration
-```python
-# GPIO Pins
-RELAY_PIN = 15                 # Light relay pin
-SERVO_PIN = 4                  # Feeder servo pin
-DS18B20_PIN = 22              # Temperature sensor pin
-
-# Relay Settings
-RELAY_ON = 0                   # Active-low ON state
-RELAY_OFF = 1                  # Active-low OFF state
-
-# Servo Settings
-SERV_FREQ = 50                 # PWM frequency (Hz)
-STOP_DUTY = 77                 # Stop position
-FORWARD_DUTY = 100             # Forward position
-REVERSE_DUTY = 50              # Reverse position
-```
+### JWT (JSON Web Token) Settings
+- `JWT_SECRET_KEY`: **(Required)** A strong, secret key used for signing JWT tokens.
+- `JWT_ALGORITHM`: **(Required)** The algorithm used for JWT signing (e.g., `HS256`).
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: The expiration time for JWT access tokens in minutes (default: `30`).
 
 ### Tank Settings
-```python
-# Default values - Can be updated via API server
-LIGHT_ON_TIMING = "10:00"      # Default light ON time (24h)
-LIGHT_OFF_TIMING = "16:00"     # Default light OFF time (24h)
-FIRMWARE = "1.0.0"             # Firmware version
+- `TANK_PRESHARED_KEY`: **(Required)** A pre-shared key used for new tank registrations to ensure authorized devices.
 
-# Note: Light timing can be updated remotely through the API:
-# PUT /api/v1/settings
-# {
-#   "light_on": "08:00",
-#   "light_off": "20:00"
-# }
-```
+### Celery Settings (Background Tasks)
+- `CELERY_BROKER_URL`: **(Required)** The URL for the Celery message broker (e.g., `redis://redis:6379/0`).
+- `CELERY_BACKEND_URL`: **(Required)** The URL for storing Celery task results (e.g., `redis://redis:6379/0`).
+- `celery_result_backend`: **(Required)** Alias for `CELERY_BACKEND_URL` (ensure consistency).
+
+### Heartbeat Monitor Settings
+- `HEARTBEAT_CHECK_INTERVAL_MINUTES`: Frequency (in minutes) at which the system checks tank heartbeats (default: `1`).
+- `TANK_OFFLINE_THRESHOLD_MINUTES`: The duration (in minutes) after which a tank is considered offline if no heartbeat is received (default: `2`).
+
+### Discord Integration
+- `DISCORD_WEBHOOK_URL`: **(Required)** The webhook URL for sending notifications to Discord.
+
+### Admin API Key
+- `ADMIN_API_KEY`: **(Required)** A secret key used to authenticate administrative API requests.
+
+### Application Timezone
+- `APP_TIMEZONE`: The timezone used by the application for all time-related operations (default: `Asia/Kolkata`). This is set via environment variable directly, not through `app/core/config.py` and is leveraged in `app/utils/timezone.py`.
 
 ## API Endpoints
 

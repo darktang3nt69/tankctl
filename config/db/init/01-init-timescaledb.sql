@@ -38,8 +38,8 @@ SELECT create_hypertable('tank_schedule_log', 'timestamp', if_not_exists => TRUE
 -- Task 2.5: Indexing considerations
 -- TimescaleDB automatically indexes the time column for hypertables.
 -- Consider adding indexes on tank_id for faster queries filtering by tank.
--- CREATE INDEX IF NOT EXISTS idx_status_logs_tank_id ON status_logs (tank_id, timestamp DESC);
--- CREATE INDEX IF NOT EXISTS idx_tank_schedule_log_tank_id ON tank_schedule_log (tank_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_status_logs_tank_id_timestamp ON status_logs (tank_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_tank_schedule_log_tank_id_timestamp ON tank_schedule_log (tank_id, timestamp DESC);
 -- Documentation would typically involve describing the schema and query patterns.
 
 -- Task 3: Implement Continuous Aggregates and Retention Policies
@@ -125,4 +125,7 @@ SELECT add_retention_policy('status_logs', INTERVAL '30 days', if_not_exists => 
 -- Task 3.6: Implement Retention Policies for Commands and Acknowledgments (90 days)
 -- Also including schedule logs (90 days) as per Task 3 description.
 SELECT add_retention_policy('tank_commands', INTERVAL '90 days', if_not_exists => TRUE);
-SELECT add_retention_policy('tank_schedule_log', INTERVAL '90 days', if_not_exists => TRUE); 
+SELECT add_retention_policy('tank_schedule_log', INTERVAL '90 days', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS idx_tank_commands_tank_id_status ON tank_commands (tank_id, status);
+CREATE INDEX IF NOT EXISTS idx_tank_commands_status_created_at ON tank_commands (status, created_at DESC); 

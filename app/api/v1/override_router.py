@@ -18,6 +18,7 @@ from app.api.deps import get_db, verify_admin_api_key
 from app.models.tank_settings import TankSettings
 from app.schemas.tank_settings import TankSettingsResponse, TankOverrideRequest
 from app.services.tank_settings_service import manual_override_command
+from app.core.exceptions import TankNotFoundError
 
 router = APIRouter(
     prefix="/tank/override",
@@ -66,6 +67,20 @@ router = APIRouter(
                         }
                     }
                 }
+            },
+            "404": {
+                "description": "Tank settings not found.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "not_found": {
+                                "summary": "Tank settings not found",
+                                "value": {"detail": "Tank settings not found"}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -95,10 +110,7 @@ def override_tank(
     # 1) ensure the tank has settings
     settings = db.get(TankSettings, req.tank_id)
     if not settings:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tank settings not found",
-        )
+        raise TankNotFoundError(detail="Tank settings not found")
 
     # 2) apply manual override (payload.override_command is 'light_on' or 'light_off')
     updated = manual_override_command(db, req)

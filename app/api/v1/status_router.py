@@ -7,6 +7,7 @@ from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
 from app.api.deps import get_db, get_current_tank
 from app.services.status_service import update_tank_status
 from app.schemas.error import ErrorResponse
+from app.core.exceptions import TankNotFoundError
 
 router = APIRouter()
 
@@ -87,10 +88,24 @@ def tank_status(
     req: Request = None,
 ) -> StatusUpdateResponse:
     """
+    ## Purpose
     Receive heartbeat/status updates from a tank node.
 
-    - Requires Bearer token authentication.
-    - Updates tank's last_seen and logs the provided status (temperature, pH, light).
+    ## Inputs
+    - **request_body** (`StatusUpdateRequest`): Contains sensor readings (temperature, pH, light_state) and firmware version.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+    - **tank_id** (`str`): The unique identifier of the tank (injected via JWT).
+    - **req** (`Request`): FastAPI request object for logging (optional).
+
+    ## Logic
+    1. Extract client IP and headers for detailed logging.
+    2. Call `update_tank_status` to persist the status update in the database.
+    3. Return a success response.
+    4. Raise HTTP 404 if the tank is not found.
+
+    ## Outputs
+    - **Success (200):** `StatusUpdateResponse` with a confirmation message and timestamp.
+    - **Error (404):** If the tank is not found.
     """
     # Detailed logging
     if req is not None:
@@ -103,4 +118,4 @@ def tank_status(
     try:
         return update_tank_status(db, tank_id, request_body)
     except KeyError:
-        raise HTTPException(status_code=404, detail="Tank not found")
+        raise TankNotFoundError(detail="Tank not found")
