@@ -1,9 +1,11 @@
 # app/models/tank.py
 
 import uuid
-from sqlalchemy import Column, String, DateTime, Boolean, Float, func
+from sqlalchemy import Column, String, DateTime, Boolean, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.utils.timezone import IST
 
 from app.core.database import Base
 
@@ -24,7 +26,7 @@ class Tank(Base):
     location = Column(String, nullable=True)
     firmware_version = Column(String, nullable=True)
 
-    last_seen = Column(DateTime(timezone=True), default=func.now())
+    last_seen = Column(DateTime(timezone=True), default=lambda: datetime.now(IST))
     is_online = Column(Boolean, default=True)
 
     token = Column(String, nullable=True)

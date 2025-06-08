@@ -26,6 +26,7 @@ def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) 
     if request.temperature is not None:
         tank.temperature = request.temperature
         # Update Prometheus metric with location
+        # Refer to Prometheus documentation for best practices on metrics: https://prometheus.io/docs/practices/instrumentation/
         tank_temperature.labels(
             tank_name=tank.tank_name,
             location=tank.location or "unknown"

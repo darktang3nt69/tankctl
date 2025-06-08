@@ -8,7 +8,7 @@ import json
 SENSITIVE_FIELDS = {"password", "token", "access_token", "auth_key"}
 
 
-def mask_sensitive(data):
+def mask_sensitive(data: any):
     if isinstance(data, dict):
         return {
             k: ("***MASKED***" if k in SENSITIVE_FIELDS else mask_sensitive(v))

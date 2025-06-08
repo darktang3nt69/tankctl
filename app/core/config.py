@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
 
+    # SQLAlchemy Connection Pool Settings
+    SQLALCHEMY_POOL_SIZE: int = 10
+    SQLALCHEMY_MAX_OVERFLOW: int = 20
+    SQLALCHEMY_POOL_RECYCLE: int = 1800 # 30 minutes
+    SQLALCHEMY_POOL_TIMEOUT: int = 30
+
     # JWT
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str
@@ -26,10 +32,10 @@ class Settings(BaseSettings):
     TANK_OFFLINE_THRESHOLD_MINUTES: int = 2
 
     # Discord (later)
-    DISCORD_WEBHOOK_URL: str = ""
+    DISCORD_WEBHOOK_URL: str
 
     # Admin API key
-    ADMIN_API_KEY:str = ""
+    ADMIN_API_KEY: str
 
     class Config:
         env_file = ".env"

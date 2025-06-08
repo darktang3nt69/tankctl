@@ -14,10 +14,14 @@ _MM = r"[0-5]\d"
 TIME_RE = re.compile(rf"^{_HH}:{_MM}$")
 
 class TankRegisterRequest(BaseModel):
-    auth_key: str = Field(..., description="Authentication key required for tank registration")
-    tank_name: str = Field(..., description="Unique name identifier for the tank")
-    location: Optional[str] = Field(None, description="Physical location or description of where the tank is installed")
-    firmware_version: Optional[str] = Field(None, description="Current version of the tank's firmware")
+    auth_key: str = Field(..., description="Authentication key required for tank registration", min_length=1, max_length=100)
+    tank_name: str = Field(..., description="Unique name identifier for the tank", min_length=1, max_length=50)
+    location: Optional[str] = Field(None, description="Physical location or description of where the tank is installed", max_length=100)
+    firmware_version: Optional[str] = Field(
+        None,
+        description="Current version of the tank's firmware (e.g., '1.0.0')",
+        pattern=r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+    )
 
     light_on: Optional[str] = Field(None, description="Time when tank lights turn on in 24-hour format (HH:MM)")
     light_off: Optional[str] = Field(None, description="Time when tank lights turn off in 24-hour format (HH:MM)")

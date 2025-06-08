@@ -26,7 +26,25 @@ def get_historical_status_data(db: Session, tank_id: UUID):
 def get_time_windowed_status_data(db: Session, tank_id: UUID, start_time: Optional[datetime] = None, end_time: Optional[datetime] = None, resolution: Optional[str] = None):
     """
     Retrieves status log data for a specific tank within a time window, with optional aggregation and gap filling.
-    Utilizes continuous aggregates for supported resolutions.
+    Utilizes TimescaleDB's continuous aggregates for efficient querying of pre-aggregated data
+    when a supported resolution is provided (e.g., '1 hour', '1 day', '5 minutes').
+    For other resolutions or when no resolution is specified, it queries the raw hypertable
+    and can apply `time_bucket_gapfill` for on-the-fly aggregation and gap filling.
+    See TimescaleDB documentation for `time_bucket_gapfill`: https://docs.timescale.com/api/latest/hyperfunctions/time_bucket_gapfill/
+    See TimescaleDB documentation for continuous aggregates: https://docs.timescale.com/api/latest/continuous-aggregates/
+
+    Business Logic:
+    - Determines the appropriate data source (continuous aggregate or raw hypertable) based on `resolution`.
+    - For supported resolutions, it queries the respective continuous aggregate table
+      (`hourly_status_aggregates`, `daily_status_aggregates`, `five_min_status_aggregates`).
+      These tables contain pre-computed `avg_temperature`, `min_temperature`, `max_temperature`,
+      `avg_ph`, `min_ph`, and `max_ph` for the given time bucket.
+    - For unsupported resolutions or raw data requests, it queries the `status_logs` hypertable.
+    - If a `resolution` is provided but not supported by a continuous aggregate, it uses
+      TimescaleDB's `time_bucket_gapfill` function on the raw data to create time-based
+      buckets and fill missing data points. This ensures a continuous series for charting.
+    - Filters data by `tank_id` and optional `start_time` and `end_time`.
+    - Orders results by time/timestamp.
     """
     query = None
 

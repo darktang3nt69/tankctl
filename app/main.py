@@ -9,7 +9,7 @@ from app.api.v1.settings_router import router as settings_router
 from app.api.v1.metrics_router import router as metrics_router
 from app.core.config import settings
 
-
+# Refer to FastAPI documentation: https://fastapi.tiangolo.com/
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from prometheus_client import Gauge
@@ -21,17 +21,11 @@ from app.models.tank_settings import TankSettings
 from app.metrics.tank_metrics import tank_online_status
 import asyncio
 
-
-# import logging.config
-# from app.utils.logging_config import LOGGING_CONFIG
-
-# logging.config.dictConfig(LOGGING_CONFIG)
-
 # Import database components
 from app.core.database import Base, engine
 
 # 🚨 NEW: Explicitly import models
-from app.models import tank, event_log
+from app.models import tank, event_log, chart_data
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -41,13 +35,32 @@ from app.core.exceptions import TankNotFoundError, InvalidCommandError, Database
 from app.core.logging_config import configure_logging
 from app.core.logging_middleware import LoggingMiddleware
 
+from app.utils.timezone import IST # Import IST
+from datetime import datetime
+from json import JSONEncoder
 
 
 app = FastAPI(
-    title="AquaPi Tank API",
+    title="TankCtl Tank API",
     description="API to manage and monitor aquarium tanks",
     version="1.0.0"
 )
+
+# Custom JSON encoder for datetime objects to ensure IST with offset
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            # Ensure the datetime object is timezone-aware
+            if obj.tzinfo is None:
+                # If naive, assume it's in IST and make it aware
+                return obj.replace(tzinfo=IST).isoformat(timespec='microseconds')
+            else:
+                # If already timezone-aware, convert to IST and format
+                return obj.astimezone(IST).isoformat(timespec='microseconds')
+        return JSONEncoder.default(self, obj)
+
+# Assign the custom encoder to FastAPI app
+app.json_encoder = CustomJSONEncoder
 
 app.add_middleware(
     CORSMiddleware,

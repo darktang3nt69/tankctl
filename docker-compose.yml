@@ -50,6 +50,8 @@ services:
     image: tankctl:latest
     container_name: tankctl_fastapi
     ports: ["8000:8000"]
+    environment:
+      CHART_API: /api/v1/tank/chart_data
     depends_on:
       db:
         condition: service_healthy

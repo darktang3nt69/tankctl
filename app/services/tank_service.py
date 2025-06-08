@@ -14,33 +14,65 @@ from app.utils.discord import send_discord_embed
 from app.core.config import settings
 from app.utils.timezone import IST
 
+# Refer to JWT (JSON Web Token) RFC 7519: https://datatracker.ietf.org/doc/html/rfc7519
+# Refer to PyJWT documentation: https://pyjwt.readthedocs.io/en/stable/
 
 def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResponse:
+    """
+    Registers a new tank or re-registers an existing tank, issuing a new JWT token.
+
+    Business Logic:
+    1.  **Authentication:** Validates the `auth_key` against a pre-shared key defined in settings.
+        This is a critical security step to prevent unauthorized tank registrations.
+    2.  **Existing Tank Check:** Queries the database to check if a tank with the provided
+        `tank_name` already exists. This allows existing tanks to re-register (e.g., after a reboot)
+        without creating duplicate entries, simply refreshing their access token.
+    3.  **New Tank Registration:** If the tank does not exist:
+        - Generates a new unique `tank_id` (UUID).
+        - Creates a new JWT `access_token` for the tank.
+        - Persists the new `Tank` entry in the database with its initial status (online, last seen).
+        - Creates a corresponding `TankSettings` entry with default or provided lighting schedule.
+    4.  **Discord Notification:** Sends an embed message to a configured Discord channel
+        to notify administrators about a new tank registration.
+    5.  **Response:** Returns a `TankRegisterResponse` with the registration details,
+        including the new `tank_id` and `access_token`.
+    """
     print("[DEBUG] Authentication attempt received for tank registration.")
 
+    # Business Rule: Validate the pre-shared authentication key.
+    # This ensures only authorized devices can register as tanks.
     if request.auth_key != settings.TANK_PRESHARED_KEY:
-        raise HTTPException(status_code=401, detail="Invalid pre-shared key")
+        raise ValueError("Invalid pre-shared key")
 
-    # If the tank already exists, just refresh its token
+    # Business Rule: Check if the tank already exists. If so, re-register and refresh its token.
+    # This handles scenarios where a tank might restart or need a new token without creating duplicates.
     existing = db.execute(
         select(Tank).where(Tank.tank_name == request.tank_name)
     ).scalar_one_or_none()
 
     if existing:
+        # Generate a new JWT token for the existing tank.
         new_token = create_jwt_token(str(existing.tank_id))
         existing.token = new_token
         db.commit()
+        db.refresh(existing) # Refresh to load updated token
+
+        # Retrieve tank settings to include in the response.
+        existing_settings = db.execute(
+            select(TankSettings).where(TankSettings.tank_id == existing.tank_id)
+        ).scalar_one_or_none()
+
         return TankRegisterResponse(
             message="Tank re-registered and token refreshed 🔄",
             tank_id=str(existing.tank_id),
             access_token=new_token,
             firmware_version=existing.firmware_version,
-            light_on=existing.settings.light_on,
-            light_off=existing.settings.light_off,
-            is_schedule_enabled=existing.settings.is_schedule_enabled,
+            light_on=existing_settings.light_on if existing_settings else None, # Safely get light_on
+            light_off=existing_settings.light_off if existing_settings else None, # Safely get light_off
+            is_schedule_enabled=existing_settings.is_schedule_enabled if existing_settings else False, # Safely get schedule status
         )
 
-    # 1) Create new Tank
+    # Business Rule: Register a new tank if no existing tank is found with the given name.
     new_id = uuid.uuid4()
     token = create_jwt_token(str(new_id))
 
@@ -57,7 +89,8 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
     db.commit()
     db.refresh(new_tank)
 
-    # 2) Create its settings row (IST-aware times from schema)
+    # Business Rule: Create default settings for the newly registered tank.
+    # Times are already IST-aware due to Pydantic validation and conversion.
     tank_settings = TankSettings(
         tank_id=new_tank.tank_id,
         light_on=request.light_on,
@@ -67,7 +100,7 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
     db.commit()
     db.refresh(tank_settings)
 
-    # 3) Notify via Discord
+    # Notify via Discord for new registration. Essential for operational awareness.
     extra_fields = {
         "Tank ID":           str(new_tank.tank_id),
         "Tank Name":         new_tank.tank_name,
@@ -83,7 +116,7 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
         extra_fields=extra_fields
     )
 
-    # 4) Return full response
+    # Return the successful registration response.
     return TankRegisterResponse(
         message="Tank registered successfully ✅",
         tank_id=str(new_tank.tank_id),

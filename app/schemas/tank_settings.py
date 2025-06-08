@@ -1,6 +1,13 @@
-from pydantic import BaseModel, Field, field_validator, field_serializer
+"""
+Tank Settings Schemas
+
+This module defines the Pydantic schemas for managing tank lighting settings,
+including request and response models for fetching, updating, and overriding settings.
+It incorporates validation rules for time formats and schedule consistency.
+"""
+from pydantic import BaseModel, Field, field_validator, field_serializer, model_validator
 from datetime import datetime, time
-from typing import Optional
+from typing import Optional, Self
 from uuid import UUID
 from zoneinfo import ZoneInfo
 import re
@@ -65,7 +72,7 @@ class TankSettingsUpdateRequest(BaseModel):
         if len(h) == 1:
             v = f"0{h}:{m}"
         if not TIME_RE.match(v):
-            raise ValueError("must be HH:MM between 00:00 and 23:59")
+            raise ValueError("Time must be in HH:MM format between 00:00 and 23:59.")
         return v
 
     @field_validator("light_on", "light_off")
@@ -74,6 +81,16 @@ class TankSettingsUpdateRequest(BaseModel):
             return None
         t0 = datetime.strptime(v, "%H:%M").time()
         return t0.replace(tzinfo=IST)
+
+    @model_validator(mode='after')
+    def validate_schedule_consistency(self) -> Self:
+        if self.is_schedule_enabled is True:
+            if self.light_on is None or self.light_off is None:
+                raise ValueError("light_on and light_off must be provided when is_schedule_enabled is True.")
+        elif self.is_schedule_enabled is False:
+            if self.light_on is not None or self.light_off is not None:
+                raise ValueError("light_on and light_off must be None when is_schedule_enabled is False.")
+        return self
 
     model_config = {"from_attributes": True}
 

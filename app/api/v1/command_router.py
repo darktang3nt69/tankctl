@@ -7,14 +7,16 @@ This module provides API endpoints for issuing commands to tanks and for tanks t
 - **POST /tank/{tank_id}/command**: Admin issues a command to a tank.
 - **GET /tank/command**: Tank fetches its pending command.
 - **POST /tank/command/ack**: Tank acknowledges command execution.
+- **GET /tank/{tank_id}/commands/history**: Retrieve command history for a tank.
 
 Purpose: Facilitate command-and-control operations between the server and tank nodes.
 """
 # app/api/v1/command_router.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
+from datetime import datetime
 
 from app.api.deps import get_db, get_current_tank
 from app.schemas.command import CommandIssueRequest, CommandIssueResponse, CommandAcknowledgeRequest
@@ -22,6 +24,7 @@ from app.services.command_service import (
     issue_command,
     get_pending_command_for_tank,
     acknowledge_command,
+    get_command_history_for_tank,
 )
 from app.services.notification_service import NotificationService
 from app.models.tank import Tank
@@ -60,6 +63,20 @@ router = APIRouter()
                                     "next_retry_at": "2024-06-01T12:05:00+05:30",
                                     "created_at": "2024-06-01T12:00:00+05:30"
                                 }
+                            }
+                        }
+                    }
+                }
+            },
+            "400": {
+                "description": "Invalid command payload.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "invalid_command": {
+                                "summary": "Invalid command",
+                                "value": {"detail": "Invalid command payload"}
                             }
                         }
                     }
@@ -107,7 +124,31 @@ def create_command(
 
 
 # 🛠 Node Route: Tank fetches its pending command
-@router.get("/tank/command")
+@router.get("/tank/command",
+    openapi_extra={
+        "responses": {
+            "200": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "success_with_command": {
+                                "summary": "Pending command found",
+                                "value": {
+                                    "command_id": "99999999-9999-9999-9999-999999999999",
+                                    "command_payload": "feed_now"
+                                }
+                            },
+                            "success_no_command": {
+                                "summary": "No pending command",
+                                "value": {"message": "No pending command"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def get_my_command(
     db: Session = Depends(get_db),
     tank_id: UUID = Depends(get_current_tank),
@@ -171,6 +212,34 @@ def get_my_command(
                         }
                     }
                 }
+            },
+            "404": {
+                "description": "Command not found.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "not_found": {
+                                "summary": "Command not found",
+                                "value": {"detail": "Command not found"}
+                            }
+                        }
+                    }
+                }
+            },
+            "500": {
+                "description": "Internal server error.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "server_error": {
+                                "summary": "Internal server error",
+                                "value": {"detail": "Internal server error"}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -225,3 +294,36 @@ def ack_my_command(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# 🛠 Node Route: Get Command History for a Tank
+@router.get("/tank/{tank_id}/commands/history", response_model=list[CommandIssueResponse])
+def get_tank_command_history(
+    tank_id: UUID,
+    db: Session = Depends(get_db),
+    status: str | None = None,
+    start_time: datetime | None = Query(None),
+    end_time: datetime | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """
+    ## Purpose
+    Retrieve the command history for a specific tank with optional filters.
+
+    ## Inputs
+    - **tank_id** (`UUID`): The unique identifier of the target tank.
+    - **db** (`Session`): SQLAlchemy database session (injected).
+    - **status** (`str`, optional): Filter commands by their status (e.g., 'pending', 'success', 'failed').
+    - **start_time** (`datetime`, optional): Filter commands created after this timestamp.
+    - **end_time** (`datetime`, optional): Filter commands created before this timestamp.
+    - **limit** (`int`, optional): Maximum number of commands to retrieve. Defaults to 100.
+
+    ## Logic
+    1. Call `get_command_history_for_tank` to retrieve relevant command entries.
+    2. Return a list of `CommandIssueResponse` objects.
+
+    ## Outputs
+    - **Success (200):** List of `CommandIssueResponse` objects.
+    """
+    commands = get_command_history_for_tank(db, tank_id, status, start_time, end_time, limit)
+    return commands

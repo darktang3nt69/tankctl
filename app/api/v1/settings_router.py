@@ -30,6 +30,7 @@ from app.services.tank_settings_service import (
     manual_override_command,
 )
 from app.utils.discord import send_discord_embed
+from app.core.exceptions import TankNotFoundError, InternalServerError
 
 router = APIRouter(
     prefix="/tank/settings",
@@ -55,16 +56,51 @@ def _ensure_tank_exists(db: Session, tank_id: str):
     - None (raises exception on error).
     """
     if not db.get(Tank, tank_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tank '{tank_id}' not found.",
-        )
+        raise TankNotFoundError(detail=f"Tank '{tank_id}' not found.")
 
 
 @router.get(
     "",
     response_model=TankSettingsResponse,
     summary="(Admin) Fetch a tank's lighting settings",
+    openapi_extra={
+        "responses": {
+            "200": {
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "success": {
+                                "summary": "Successfully fetched settings",
+                                "value": {
+                                    "tank_id": "77777777-7777-7777-7777-777777777777",
+                                    "light_on": "09:00",
+                                    "light_off": "17:00",
+                                    "is_schedule_enabled": True,
+                                    "schedule_paused_until": None,
+                                    "last_schedule_check_on": None,
+                                    "last_schedule_check_off": None
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "404": {
+                "description": "Tank not found.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "not_found": {
+                                "summary": "Tank not found",
+                                "value": {"detail": "Tank not found"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 def read_settings(
     *,
@@ -133,6 +169,34 @@ def read_settings(
                         }
                     }
                 }
+            },
+            "404": {
+                "description": "Tank not found.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "not_found": {
+                                "summary": "Tank not found",
+                                "value": {"detail": "Tank not found"}
+                            }
+                        }
+                    }
+                }
+            },
+            "500": {
+                "description": "Internal server error.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "server_error": {
+                                "summary": "Internal server error",
+                                "value": {"detail": "Internal server error"}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -164,10 +228,7 @@ def put_settings(
         # update_tank_settings now also clears any outstanding pause
         return update_tank_settings(db, str(payload.tank_id), payload)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        raise InternalServerError(detail=str(e))
 
 
 @router.post(
@@ -223,12 +284,13 @@ def clear_manual_override(
     ## Logic
     1. Ensure the tank exists.
     2. Retrieve the tank's settings.
-    3. If a pause is set, clear it and reset today's schedule markers.
-    4. Commit changes and send a Discord notification.
+    3. If a manual pause is active (`schedule_paused_until` is set), clear it.
+    4. Reset `last_schedule_check_on` and `last_schedule_check_off` to ensure the schedule runs immediately.
+    5. Commit changes to the database.
 
     ## Outputs
-    - **Success:** `TankSettingsResponse` with updated settings.
-    - **Error (404):** If tank not found.
+    - **Success (200):** `TankSettingsResponse` with the updated settings.
+    - **Error (404):** If the tank is not found.
     """
     tid = str(tank_id)
     _ensure_tank_exists(db, tid)

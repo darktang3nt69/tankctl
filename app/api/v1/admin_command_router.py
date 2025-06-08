@@ -54,6 +54,20 @@ router = APIRouter()
                         }
                     }
                 }
+            },
+            "404": {
+                "description": "Tank or command not found.",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                        "examples": {
+                            "not_found": {
+                                "summary": "Tank or command not found",
+                                "value": {"detail": "Tank or command not found"}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
