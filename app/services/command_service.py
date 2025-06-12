@@ -51,8 +51,10 @@ def issue_command(
     if source == "manual" and settings:
         if command_payload == "light_on":
             settings.manual_override_state = "on"
+            send_discord_embed(status="manual_light_on", tank_name=tank.tank_name, command_payload=command_payload)
         elif command_payload == "light_off":
             settings.manual_override_state = "off"
+            send_discord_embed(status="manual_light_off", tank_name=tank.tank_name, command_payload=command_payload)
 
     # Create a new TankCommand entry.
     new_command = TankCommand(
@@ -133,7 +135,7 @@ def acknowledge_command(db: Session, tank_id: str, ack: CommandAcknowledgeReques
     tank = db.query(Tank).filter(Tank.tank_id == tank_id).first()
     if tank and command:
         send_discord_embed(
-            status="command_acknowledgment",
+            status="command_ack",
             tank_name=tank.tank_name,
             command_payload=command.command_payload,
             success=ack.success,

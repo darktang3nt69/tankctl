@@ -134,10 +134,7 @@ def ack_my_command(
     - **Error (404):** If the command is not found.
     """
     try:
-        acknowledge_command(db, request.command_id, tank_id, request.success)
-        # Notify via Discord if configured (add as background task)
-        if NotificationService.is_configured():
-            background_tasks.add_task(NotificationService.send_command_acknowledgement_notification, request.command_id, request.success)
+        acknowledge_command(db, tank_id, request)
         return {"message": "Command acknowledged successfully"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

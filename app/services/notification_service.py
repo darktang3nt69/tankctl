@@ -1,6 +1,13 @@
-from app.utils.discord import send_discord_embed
+from app.utils.discord import send_discord_embed, DISCORD_WEBHOOK_URL
 
 class NotificationService:
+    @staticmethod
+    def is_configured():
+        """
+        Checks if the notification service (Discord) is configured.
+        """
+        return DISCORD_WEBHOOK_URL is not None
+
     @staticmethod
     def send_command_acknowledgement_notification(tank_name: str, command_payload: str, success: bool):
         """
