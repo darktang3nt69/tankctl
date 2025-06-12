@@ -106,22 +106,22 @@ services:
       retries: 3
 
   # ───── Grafana (Metrics Dashboard) ─────
-  grafana:
-    <<: *app-defaults
-    image: grafana/grafana-oss:12.0.0
-    container_name: tankctl_grafana
-    ports: ["3000:3000"]  # Grafana web interface on port 3000
-    environment:
-      GF_SECURITY_ADMIN_USER: admin  # Admin credentials
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource, volkovlabs-form-panel  # Preinstalled plugins
-    volumes:
-      - grafana_data:/var/lib/grafana  # Persist Grafana data
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning  # Provisioning dashboards/datasources
-      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
-      - ./docker/grafana/plugins:/var/lib/grafana/plugins
-    depends_on: 
-      - db
+  # grafana:
+  #   <<: *app-defaults
+  #   image: grafana/grafana-oss:12.0.0
+  #   container_name: tankctl_grafana
+  #   ports: ["3000:3000"]  # Grafana web interface on port 3000
+  #   environment:
+  #     GF_SECURITY_ADMIN_USER: admin  # Admin credentials
+  #     GF_SECURITY_ADMIN_PASSWORD: admin
+  #     GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource, volkovlabs-form-panel  # Preinstalled plugins
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana  # Persist Grafana data
+  #     - ./docker/grafana/provisioning:/etc/grafana/provisioning  # Provisioning dashboards/datasources
+  #     - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+  #     - ./docker/grafana/plugins:/var/lib/grafana/plugins
+  #   depends_on: 
+  #     - db
 
   # ───── Prometheus (Metrics Collector) ─────
   prometheus:

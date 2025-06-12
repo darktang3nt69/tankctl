@@ -6,14 +6,15 @@ from sqlalchemy.orm import Session
 from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
 from app.api.deps import get_db, get_current_tank
 from app.services.status_service import update_tank_status
-from app.schemas.error import ErrorResponse
+from app.schemas.responses import StandardResponse
+from app.api.utils.responses import create_success_response, create_error_response
 from app.core.exceptions import TankNotFoundError
 
 router = APIRouter()
 
 @router.post(
     "/tank/status",
-    response_model=StatusUpdateResponse,
+    response_model=StandardResponse[StatusUpdateResponse],
     status_code=status.HTTP_200_OK,
     summary="Submit a heartbeat/status update from a tank",
 )
@@ -22,7 +23,7 @@ def tank_status(
     db: Session = Depends(get_db),
     tank_id: str = Depends(get_current_tank),
     req: Request = None,
-) -> StatusUpdateResponse:
+) -> StandardResponse[StatusUpdateResponse]:
     """
     ## Purpose
     Receive heartbeat/status updates from a tank node.
@@ -40,7 +41,7 @@ def tank_status(
     4. Raise HTTP 404 if the tank is not found.
 
     ## Outputs
-    - **Success (200):** `StatusUpdateResponse` with a confirmation message and timestamp.
+    - **Success (200):** `StandardResponse` with `StatusUpdateResponse` data.
     - **Error (404):** If the tank is not found.
     """
     # Detailed logging
@@ -52,6 +53,7 @@ def tank_status(
         except Exception as e:
             print(f"[TANK STATUS] Logging error: {e}")
     try:
-        return update_tank_status(db, tank_id, request_body)
-    except KeyError:
-        raise TankNotFoundError(detail="Tank not found")
+        status_response = update_tank_status(db, tank_id, request_body)
+        return create_success_response(data=status_response)
+    except ValueError as e:
+        raise TankNotFoundError(detail=str(e))

@@ -4,6 +4,7 @@ from app.api.v1.register_router import router as register_router
 from app.api.v1.status_router import router as status_router
 from app.api.v1.command_router import router as command_router
 from app.api.v1.admin_command_router import router as admin_command_router
+from app.api.v1.docs_router import router as docs_router
 # from app.api.v1.override_router import router as override_router
 from app.api.v1.settings_router import router as settings_router
 from app.api.v1.metrics_router import router as metrics_router
@@ -32,10 +33,19 @@ from app.core.exceptions import TankNotFoundError, InvalidCommandError, Database
 
 from app.core.logging_config import configure_logging
 from app.core.logging_middleware import LoggingMiddleware
+from app.api.middleware.response_middleware import ResponseTransformMiddleware
 
 from app.utils.timezone import IST # Import IST
 from datetime import datetime
 from json import JSONEncoder
+
+from fastapi.exceptions import RequestValidationError # Added for new error handlers
+from sqlalchemy.exc import SQLAlchemyError # Added for new error handlers
+from app.api.errors.handlers import (
+    validation_exception_handler,
+    sqlalchemy_exception_handler,
+    generic_exception_handler
+) # Added new error handlers
 
 
 app = FastAPI(
@@ -69,13 +79,14 @@ app.add_middleware(
 )
 
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(ResponseTransformMiddleware)
 
 instrumentator = Instrumentator().instrument(app)
 
 # ✅ Auto-create tables on startup
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)  # Re-added: Database initialization on app startup
     instrumentator.expose(app, include_in_schema=False, should_gzip=True, endpoint="/metrics")
 
 configure_logging()
@@ -86,6 +97,7 @@ app.include_router(register_router, prefix="/api/v1")
 app.include_router(status_router,   prefix="/api/v1")
 app.include_router(command_router, prefix="/api/v1")
 app.include_router(admin_command_router, prefix="/api/v1")
+app.include_router(docs_router, prefix="/api/v1")
 # app.include_router(override_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(metrics_router, prefix="/api/v1")
@@ -152,3 +164,8 @@ def list_tanks():
         }
     finally:
         db.close()
+
+# Register new standardized exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
