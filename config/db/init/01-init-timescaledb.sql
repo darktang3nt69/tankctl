@@ -1,7 +1,7 @@
 -- Enable TimescaleDB extension
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
--- Example: create a metrics table and hypertable
+-- Task 2.1: Create Metrics Table (Hypertable: tank_metrics)
 CREATE TABLE IF NOT EXISTS tank_metrics (
     time        TIMESTAMPTZ       NOT NULL,
     tank_id     UUID              NOT NULL,
@@ -9,7 +9,14 @@ CREATE TABLE IF NOT EXISTS tank_metrics (
     value       DOUBLE PRECISION  NOT NULL
 );
 
-SELECT create_hypertable('tank_metrics', 'time', if_not_exists => TRUE);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.hypertables WHERE hypertable_name = 'tank_metrics'
+    ) THEN
+        PERFORM create_hypertable('tank_metrics', 'time', if_not_exists => TRUE);
+    END IF;
+END$$;
 
 -- Task 2.2: Create Status Logs Hypertable
 CREATE TABLE IF NOT EXISTS status_logs (
@@ -18,37 +25,46 @@ CREATE TABLE IF NOT EXISTS status_logs (
     temperature DOUBLE PRECISION,
     ph DOUBLE PRECISION,
     light_state BOOLEAN,
-    firmware_version VARCHAR,
+    firmware_version TEXT,
     timestamp TIMESTAMPTZ NOT NULL
 );
 
-SELECT create_hypertable('status_logs', 'timestamp', if_not_exists => TRUE);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.hypertables WHERE hypertable_name = 'status_logs'
+    ) THEN
+        PERFORM create_hypertable('status_logs', 'timestamp', if_not_exists => TRUE);
+    END IF;
+END$$;
 
 -- Task 2.4: Create Schedule Logs Hypertable
 CREATE TABLE IF NOT EXISTS tank_schedule_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tank_id UUID NOT NULL,
-    event_type VARCHAR NOT NULL,
-    trigger_source VARCHAR NOT NULL,
+    event_type TEXT NOT NULL,
+    trigger_source TEXT NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL
 );
 
-SELECT create_hypertable('tank_schedule_log', 'timestamp', if_not_exists => TRUE);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.hypertables WHERE hypertable_name = 'tank_schedule_log'
+    ) THEN
+        PERFORM create_hypertable('tank_schedule_log', 'timestamp', if_not_exists => TRUE);
+    END IF;
+END$$;
 
--- Task 2.5: Indexing considerations
--- TimescaleDB automatically indexes the time column for hypertables.
--- Consider adding indexes on tank_id for faster queries filtering by tank.
+-- Task 2.5: Indexing
 CREATE INDEX IF NOT EXISTS idx_status_logs_tank_id_timestamp ON status_logs (tank_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_tank_schedule_log_tank_id_timestamp ON tank_schedule_log (tank_id, timestamp DESC);
--- Documentation would typically involve describing the schema and query patterns.
+CREATE INDEX IF NOT EXISTS idx_tank_commands_tank_id_status ON tank_commands (tank_id, status);
+CREATE INDEX IF NOT EXISTS idx_tank_commands_status_created_at ON tank_commands (status, created_at DESC);
 
--- Task 3: Implement Continuous Aggregates and Retention Policies
+-- Task 3: Continuous Aggregates and Retention Policies
 
--- Task 3.1: Implement Hourly Temperature Continuous Aggregates
--- Task 3.2: Implement Daily Temperature Continuous Aggregates
--- Task 3.3: Implement pH Continuous Aggregates
--- Assuming hourly for pH for now, adjust if needed.
-
+-- 3.1: Hourly Aggregate
 CREATE MATERIALIZED VIEW IF NOT EXISTS hourly_status_aggregates
 WITH (timescaledb.continuous)
 AS
@@ -65,6 +81,7 @@ FROM status_logs
 GROUP BY time_bucket('1 hour', timestamp), tank_id
 WITH NO DATA;
 
+-- 3.2: Daily Aggregate
 CREATE MATERIALIZED VIEW IF NOT EXISTS daily_status_aggregates
 WITH (timescaledb.continuous)
 AS
@@ -81,7 +98,7 @@ FROM status_logs
 GROUP BY time_bucket('1 day', timestamp), tank_id
 WITH NO DATA;
 
--- New: 5-minute continuous aggregate
+-- 3.3: 5-minute Aggregate
 CREATE MATERIALIZED VIEW IF NOT EXISTS five_min_status_aggregates
 WITH (timescaledb.continuous)
 AS
@@ -98,9 +115,7 @@ FROM status_logs
 GROUP BY time_bucket('5 minutes', timestamp), tank_id
 WITH NO DATA;
 
--- Task 3.4: Configure Refresh Policies for Aggregates
--- Refresh hourly aggregates more frequently, daily less often.
--- Add refresh policy for 5-minute aggregate
+-- 3.4: Continuous Aggregate Policies
 SELECT add_continuous_aggregate_policy('hourly_status_aggregates',
   start_offset => INTERVAL '1 day',
   end_offset => INTERVAL '1 hour',
@@ -119,13 +134,8 @@ SELECT add_continuous_aggregate_policy('five_min_status_aggregates',
   schedule_interval => INTERVAL '1 minute',
   if_not_exists => TRUE);
 
--- Task 3.5: Implement Retention Policy for Status Logs (30 days)
+-- 3.5: Retention Policies
 SELECT add_retention_policy('status_logs', INTERVAL '30 days', if_not_exists => TRUE);
-
--- Task 3.6: Implement Retention Policies for Commands and Acknowledgments (90 days)
--- Also including schedule logs (90 days) as per Task 3 description.
 SELECT add_retention_policy('tank_commands', INTERVAL '90 days', if_not_exists => TRUE);
 SELECT add_retention_policy('tank_schedule_log', INTERVAL '90 days', if_not_exists => TRUE);
-
-CREATE INDEX IF NOT EXISTS idx_tank_commands_tank_id_status ON tank_commands (tank_id, status);
-CREATE INDEX IF NOT EXISTS idx_tank_commands_status_created_at ON tank_commands (status, created_at DESC); 
+  
