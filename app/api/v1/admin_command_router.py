@@ -12,7 +12,7 @@ Purpose: Facilitate manual control and intervention for tank operations by autho
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.api.deps import get_db, verify_admin_api_key
+from app.api.deps import get_db
 from app.services.admin_command_service import issue_admin_command
 from app.schemas.admin_command import AdminSendCommandRequest
 from uuid import UUID
@@ -75,7 +75,6 @@ router = APIRouter()
 def send_command_to_tank(
     request: AdminSendCommandRequest,  # ✅ Accept JSON body here
     db: Session = Depends(get_db),
-    _: str = Depends(verify_admin_api_key),
 ):
     """
     ## Purpose
@@ -86,13 +85,11 @@ def send_command_to_tank(
         - `tank_id` (UUID): The unique identifier of the target tank.
         - `command_payload` (str): The command to send (e.g., 'feed_now', 'light_on', 'light_off').
     - **db** (`Session`): SQLAlchemy database session (injected).
-    - **_** (`str`): API key verification (injected, unused).
 
     ## Logic
-    1. Verify admin API key via dependency injection.
-    2. Call `issue_admin_command` to create and store the command for the specified tank.
-    3. Return a success message and command details if successful.
-    4. Raise HTTP 404 if the tank or command is invalid.
+    1. Call `issue_admin_command` to create and store the command for the specified tank.
+    2. Return a success message and command details if successful.
+    3. Raise HTTP 404 if the tank or command is invalid.
 
     ## Outputs
     - **Success (201):**

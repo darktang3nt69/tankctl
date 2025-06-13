@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.api.deps import get_db, verify_admin_api_key
+from app.api.deps import get_db
 from app.models.tank_settings import TankSettings
 from app.schemas.tank_settings import TankSettingsResponse, TankOverrideRequest
 from app.services.tank_settings_service import manual_override_command
@@ -30,7 +30,6 @@ router = APIRouter(
     response_model=TankSettingsResponse,
     status_code=status.HTTP_200_OK,
     summary="(Admin) Manually override lights ON/OFF for a tank",
-    dependencies=[Depends(verify_admin_api_key)],  # require x-api-key
     openapi_extra={
         "requestBody": {
             "content": {

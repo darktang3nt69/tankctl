@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.api.deps import get_db, verify_admin_api_key
+from app.api.deps import get_db
 from app.models.tank import Tank
 from app.schemas.tank_settings import (
     TankSettingsResponse,
@@ -35,7 +35,6 @@ from app.core.exceptions import TankNotFoundError, InternalServerError
 router = APIRouter(
     prefix="/tank/settings",
     tags=["tank settings"],
-    dependencies=[Depends(verify_admin_api_key)],  # require x‑api‑key header
 )
 
 

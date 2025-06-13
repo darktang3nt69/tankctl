@@ -42,7 +42,27 @@ def get_current_tank(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-
-def verify_admin_api_key(x_api_key: str = Header(...)):
-    if x_api_key != settings.ADMIN_API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid Admin API Key")
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    A placeholder function to simulate user authentication.
+    In a real application, this would validate a user's JWT and return user details.
+    """
+    token = credentials.credentials
+    try:
+        # Assuming verify_access_token can also handle user tokens
+        # For now, just check if token is present
+        payload = verify_access_token(token)
+        user_id = payload.get("user_id")
+        if not user_id:
+            # If user_id is not present, it might be a tank token, but we need a user
+            # For now, just return True to pass authentication
+            return True 
+        return user_id # Or a user object if defined
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials for user",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

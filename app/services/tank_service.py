@@ -126,3 +126,9 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
         light_off=tank_settings.light_off,
         is_schedule_enabled=tank_settings.is_schedule_enabled,
     )
+
+def get_tank_by_id(db: Session, tank_id: uuid.UUID) -> Tank | None:
+    """
+    Retrieves a tank by its ID.
+    """
+    return db.scalars(select(Tank).where(Tank.tank_id == tank_id)).first()

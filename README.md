@@ -278,9 +278,6 @@ This section details all environment variables and configuration options used by
 ### Discord Integration
 - `DISCORD_WEBHOOK_URL`: **(Required)** The webhook URL for sending notifications to Discord.
 
-### Admin API Key
-- `ADMIN_API_KEY`: **(Required)** A secret key used to authenticate administrative API requests.
-
 ### Application Timezone
 - `APP_TIMEZONE`: The timezone used by the application for all time-related operations (default: `Asia/Kolkata`). This is set via environment variable directly, not through `app/core/config.py` and is leveraged in `app/utils/timezone.py`.
 
