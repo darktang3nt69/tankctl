@@ -1,5 +1,5 @@
 import os
-import requests
+import httpx # Use httpx for async requests
 from datetime import datetime
 from dotenv import load_dotenv
 from app.utils.timezone import IST
@@ -11,9 +11,9 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 # -----------------------------------------
 # Unified Discord Embed Notification
 # -----------------------------------------
-def send_discord_embed(status: str, tank_name: str, command_payload: str = None, success: bool = None, extra_fields: dict = None):
+async def send_discord_embed(status: str, tank_name: str, command_payload: str = None, success: bool = None, extra_fields: dict = None):
     """
-    Send a styled embed notification to Discord for any AquaPi event.
+    Send a styled embed notification to Discord for any AquaPi event asynchronously.
     
     Args:
         status (str): One of: online, offline, new_registration, light_on, light_off,
@@ -23,6 +23,10 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
         success (bool, optional): Used for command acknowledgment (success/failure)
         extra_fields (dict, optional): Any additional info to show
     """
+
+    if not DISCORD_WEBHOOK_URL:
+        print("DEBUG: DISCORD_WEBHOOK_URL not set. Skipping Discord notification.")
+        return
 
     now_ist = datetime.now(IST)
     now_ist_iso = now_ist.isoformat()
@@ -151,8 +155,9 @@ def send_discord_embed(status: str, tank_name: str, command_payload: str = None,
     headers = {"Content-Type": "application/json"}
 
     try:
-        resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, headers=headers)
-        if resp.status_code not in (200, 204):
-            print(f"❌ Failed to send Discord embed: {resp.status_code} {resp.text}")
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(DISCORD_WEBHOOK_URL, json=payload, headers=headers)
+            if resp.status_code not in (200, 204):
+                print(f"❌ Failed to send Discord embed: {resp.status_code} {resp.text}")
     except Exception as e:
         print(f"❌ Discord webhook error: {e}")

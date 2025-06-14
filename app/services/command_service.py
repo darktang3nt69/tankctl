@@ -21,7 +21,7 @@ from app.utils.timezone import IST
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", 3))
 BASE_BACKOFF_SECONDS = int(os.getenv("BASE_BACKOFF_SECONDS", 60))
 
-def issue_command(
+async def issue_command(
     db: Session,
     tank_id: uuid.UUID,
     command_type: str,
@@ -55,11 +55,9 @@ def issue_command(
     settings = db.execute(select(TankSettings).where(TankSettings.tank_id == tank_id)).scalar_one_or_none()
     if source == "manual" and command_type in ["light_on", "light_off"] and settings:
         if command_type == "light_on":
-            settings.manual_override_state = "on"
-            send_discord_embed(status="manual_light_on", tank_name=tank.tank_name, command_payload=command_type)
+            await send_discord_embed(status="manual_light_on", tank_name=tank.tank_name, command_payload=command_type)
         elif command_type == "light_off":
-            settings.manual_override_state = "off"
-            send_discord_embed(status="manual_light_off", tank_name=tank.tank_name, command_payload=command_type)
+            await send_discord_embed(status="manual_light_off", tank_name=tank.tank_name, command_payload=command_type)
 
     # Create a new TankCommand entry.
     new_command = TankCommand(
@@ -107,7 +105,7 @@ def get_pending_command_for_tank(db: Session, tank_id: uuid.UUID) -> TankCommand
 
     return command
 
-def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAcknowledgeRequest):
+async def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAcknowledgeRequest):
     """
     Handles the acknowledgment of a command execution from a tank node.
 
@@ -147,7 +145,7 @@ def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAcknowledge
     # This provides real-time feedback on tank operations.
     tank = db.query(Tank).filter(Tank.tank_id == tank_id).first()
     if tank and command:
-        send_discord_embed(
+        await send_discord_embed(
             status="command_ack",
             tank_name=tank.tank_name,
             command_payload=command.command_payload.get("command_type", "unknown"), # Use command_type from payload
@@ -218,7 +216,7 @@ def get_command_history_for_tank(
 
     return commands
 
-def retry_stale_commands(db: Session):
+async def retry_stale_commands(db: Session):
     """
     Identifies and retries commands that are 'pending' or 'in_progress' and have
     exceeded their `next_retry_at` timestamp. Commands are retried with an
@@ -276,7 +274,7 @@ def retry_stale_commands(db: Session):
             command.completed_at = now # Set completion time for failed commands
             command.result = "Command failed after multiple retries" # Set result
             print(f"❌ Command {command.command_id} FAILED for tank {tank_name} after {command.retries} retries.")
-            send_discord_embed(
+            await send_discord_embed(
                 status="retry_failed",
                 tank_name=tank_name,
                 command_payload=command.command_payload.get("command_type", "unknown"),
@@ -295,9 +293,10 @@ def retry_stale_commands(db: Session):
 
             print(f"🔁 Retrying command {command.command_id} for tank {tank_name} | "
                   f"Retry #{command.retries} | Next retry at {command.next_retry_at.strftime('%H:%M:%S')}")
-            send_discord_embed(
+            await send_discord_embed(
                 status="retry_scheduled",
                 tank_name=tank_name,
+                command_payload=command.command_payload.get("command_type", "unknown"),
                 extra_fields={
                     "Command":       command.command_payload.get("command_type", "unknown"),
                     "Retry #":       str(command.retries),

@@ -8,6 +8,7 @@ from app.api.v1.docs_router import router as docs_router
 # from app.api.v1.override_router import router as override_router
 from app.api.v1.settings_router import router as settings_router
 from app.api.v1.metrics_router import router as metrics_router
+from app.api.v1.events_router import router as events_router
 from app.core.config import settings
 
 # Refer to FastAPI documentation: https://fastapi.tiangolo.com/
@@ -101,6 +102,7 @@ app.include_router(docs_router, prefix="/api/v1")
 # app.include_router(override_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(metrics_router, prefix="/api/v1")
+app.include_router(events_router, prefix="/api/v1")
 
 @app.get("/", tags=["Health Check"])
 def health_check():

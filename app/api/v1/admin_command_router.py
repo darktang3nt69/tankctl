@@ -72,7 +72,7 @@ router = APIRouter()
         }
     }
 )
-def send_command_to_tank(
+async def send_command_to_tank(
     request: AdminSendCommandRequest,  # ✅ Accept JSON body here
     db: Session = Depends(get_db),
 ):
@@ -102,7 +102,7 @@ def send_command_to_tank(
         - `detail` (str): Error message if the tank or command is not found.
     """
     try:
-        command = issue_admin_command(db, request.tank_id, request.command_payload)
+        command = await issue_admin_command(db, request.tank_id, request.command_payload)
         return {
             "message": "Command created successfully",
             "command_id": str(command.command_id),

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+import asyncio
 
 from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
 from app.api.deps import get_db, get_current_tank
@@ -9,6 +10,7 @@ from app.services.status_service import update_tank_status
 from app.schemas.responses import StandardResponse
 from app.api.utils.responses import create_success_response, create_error_response
 from app.core.exceptions import TankNotFoundError
+from app.services.events import publish_event, EventType
 
 router = APIRouter()
 
@@ -18,7 +20,7 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     summary="Submit a heartbeat/status update from a tank",
 )
-def tank_status(
+async def tank_status(
     request_body: StatusUpdateRequest,
     db: Session = Depends(get_db),
     tank_id: str = Depends(get_current_tank),
@@ -37,8 +39,9 @@ def tank_status(
     ## Logic
     1. Extract client IP and headers for detailed logging.
     2. Call `update_tank_status` to persist the status update in the database.
-    3. Return a success response.
-    4. Raise HTTP 404 if the tank is not found.
+    3. Publish event for status change
+    4. Return a success response.
+    5. Raise HTTP 404 if the tank is not found.
 
     ## Outputs
     - **Success (200):** `StandardResponse` with `StatusUpdateResponse` data.
@@ -54,6 +57,20 @@ def tank_status(
             print(f"[TANK STATUS] Logging error: {e}")
     try:
         status_response = update_tank_status(db, tank_id, request_body)
+        
+        # Publish event for status change
+        await publish_event(
+            event_type=EventType.TANK_STATUS_CHANGE,
+            data={
+                "tank_id": tank_id,
+                "temperature": request_body.temperature,
+                "ph": request_body.ph,
+                "light_state": request_body.light_state,
+                "firmware_version": request_body.firmware_version
+            },
+            tank_id=tank_id
+        )
+
         return create_success_response(data=status_response)
     except ValueError as e:
         raise TankNotFoundError(detail=str(e))

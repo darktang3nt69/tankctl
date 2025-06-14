@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Discord (later)
     DISCORD_WEBHOOK_URL: str
 
+    # Redis for SSE
+    REDIS_URL: str
+
+    # Logging
+    LOG_LEVEL: str = "INFO" # Default to INFO, but can be overridden
+
     class Config:
         env_file = ".env"
 

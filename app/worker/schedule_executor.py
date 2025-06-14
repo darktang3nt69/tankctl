@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from sqlalchemy.orm import Session
 from celery import Celery
+import asyncio
 
 from app.core.database import SessionLocal
 from app.models.tank import Tank
@@ -18,7 +19,10 @@ celery = Celery(
 )
 
 @celery.task
-def enforce_lighting_schedule():
+def enforce_lighting_schedule_sync():
+    asyncio.run(_enforce_lighting_schedule_async())
+
+async def _enforce_lighting_schedule_async():
     # current IST timestamp
     now = datetime.now(IST)
     now_ist_str = now.strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -83,14 +87,14 @@ def enforce_lighting_schedule():
                 print(f"  DEBUG: already_on_today? {already_on}")
                 if not already_on:
                     print("  DEBUG: Triggering scheduled LIGHT ON")
-                    issue_command(db, tank.tank_id, "light_on")
+                    await issue_command(db, tank.tank_id, "light_on")
                     settings.last_schedule_check_on = now
                     db.add(TankScheduleLog(
                         tank_id        = tank.tank_id,
                         event_type     = "light_on",
                         trigger_source = "scheduled"
                     ))
-                    send_discord_embed(
+                    await send_discord_embed(
                         status="light_on",
                         tank_name=tank.tank_name,
                         command_payload="light_on (scheduled)"
@@ -107,14 +111,14 @@ def enforce_lighting_schedule():
                 print(f"  DEBUG: on_today? {on_today}, already_off_today? {already_off}")
                 if on_today and not already_off:
                     print("  DEBUG: Triggering scheduled LIGHT OFF")
-                    issue_command(db, tank.tank_id, "light_off")
+                    await issue_command(db, tank.tank_id, "light_off")
                     settings.last_schedule_check_off = now
                     db.add(TankScheduleLog(
                         tank_id        = tank.tank_id,
                         event_type     = "light_off",
                         trigger_source = "scheduled"
                     ))
-                    send_discord_embed(
+                    await send_discord_embed(
                         status="light_off",
                         tank_name=tank.tank_name,
                         command_payload="light_off (scheduled)"

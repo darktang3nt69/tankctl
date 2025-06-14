@@ -1,6 +1,6 @@
     # Dockerfile
 
-    FROM python:3.11-slim
+    FROM python:3.11-slim-bookworm
 
     # Set working directory
     WORKDIR /app
@@ -11,10 +11,13 @@
     # Install system dependencies
     RUN apt-get update && apt-get install -y gcc libpq-dev
 
+    # Install uv
+    RUN pip install uv
+
     # Install Python dependencies
     COPY requirements.txt .
-    RUN pip install --no-cache-dir -r requirements.txt
-    RUN pip install --no-cache-dir --upgrade structlog
+    RUN uv pip install --system -r requirements.txt
+    RUN uv pip install --system --no-cache-dir --upgrade structlog
 
     # Copy the application code
     COPY ./app ./app
