@@ -16,8 +16,7 @@
 
     # Install Python dependencies
     COPY requirements.txt .
-    RUN uv pip install --system -r requirements.txt
-    RUN uv pip install --system --no-cache-dir --upgrade structlog
+    RUN uv pip install --system -r requirements.txt && uv pip install --system --no-cache-dir --upgrade structlog
 
     # Copy the application code
     COPY ./app ./app
