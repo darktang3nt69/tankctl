@@ -17,7 +17,7 @@ from app.utils.timezone import IST
 # Refer to JWT (JSON Web Token) RFC 7519: https://datatracker.ietf.org/doc/html/rfc7519
 # Refer to PyJWT documentation: https://pyjwt.readthedocs.io/en/stable/
 
-def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResponse:
+async def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResponse:
     """
     Registers a new tank or re-registers an existing tank, issuing a new JWT token.
 
@@ -110,7 +110,7 @@ def register_tank(db: Session, request: TankRegisterRequest) -> TankRegisterResp
         "Light Off (IST)":   tank_settings.light_off.strftime("%H:%M"),
         "Schedule Enabled":  tank_settings.is_schedule_enabled,
     }
-    send_discord_embed(
+    await send_discord_embed(
         status="new_registration",
         tank_name=new_tank.tank_name,
         extra_fields=extra_fields

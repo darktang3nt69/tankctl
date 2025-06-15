@@ -8,6 +8,7 @@ from app.core.database import SessionLocal
 from app.utils.jwt import verify_access_token
 
 from app.core.config import settings
+from app.models.tank import Tank
 
 security = HTTPBearer()
 
@@ -22,7 +23,8 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 def get_current_tank(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
 ) -> str:
     """
     Extract and verify the JWT token from the Authorization header,
@@ -34,6 +36,15 @@ def get_current_tank(
         tank_id = payload.get("tank_id")
         if not tank_id:
             raise ValueError("tank_id missing in token payload")
+
+        # Verify if the tank_id exists in the database
+        tank = db.query(Tank).filter(Tank.tank_id == tank_id).first()
+        if not tank:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tank not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return tank_id
     except Exception:
         raise HTTPException(

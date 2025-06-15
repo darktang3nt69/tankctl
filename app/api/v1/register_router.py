@@ -24,7 +24,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Register a new tank node",
 )
-def tank_register(
+async def tank_register(
     request: TankRegisterRequest,
     db: Session = Depends(get_db),
 ) -> TankRegisterResponse:
@@ -46,6 +46,6 @@ def tank_register(
     - **Error (401):** `detail` (str): Error message if registration fails.
     """
     try:
-        return register_tank(db, request)
+        return await register_tank(db, request)
     except ValueError as e:
         raise AuthenticationError(detail=str(e))

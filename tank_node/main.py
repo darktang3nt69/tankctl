@@ -12,9 +12,9 @@ from onewire import OneWire
 from ds18x20 import DS18X20
 
 # ───── CONFIGURATION ─────
-SSID              = 'xxx.4G'
-PASSWORD          = 'xxxx'
-BASE_URL          = 'https://xxx.xxxx.xxx'
+SSID              = 'EMPIRE_2.4G'
+PASSWORD          = '30379718'
+BASE_URL          = 'https://api.darktang3nt.cloud'
 
 # API endpoints
 REGISTER_API      = '/api/v1/tank/register'
@@ -23,9 +23,9 @@ COMMAND_API       = '/api/v1/tank/command'
 ACK_API           = '/api/v1/tank/command/ack'
 
 # Auth credentials
-AUTH_KEY          = 'xxx'
-TANK_NAME         = 'xxx'
-LOCATION          = 'xxx'
+AUTH_KEY          = 'pJf8YZ1gLfOi5Gzmu1H6ldu7q3TaRBZc2iBuwg8xshIKtRYU'
+TANK_NAME         = 'Dragon Guppies Tank'
+LOCATION          = 'Hyderabad'
 
 # Default Tank Lighting schedule
 LIGHT_ON_TIMING   = "10:00"
@@ -50,6 +50,7 @@ MIN_HEAP_BYTES    = 50000
 RELAY_PIN         = 15      # D15: light relay (active-low)
 SERVO_PIN         = 4       # D4: continuous SG90 servo
 DS18B20_PIN       = 22      # D22: DS18B20 temperature sensor
+LED_PIN           = 2       # Onboard LED for ESP32 (GPIO2)
 
 # Relay logic inversion
 RELAY_ON          = 0       # drive low to turn relay/light ON
@@ -71,6 +72,9 @@ FIRMWARE          = "1.0.0"
 light_relay = Pin(RELAY_PIN, Pin.OUT, value=RELAY_OFF)
 # initialize servo
 servo = PWM(Pin(SERVO_PIN), freq=SERV_FREQ)
+
+# initialize internal LED
+internal_led = Pin(LED_PIN, Pin.OUT, value=0) # Turn off LED initially
 
 # initialize DS18B20
 ds_pin = Pin(DS18B20_PIN)
@@ -184,7 +188,7 @@ def connect_wifi():
         while not wlan.isconnected() and time.time()-start < WIFI_TIMEOUT:
             feed(); time.sleep(0.2)
         if wlan.isconnected():
-            print("✔ Wi‑Fi IP:", wlan.ifconfig()[0]); return
+            print("✔ Wi‑Fi IP:", wlan.ifconfig()[0]); internal_led.value(1); return # Turn on LED
         print("⚠️ Wi‑Fi failed")
     print("❌ Rebooting"); time.sleep(2); machine.reset()
 
@@ -214,8 +218,15 @@ def request_with_refresh(fn, *args):
     code, res = fn(token, *args)
     if code==401:
         print("⚠️ Token expired—re-register")
+        internal_led.value(0) # Turn off LED during re-registration
         _, token = register_tank()
         code, res = fn(token, *args)
+    
+    if code == 200:
+        internal_led.value(1) # Turn on LED for successful API call
+    else:
+        internal_led.value(0) # Turn off LED for failed API call
+    
     return code, res
 
 # ───── HTTP HELPERS ─────
@@ -284,9 +295,12 @@ COMMAND_MAP = {
 # ───── MAIN LOOP ─────
 def main():
     global tank_id, token, state
+    internal_led.value(0) # Ensure LED is off before network ops
     connect_wifi()
     tank_id, token = load_config()
-    if not token: tank_id, token = register_tank()
+    if not token:
+        tank_id, token = register_tank()
+        internal_led.value(1) # Turn on LED after successful registration
     print("▶ Running, tank_id:", tank_id)
 
     last_s = time.time()-STATUS_INTERVAL
@@ -302,12 +316,17 @@ def main():
             print("Polling for command...")
             cmd = poll_command(); last_p = time.ticks_ms()
             if 'command_id' in cmd:
-                cid = cmd['command_id']; raw = cmd.get('command_payload','')
-                params = cmd.get('params',{}); key = raw.upper()
-                print("Cmd:",raw,"->",key)
+                cid = cmd['command_id']
+                # Parse the nested command_payload
+                command_payload = cmd.get('command_payload', {})
+                key = command_payload.get('command_type', '').upper()  # Extract command_type
+                params = command_payload.get('parameters', {})        # Extract parameters
+                print("Cmd:", key, "->", params)
                 ok=True
-                try: COMMAND_MAP.get(key,lambda p:print("Unknown",key))(params)
-                except Exception as e: ok=False; print("Err:",e)
+                try: 
+                    COMMAND_MAP.get(key,lambda p:print("Unknown",key))(params)
+                except Exception as e: 
+                    ok=False; print("Err:",e)
                 ack_command(cid, ok)
 
         if time.ticks_diff(time.ticks_ms(), last_f) >= FLUSH_INTERVAL_MS:

@@ -22,7 +22,7 @@ from typing import Optional
 from app.api.deps import get_db, get_current_tank
 from app.schemas.command import CommandAcknowledgeRequest, CommandCreate, CommandResponse, CommandType
 from app.services.command_service import (
-    issue_command,
+    issue_command as service_issue_command,
     get_pending_command_for_tank,
     acknowledge_command,
     get_command_history_for_tank,
@@ -82,7 +82,7 @@ async def issue_command(
             )
 
         # Create the command using existing service
-        command_result = issue_command(db, UUID(command.tank_id), command.command_type.value, command.parameters)
+        command_result = await service_issue_command(db, UUID(command.tank_id), command.command_type.value, command.parameters)
         
         # Enhance the response with additional information
         enhanced_response = {
@@ -191,7 +191,7 @@ async def get_command_status(
 
 # 🛠 Node Route: Tank acknowledges command execution
 @router.post("/tank/command/ack")
-def ack_my_command(
+async def ack_my_command(
     background_tasks: BackgroundTasks,  # ✅ First
     request: CommandAcknowledgeRequest,
     db: Session = Depends(get_db),
@@ -216,7 +216,7 @@ def ack_my_command(
     - **Error (404):** If the command is not found.
     """
     try:
-        acknowledge_command(db, tank_id, request)
+        await acknowledge_command(db, tank_id, request)
         return {"message": "Command acknowledged successfully"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

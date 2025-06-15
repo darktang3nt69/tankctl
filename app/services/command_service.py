@@ -117,6 +117,8 @@ async def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAckno
     - Records the `last_attempt_at` timestamp.
     - Triggers a Discord notification to inform about the command acknowledgment status.
     """
+    print(f"DEBUG: Acknowledging command {ack.command_id} for tank {tank_id}")
+
     # Fetch the command to be acknowledged.
     command = db.execute(
         select(TankCommand).where(
@@ -125,11 +127,17 @@ async def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAckno
     ).scalar_one_or_none()
 
     if not command:
+        print(f"DEBUG: Command {ack.command_id} not found in DB.")
         raise ValueError("Command not found.")
+
+    print(f"DEBUG: Found command {command.command_id} in DB. Tank ID on command: {command.tank_id}")
 
     # Ensure the command belongs to the tank acknowledging it for security and data integrity.
     if command.tank_id != tank_id:
+        print(f"DEBUG: Command tank_id {command.tank_id} does not match request tank_id {tank_id}.")
         raise ValueError("Command does not belong to this tank.")
+
+    print(f"DEBUG: Command {command.command_id} belongs to tank {tank_id}. Updating status.")
 
     # Update the command status based on the acknowledgment result.
     command.status = "success" if ack.success else "failed"
