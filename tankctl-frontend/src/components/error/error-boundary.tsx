@@ -1,0 +1,1 @@
+// Error boundary with encrypted error logging

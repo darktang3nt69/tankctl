@@ -1,0 +1,12 @@
+# Security contact information
+Contact: mailto:security@tankctl.com
+Encryption: https://tankctl.com/.well-known/pgp-key.txt
+Acknowledgments: https://tankctl.com/security-hall-of-fame
+Policy: https://tankctl.com/security-policy
+
+# Vulnerability Reporting Guidelines
+Preferred-Languages: en
+Canonical: https://tankctl.com/.well-known/security.txt
+
+# This file follows RFC 9116 standard
+Expires: 2025-01-01T00:00:00.000Z
