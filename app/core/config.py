@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     celery_result_backend: str
 
     # Heartbeat Monitor
-    HEARTBEAT_CHECK_INTERVAL_MINUTES: int = 1
+    HEARTBEAT_CHECK_INTERVAL_MINUTES: int =1
     TANK_OFFLINE_THRESHOLD_MINUTES: int = 2
+    SCHEDULE_LIGHTING_INTERVAL_MINUTES: int = 2
+    CHECK_OFFLINE_TANK_STATUS_INTERVAL_MINUTES: int = 5
 
     # Discord (later)
     DISCORD_WEBHOOK_URL: str
