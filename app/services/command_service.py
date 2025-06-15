@@ -94,6 +94,7 @@ def get_pending_command_for_tank(db: Session, tank_id: uuid.UUID) -> TankCommand
     Retrieves the oldest pending or in-progress command for a specific tank.
     Commands are ordered by creation time to ensure FIFO processing.
     """
+    print(f"DEBUG: get_pending_command_for_tank called for tank_id: {tank_id}")
     command = db.execute(
         select(TankCommand)
         .where(
@@ -102,27 +103,19 @@ def get_pending_command_for_tank(db: Session, tank_id: uuid.UUID) -> TankCommand
         )
         .order_by(TankCommand.created_at.asc())
     ).scalars().first()
-
+    print(f"DEBUG: get_pending_command_for_tank returning: {command.command_id if command else 'None'}")
     return command
 
 async def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAcknowledgeRequest):
     """
     Handles the acknowledgment of a command execution from a tank node.
-
-    Business Logic:
-    - Fetches the command by its `command_id`.
-    - Verifies that the command belongs to the acknowledging tank (`tank_id`).
-    - Updates the command's status to 'success' or 'failed' based on `ack.success`.
-    - Sets `retries` to `MAX_RETRIES` (3) to prevent further retries for acknowledged commands.
-    - Records the `last_attempt_at` timestamp.
-    - Triggers a Discord notification to inform about the command acknowledgment status.
     """
     print(f"DEBUG: Acknowledging command {ack.command_id} for tank {tank_id}")
 
-    # Fetch the command to be acknowledged.
+    # Fetch the command to be acknowledged
     command = db.execute(
         select(TankCommand).where(
-            TankCommand.command_id == ack.command_id
+            TankCommand.command_id == ack.command_id  # this is now already a UUID object
         )
     ).scalar_one_or_none()
 
@@ -133,7 +126,9 @@ async def acknowledge_command(db: Session, tank_id: uuid.UUID, ack: CommandAckno
     print(f"DEBUG: Found command {command.command_id} in DB. Tank ID on command: {command.tank_id}")
 
     # Ensure the command belongs to the tank acknowledging it for security and data integrity.
-    if command.tank_id != tank_id:
+    print(f"DEBUG: Type of command.tank_id: {type(command.tank_id)}")
+    print(f"DEBUG: Type of tank_id: {type(tank_id)}")
+    if command.tank_id != uuid.UUID(tank_id):
         print(f"DEBUG: Command tank_id {command.tank_id} does not match request tank_id {tank_id}.")
         raise ValueError("Command does not belong to this tank.")
 
@@ -259,12 +254,12 @@ async def retry_stale_commands(db: Session):
     # 2) Fetch those full command rows by joining with the subquery results.
     head_cmds = (
         db.query(TankCommand)
-          .join(
-             subq,
-             (TankCommand.tank_id == subq.c.tank_id) &
-             (TankCommand.created_at == subq.c.min_created)
-          )
-          .all()
+           .join(
+              subq,
+              (TankCommand.tank_id == subq.c.tank_id) &
+              (TankCommand.created_at == subq.c.min_created)
+           )
+           .all()
     )
 
     print(f"📦 Head-of-line commands eligible for retry: {len(head_cmds)}")

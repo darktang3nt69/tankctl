@@ -12,9 +12,9 @@ from onewire import OneWire
 from ds18x20 import DS18X20
 
 # ───── CONFIGURATION ─────
-SSID              = 'EMPIRE_2.4G'
-PASSWORD          = '30379718'
-BASE_URL          = 'https://api.darktang3nt.cloud'
+SSID              = 'xxxx.4G'
+PASSWORD          = 'xxxxx'
+BASE_URL          = 'https://xxxx.cccc.cloud'
 
 # API endpoints
 REGISTER_API      = '/api/v1/tank/register'
@@ -23,9 +23,9 @@ COMMAND_API       = '/api/v1/tank/command'
 ACK_API           = '/api/v1/tank/command/ack'
 
 # Auth credentials
-AUTH_KEY          = 'pJf8YZ1gLfOi5Gzmu1H6ldu7q3TaRBZc2iBuwg8xshIKtRYU'
-TANK_NAME         = 'Dragon Guppies Tank'
-LOCATION          = 'Hyderabad'
+AUTH_KEY          = 'xxxxx'
+TANK_NAME         = 'xxxx'
+LOCATION          = 'xxxx'
 
 # Default Tank Lighting schedule
 LIGHT_ON_TIMING   = "10:00"
@@ -315,6 +315,7 @@ def main():
         if time.ticks_diff(time.ticks_ms(), last_p) >= COMMAND_POLL_MS:
             print("Polling for command...")
             cmd = poll_command(); last_p = time.ticks_ms()
+            print(f"DEBUG: Received command from poll_command: {cmd.get('command_id', 'No command ID')}")
             if 'command_id' in cmd:
                 cid = cmd['command_id']
                 # Parse the nested command_payload
@@ -336,3 +337,4 @@ def main():
 
 if __name__=='__main__':
     main()
+
