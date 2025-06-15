@@ -11,6 +11,8 @@ from celery import Celery
 import time
 
 from app.metrics.tank_metrics import tank_online_status
+from app.services.push_notification import send_tank_notification
+import asyncio
 
 # Celery app setup
 celery = Celery(
@@ -66,6 +68,16 @@ def heartbeat_check():
                 tank.is_online = False
                 offline_count += 1
                 send_discord_embed(status="offline", tank_name=tank.tank_name)
+                # Add push notification for offline tank
+                asyncio.run(send_tank_notification(
+                    tank_id=tank.tank_id,
+                    title="Tank Offline",
+                    body=f"Tank {tank.tank_name} has gone offline. Last seen {last_seen.strftime('%Y-%m-%d %H:%M:%S')}.",
+                    notification_type="offline",
+                    icon="/icons/tank-offline.png",
+                    badge="/icons/badge-alert.png",
+                    tag=f"tank-offline-{tank.tank_id}"
+                ))
                 # ✅ Clear alert state if it exists
                 existing_alert = db.query(TankAlertState).filter_by(tank_id=tank.tank_id).first()
                 if existing_alert:
@@ -78,6 +90,16 @@ def heartbeat_check():
                 tank.is_online = True
                 online_count += 1
                 send_discord_embed(status="online", tank_name=tank.tank_name)
+                # Add push notification for online tank
+                asyncio.run(send_tank_notification(
+                    tank_id=tank.tank_id,
+                    title="Tank Online",
+                    body=f"Tank {tank.tank_name} is back online.",
+                    notification_type="online",
+                    icon="/icons/tank-online.png",
+                    badge="/icons/badge-success.png",
+                    tag=f"tank-online-{tank.tank_id}"
+                ))
 
         db.commit()
 

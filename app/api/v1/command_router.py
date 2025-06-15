@@ -46,22 +46,58 @@ async def issue_command(
     """
     Issue a command to a tank.
     
+    This endpoint allows sending commands to control tank functions such as
+    lighting, temperature settings, and feeding.
+    
     Available command types:
     - light_on: Turn on the tank light
     - light_off: Turn off the tank light
     - set_temperature: Set the target temperature (requires "temperature" parameter)
     - feed: Trigger feeding mechanism
     
+    Parameters:
+    - command: Command details including tank_id, command_type, and parameters
+    
     Parameters for set_temperature:
     - temperature: Target temperature in Celsius (0-40)
     
-    Returns:
-        CommandResponse: Command details including ID and status
+    Example request:
+    ```json
+    {
+      "tank_id": "550e8400-e29b-41d4-a716-446655440000",
+      "command_type": "set_temperature",
+      "parameters": {
+        "temperature": 26.5
+      }
+    }
+    ```
     
-    Raises:
-        400: Invalid command parameters or tank offline
-        404: Tank not found
-        500: Server error
+    Example response:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "command_id": "123e4567-e89b-12d3-a456-426614174000",
+        "status": "pending",
+        "timestamp": "2025-06-12T10:35:00Z",
+        "tank_id": "550e8400-e29b-41d4-a716-446655440000",
+        "command_type": "set_temperature",
+        "parameters": {
+          "temperature": 26.5
+        },
+        "estimated_execution": "2025-06-12T10:35:05Z"
+      },
+      "meta": {
+        "timestamp": "2025-06-12T10:35:00Z"
+      }
+    }
+    ```
+    
+    Status codes:
+    - 202: Command accepted
+    - 400: Invalid command parameters or tank offline
+    - 404: Tank not found
+    - 401: Unauthorized
     """
     try:
         # Check if tank exists and is online

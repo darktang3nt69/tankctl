@@ -8,6 +8,8 @@ from app.models.status_log import StatusLog
 from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
 from app.utils.timezone import IST
 from app.metrics.tank_metrics import tank_temperature
+from app.services.push_notification import send_tank_notification
+import asyncio
 
 def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) -> StatusUpdateResponse:
     tank = db.execute(
@@ -31,6 +33,18 @@ def update_tank_status(db: Session, tank_id: str, request: StatusUpdateRequest) 
             tank_name=tank.tank_name,
             location=tank.location or "unknown"
         ).set(request.temperature)
+
+        # Add temperature alert logic
+        if request.temperature > 32:
+            asyncio.run(send_tank_notification(
+                tank_id=tank_id,
+                title="Temperature Alert: High",
+                body=f"Tank {tank.tank_name} temperature is {request.temperature}°C, which is above the safe threshold.",
+                notification_type="temperature_alert",
+                icon="/icons/temperature-alert.png",
+                badge="/icons/badge-alert.png",
+                tag=f"temp-alert-high-{tank_id}"
+            ))
     if request.ph is not None:
         tank.ph = request.ph
     if request.light_state is not None:

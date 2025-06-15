@@ -9,10 +9,14 @@ from app.api.v1.docs_router import router as docs_router
 from app.api.v1.settings_router import router as settings_router
 from app.api.v1.metrics_router import router as metrics_router
 from app.api.v1.events_router import router as events_router
+from app.api.v1.auth_router import router as auth_router
+from app.api.v1.push_router import router as push_router
+# from app.api.v1.override_router import router as override_router
 from app.core.config import settings
 
 # Refer to FastAPI documentation: https://fastapi.tiangolo.com/
 from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi.openapi.utils import get_openapi
 
 from prometheus_client import Gauge
 from sqlalchemy.orm import Session
@@ -50,9 +54,11 @@ from app.api.errors.handlers import (
 
 
 app = FastAPI(
-    title="TankCtl Tank API",
-    description="API to manage and monitor aquarium tanks",
-    version="1.0.0"
+    title="TankCtl API",
+    description="API for controlling and monitoring fish tanks",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Custom JSON encoder for datetime objects to ensure IST with offset
@@ -94,15 +100,17 @@ configure_logging()
 
 # Include your API routers
 # Mount versioned routes
-app.include_router(register_router, prefix="/api/v1")
-app.include_router(status_router,   prefix="/api/v1")
-app.include_router(command_router, prefix="/api/v1")
-app.include_router(admin_command_router, prefix="/api/v1")
-app.include_router(docs_router, prefix="/api/v1")
+app.include_router(register_router, prefix="/api/v1", tags=["Registration"])
+app.include_router(status_router,   prefix="/api/v1", tags=["Tanks", "Status"])
+app.include_router(command_router, prefix="/api/v1", tags=["Commands"])
+app.include_router(admin_command_router, prefix="/api/v1", tags=["Admin Commands"])
+app.include_router(docs_router, prefix="/api/v1", tags=["Documentation"])
 # app.include_router(override_router, prefix="/api/v1")
-app.include_router(settings_router, prefix="/api/v1")
-app.include_router(metrics_router, prefix="/api/v1")
-app.include_router(events_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1", tags=["Settings"])
+app.include_router(metrics_router, prefix="/api/v1", tags=["Metrics"])
+app.include_router(events_router, prefix="/api/v1", tags=["Events"])
+app.include_router(auth_router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(push_router, prefix="/api/v1", tags=["Push Notifications"])
 
 @app.get("/", tags=["Health Check"])
 def health_check():
@@ -171,3 +179,101 @@ def list_tanks():
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
+
+# Customize OpenAPI schema
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="TankCtl API",
+        version="1.0.0",
+        description="""
+        # TankCtl API Documentation
+        
+        This API allows you to control and monitor fish tanks remotely.
+        
+        ## Authentication
+        
+        All endpoints require authentication using JWT tokens.
+        Get your token from the `/api/v1/auth/token` endpoint.
+        
+        ## Key Features
+        
+        - Real-time tank monitoring
+        - Command issuance and tracking
+        - Historical data analysis
+        - Push notifications
+        
+        ## Getting Started
+        
+        1. Authenticate using your ADMIN_API_KEY
+        2. Fetch tank status using `/api/v1/tanks/{tank_id}/status`
+        3. Issue commands using `/api/v1/commands`
+        4. Subscribe to real-time updates using `/api/v1/events`
+        
+        For detailed integration guides, see `/api/v1/docs/frontend-integration`.
+        """,
+        routes=app.routes,
+    )
+    
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    
+    # Apply security globally
+    openapi_schema["security"] = [{"bearerAuth": []}]
+    
+    # Add tags with descriptions
+    openapi_schema["tags"] = [
+        {
+            "name": "Authentication",
+            "description": "Authentication endpoints for getting access and refresh tokens"
+        },
+        {
+            "name": "Tanks",
+            "description": "Endpoints for tank management and status monitoring"
+        },
+        {
+            "name": "Commands",
+            "description": "Endpoints for issuing and tracking commands"
+        },
+        {
+            "name": "Metrics",
+            "description": "Endpoints for retrieving current and historical metrics"
+        },
+        {
+            "name": "Registration",
+            "description": "Endpoints for registering new tank devices"
+        },
+        {
+            "name": "Admin Commands",
+            "description": "Endpoints for administrative commands"
+        },
+        {
+            "name": "Documentation",
+            "description": "Endpoints providing API documentation and examples"
+        },
+        {
+            "name": "Settings",
+            "description": "Endpoints for managing tank settings"
+        },
+        {
+            "name": "Events",
+            "description": "Endpoints for real-time event streaming and monitoring"
+        },
+        {
+            "name": "Push Notifications",
+            "description": "Endpoints for managing web push subscriptions and notifications"
+        }
+    ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi

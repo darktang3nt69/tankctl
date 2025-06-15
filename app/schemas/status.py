@@ -40,3 +40,28 @@ class StatusUpdateRequest(BaseModel):
 class StatusUpdateResponse(BaseModel):
     message: str = Field(..., description="Confirmation message")
     timestamp: datetime = Field(..., description="Time of this status update")
+
+class TankStatus(BaseModel):
+    tank_id: str = Field(..., description="UUID of the tank")
+    name: str = Field(..., description="Name of the tank")
+    temperature: Optional[float] = Field(None, description="Current tank temperature in Celsius")
+    ph: Optional[float] = Field(None, description="Current tank pH level")
+    online: bool = Field(..., description="Whether the tank is currently online")
+    last_seen: datetime = Field(..., description="Timestamp of the last known activity from the tank")
+    light_status: Optional[str] = Field(None, description="Current status of the tank light (on/off)")
+
+    class Config:
+        orm_mode = True
+        json_schema_extra = {
+            "examples": [
+                {
+                    "tank_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "name": "Main Tank",
+                    "temperature": 25.5,
+                    "ph": 7.2,
+                    "online": True,
+                    "last_seen": "2025-06-12T10:30:00Z",
+                    "light_status": "on"
+                }
+            ]
+        }

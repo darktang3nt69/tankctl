@@ -3,14 +3,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 import asyncio
+from datetime import datetime
 
-from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse
-from app.api.deps import get_db, get_current_tank
+from app.schemas.status import StatusUpdateRequest, StatusUpdateResponse, TankStatus
+from app.api.deps import get_db, get_current_tank, get_current_user
 from app.services.status_service import update_tank_status
 from app.schemas.responses import StandardResponse
 from app.api.utils.responses import create_success_response, create_error_response
 from app.core.exceptions import TankNotFoundError
 from app.services.events import publish_event, EventType
+from app.crud.tank import get_tank_by_id
 
 router = APIRouter()
 
@@ -74,3 +76,61 @@ async def tank_status(
         return create_success_response(data=status_response)
     except ValueError as e:
         raise TankNotFoundError(detail=str(e))
+
+@router.get("/tanks/{tank_id}/status", response_model=StandardResponse[TankStatus])
+async def get_tank_status(
+    tank_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get the current status of a specific tank.
+    
+    This endpoint returns the latest status information for the specified tank,
+    including temperature, pH, and online status.
+    
+    Parameters:
+    - tank_id: UUID of the tank
+    
+    Returns:
+        TankStatus: Current status of the tank
+        
+    Example response:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "tank_id": "550e8400-e29b-41d4-a716-446655440000",
+        "name": "Main Tank",
+        "temperature": 25.5,
+        "ph": 7.2,
+        "online": true,
+        "last_seen": "2025-06-12T10:30:00Z",
+        "light_status": "on"
+      },
+      "meta": {
+        "timestamp": "2025-06-12T10:35:00Z"
+      }
+    }
+    ```
+    
+    Status codes:
+    - 200: Successful operation
+    - 404: Tank not found
+    - 401: Unauthorized
+    """
+    tank = get_tank_by_id(db, tank_id)
+    if not tank:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tank not found")
+    
+    return create_success_response(
+        data=TankStatus(
+            tank_id=str(tank.tank_id),
+            name=tank.tank_name,
+            temperature=tank.temperature,
+            ph=tank.ph,
+            online=tank.is_online,
+            last_seen=tank.last_seen,
+            light_status="on" if tank.light_state else "off"
+        )
+    )

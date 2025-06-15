@@ -107,4 +107,117 @@ async def event_stream(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no"
         }
-    ) 
+    )
+
+@router.get("/events/docs", tags=["documentation"])
+async def events_documentation():
+    """
+    Server-Sent Events (SSE) documentation for frontend developers.
+    
+    This endpoint provides detailed information about the SSE endpoint,
+    event types, and example code for handling events in the frontend.
+    
+    Event endpoint: /api/v1/events
+    
+    Query parameters:
+    - tank_id (optional): Filter events by tank ID
+    - event_type (optional): Filter events by type
+    - since (optional): Get events since timestamp (ISO format)
+    
+    Event types:
+    - tank_status_change: Tank status has been updated
+    - tank_offline: Tank has gone offline
+    - tank_online: Tank has come back online
+    - command_issued: New command has been issued
+    - command_acknowledged: Command has been acknowledged by tank
+    - command_completed: Command has been completed successfully
+    - command_failed: Command execution failed
+    - temperature_alert: Temperature is outside normal range
+    - ph_alert: pH is outside normal range
+    
+    Event format:
+    ```
+    event: [event_type]
+    id: [unique_event_id]
+    data: {
+        "timestamp": "2025-06-12T10:30:00Z",
+        "tank_id": "tank-123",
+        ... event specific data ...
+    }
+    ```
+    
+    Example frontend code:
+    ```javascript
+    function connectToEventStream() {
+      const token = sessionStorage.getItem('token');
+      const eventSource = new EventSource(`/api/v1/events?tank_id=${tankId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Handle connection established
+      eventSource.addEventListener('connection_established', (event) => {
+        console.log('SSE connection established');
+      });
+      
+      // Handle tank status changes
+      eventSource.addEventListener('tank_status_change', (event) => {
+        const data = JSON.parse(event.data);
+        updateTankStatus(data);
+      });
+      
+      // Handle tank offline events
+      eventSource.addEventListener('tank_offline', (event) => {
+        const data = JSON.parse(event.data);
+        showOfflineAlert(data);
+      });
+      
+      // Handle command events
+      eventSource.addEventListener('command_completed', (event) => {
+        const data = JSON.parse(event.data);
+        updateCommandStatus(data);
+      });
+      
+      // Handle connection errors
+      eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        setTimeout(connectToEventStream, 5000); // Reconnect after 5 seconds
+      };
+      
+      return eventSource;
+    }
+    ```
+    
+    Reconnection strategy:
+    - If connection is lost, wait 5 seconds before reconnecting
+    - Use exponential backoff for repeated failures
+    - Store last event ID and use it when reconnecting to resume from where you left off
+    """
+    return {
+        "endpoint": "/api/v1/events",
+        "query_parameters": {
+            "tank_id": "Filter events by tank ID",
+            "event_type": "Filter events by type",
+            "since": "Get events since timestamp (ISO format)"
+        },
+        "event_types": {
+            "tank_status_change": "Tank status has been updated",
+            "tank_offline": "Tank has gone offline",
+            "tank_online": "Tank has come back online",
+            "command_issued": "New command has been issued",
+            "command_acknowledged": "Command has been acknowledged by tank",
+            "command_completed": "Command has been completed successfully",
+            "command_failed": "Command execution failed",
+            "temperature_alert": "Temperature is outside normal range",
+            "ph_alert": "pH is outside normal range"
+        },
+        "event_format": {
+            "example": 'event: tank_status_change\nid: 123\ndata: {"timestamp": "2025-06-12T10:30:00Z", "tank_id": "tank-123", "temperature": 25.5}'
+        },
+        "reconnection_strategy": {
+            "initial_delay": "5 seconds",
+            "backoff": "Exponential",
+            "resume": "Use last event ID when reconnecting"
+        }
+    } 

@@ -12,9 +12,9 @@ from onewire import OneWire
 from ds18x20 import DS18X20
 
 # ───── CONFIGURATION ─────
-SSID              = 'xxxx.4G'
-PASSWORD          = 'xxxxx'
-BASE_URL          = 'https://xxxx.cccc.cloud'
+SSID              = 'EMPIRE_2.4G'
+PASSWORD          = '30379718'
+BASE_URL          = 'https://api.darktang3nt.cloud'
 
 # API endpoints
 REGISTER_API      = '/api/v1/tank/register'
@@ -23,9 +23,9 @@ COMMAND_API       = '/api/v1/tank/command'
 ACK_API           = '/api/v1/tank/command/ack'
 
 # Auth credentials
-AUTH_KEY          = 'xxxxx'
-TANK_NAME         = 'xxxx'
-LOCATION          = 'xxxx'
+AUTH_KEY          = 'pJf8YZ1gLfOi5Gzmu1H6ldu7q3TaRBZc2iBuwg8xshIKtRYU'
+TANK_NAME         = 'Dragon Guppies Tank'
+LOCATION          = 'Hyderabad'
 
 # Default Tank Lighting schedule
 LIGHT_ON_TIMING   = "10:00"
