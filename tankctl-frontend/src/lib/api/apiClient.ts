@@ -1,4 +1,5 @@
 import { getToken } from "@/lib/auth/tokenStorage";
+import { toast } from 'sonner';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -39,7 +40,9 @@ export async function get<T>(path: string, params?: Record<string, any>): Promis
     const data = await response.json();
     return { success: true, data };
   } catch (error: any) {
-    return { success: false, error: error.message || "Network error or API is unreachable." };
+    const errorMessage = error.message || "Network error or API is unreachable.";
+    toast.error(`API Error: ${errorMessage}`);
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -60,13 +63,17 @@ export async function post<T>(path: string, data: any, contentType: string = "ap
 
     if (!response.ok) {
       const errorText = await response.text();
-      return { success: false, error: errorText || response.statusText, status: response.status };
+      const errorMessage = errorText || response.statusText;
+      toast.error(`API Error: ${errorMessage}`);
+      return { success: false, error: errorMessage, status: response.status };
     }
 
     const responseData = await response.json();
     return { success: true, data: responseData.data };
   } catch (error: any) {
-    return { success: false, error: error.message || "Network error or API is unreachable." };
+    const errorMessage = error.message || "Network error or API is unreachable.";
+    toast.error(`API Error: ${errorMessage}`);
+    return { success: false, error: errorMessage };
   }
 }
 

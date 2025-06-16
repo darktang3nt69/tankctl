@@ -1,8 +1,15 @@
 // store/authStore.ts
 import { create } from 'zustand';
-import { devtools, persist, createJSONStorage, StateStorage } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 // import { encryptData, decryptData } from '@/lib/auth/tokenStorage'; // No longer directly used here
 
+// Define the interface for the persisted state
+interface PersistedAuthState {
+  token: string | null;
+  apiUrl: string | null;
+}
+
+// Define the interface for the auth state
 interface AuthState {
   isAuthenticated: boolean;
   token: string | null;
@@ -10,13 +17,6 @@ interface AuthState {
   login: (token: string, apiUrl: string) => void;
   logout: () => void;
   setApiUrl: (url: string) => void;
-  // Add other state properties and actions as needed
-}
-
-// Define the interface for the persisted state
-interface PersistedAuthState {
-  token: string | null;
-  apiUrl: string | null;
 }
 
 // Custom storage (optional, but good for demonstration if you need custom logic)
@@ -51,33 +51,28 @@ const useAuthStore = create<AuthState>()(
         setApiUrl: (url) => set({ apiUrl: url }),
       }),
       {
-        name: 'auth-storage', // unique name for localStorage key
-        storage: createJSONStorage(() => localStorage), // or customStorage
-        // Explicitly type the partialize function to return PersistedAuthState
+        name: 'auth-storage',
+        storage: createJSONStorage(() => localStorage),
         partialize: (state): PersistedAuthState => ({
           token: state.token,
           apiUrl: state.apiUrl,
         }),
-        // Optional: onRehydrateStorage for custom rehydration logic
-        onRehydrateStorage: (state) => {
-          console.log('hydration starts');
-          if (state && state.token) { // Check if state and token exist
-            (state as AuthState).isAuthenticated = true; // Set isAuthenticated to true if token exists
+        onRehydrateStorage: () => (state) => {
+          // After rehydration, ensure isAuthenticated matches token presence
+          if (state) {
+            state.isAuthenticated = !!state.token;
           }
-          return (persistedState, currentState) => {
-            console.log('hydration finished', persistedState, currentState);
-          };
         },
-        // Optional: versioning for migrations
         version: 1,
         migrate: (persistedState: any, version: number) => {
+          // If we have old state, ensure it has the correct shape
           if (version === 0) {
-            // if the storage is from version 0, we should migrate it to version 1
-            // For example, if 'token' was previously 'jwtToken'
-            // const state = persistedState as AuthStateV0;
-            // return { token: state.jwtToken, apiUrl: state.apiUrl };
+            return {
+              token: persistedState.token || null,
+              apiUrl: persistedState.apiUrl || null,
+            };
           }
-          return persistedState as AuthState;
+          return persistedState;
         },
       }
     )

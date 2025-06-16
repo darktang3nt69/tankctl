@@ -1,6 +1,9 @@
-import { FlashToastDisplay } from '@/components/flash-toast-display';
+'use client';
 
-export default function HomePage() {
+import { FlashToastDisplay } from '@/components/flash-toast-display';
+import { withAuth } from '@/components/auth/with-auth';
+
+function HomePage() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <h1>Welcome to TankCtl!</h1>
@@ -8,4 +11,6 @@ export default function HomePage() {
       <FlashToastDisplay />
     </div>
   );
-} 
+}
+
+export default withAuth(HomePage); 

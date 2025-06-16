@@ -1,20 +1,20 @@
 // components/auth/login-form.tsx
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { loginSchema } from '@/schemas/loginSchema';
+import useAuthStore from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
-import { loginSchema } from '@/schemas/loginSchema';
-import { login } from '@/lib/auth/authService';
-import useAuthStore from '@/store/authStore';
-import { useRouter } from 'next/navigation';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { toast } from 'sonner';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { useEffect } from 'react';
+import { login } from '@/lib/auth/authService';
 
 export function LoginForm() {
   const router = useRouter();
@@ -27,15 +27,18 @@ export function LoginForm() {
     },
   });
 
+  // Show validation errors as toasts
   useEffect(() => {
-    const errors = form.formState.errors;
-    if (Object.keys(errors).length > 0) {
-      const firstErrorKey = Object.keys(errors)[0];
-      const errorMessage = (errors as any)[firstErrorKey]?.message;
-      if (errorMessage) {
-        toast.error(`Validation Error: ${errorMessage}`);
+    const subscription = form.watch(() => {
+      const errors = form.formState.errors;
+      if (Object.keys(errors).length > 0) {
+        const firstError = Object.values(errors)[0];
+        if (firstError?.message) {
+          toast.error(firstError.message);
+        }
       }
-    }
+    });
+    return () => subscription.unsubscribe();
   }, [form.formState.errors]);
 
   async function onSubmit(values: z.infer<typeof loginSchema>) {
