@@ -14,9 +14,11 @@ interface AuthState {
   isAuthenticated: boolean;
   token: string | null;
   apiUrl: string | null;
+  isLoading: boolean;
   login: (token: string, apiUrl: string) => void;
   logout: () => void;
   setApiUrl: (url: string) => void;
+  setLoading: (isLoading: boolean) => void;
 }
 
 // Custom storage (optional, but good for demonstration if you need custom logic)
@@ -46,9 +48,11 @@ const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
         token: null,
         apiUrl: null,
-        login: (token, apiUrl) => set({ isAuthenticated: true, token, apiUrl }),
-        logout: () => set({ isAuthenticated: false, token: null, apiUrl: null }),
+        isLoading: true, // Start with loading true for initial hydration
+        login: (token, apiUrl) => set({ isAuthenticated: true, token, apiUrl, isLoading: false }),
+        logout: () => set({ isAuthenticated: false, token: null, apiUrl: null, isLoading: false }),
         setApiUrl: (url) => set({ apiUrl: url }),
+        setLoading: (isLoading) => set({ isLoading }),
       }),
       {
         name: 'auth-storage',
@@ -62,6 +66,10 @@ const useAuthStore = create<AuthState>()(
           if (state) {
             state.isAuthenticated = !!state.token;
           }
+          // Set loading to false after rehydration
+          setTimeout(() => {
+            useAuthStore.getState().setLoading(false);
+          }, 0);
         },
         version: 1,
         migrate: (persistedState: any, version: number) => {

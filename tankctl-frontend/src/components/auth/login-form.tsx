@@ -34,7 +34,9 @@ export function LoginForm() {
       if (Object.keys(errors).length > 0) {
         const firstError = Object.values(errors)[0];
         if (firstError?.message) {
-          toast.error(firstError.message);
+          toast.error(firstError.message, {
+            duration: 3000,
+          });
         }
       }
     });
@@ -46,14 +48,18 @@ export function LoginForm() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
     if (!apiUrl) {
-      toast.error("API URL is not configured. Please set NEXT_PUBLIC_API_URL environment variable.");
+      toast.error("API URL is not configured. Please set NEXT_PUBLIC_API_URL environment variable.", {
+        duration: 5000,
+      });
       return;
     }
 
     console.log('onSubmit - apiUrl:', apiUrl, 'apiKey:', apiKey);
 
     // Show a loading toast before the API call
-    const loadingToastId = toast.loading("Authenticating...");
+    const loadingToastId = toast.loading("Authenticating...", {
+      duration: Infinity,
+    });
 
     const result = await login(apiUrl, apiKey);
 
@@ -63,9 +69,15 @@ export function LoginForm() {
     if (result.success) {
       storeLogin(result.token!, apiUrl);
       console.log('Auth store state after login:', useAuthStore.getState());
+      toast.success("Login successful!", {
+        duration: 3000,
+      });
       const successMessage = encodeURIComponent("Login successful!");
       router.push(`/home?status=success&message=${successMessage}`);
     } else {
+      toast.error(result.message || "Login failed", {
+        duration: 5000,
+      });
       const errorMessage = encodeURIComponent(result.message || "Login failed");
       router.push(`/home?status=error&message=${errorMessage}`);
     }
