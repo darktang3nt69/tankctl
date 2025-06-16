@@ -8,82 +8,78 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
-import { Checkbox } from "@/components/ui/checkbox";
 import { loginSchema } from '@/schemas/loginSchema';
 import { login } from '@/lib/auth/authService';
-import { useEffect, useState } from 'react';
 import useAuthStore from '@/store/authStore';
 import { useRouter } from 'next/navigation';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { toast } from 'sonner';
+import { useEffect } from 'react';
 
 export function LoginForm() {
   const router = useRouter();
   const { setApiUrl: setStoreApiUrl, login: storeLogin } = useAuthStore();
 
-  const [isRemembered, setIsRemembered] = useState(false);
-
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      apiUrl: '',
       apiKey: '',
     },
   });
 
   useEffect(() => {
-    const rememberedUrl = localStorage.getItem("rememberedApiUrl");
-    if (rememberedUrl) {
-      form.setValue("apiUrl", rememberedUrl);
-      setIsRemembered(true); // Set checkbox state if URL is remembered
+    const errors = form.formState.errors;
+    if (Object.keys(errors).length > 0) {
+      const firstErrorKey = Object.keys(errors)[0];
+      const errorMessage = (errors as any)[firstErrorKey]?.message;
+      if (errorMessage) {
+        toast.error(`Validation Error: ${errorMessage}`);
+      }
     }
-  }, [form]);
+  }, [form.formState.errors]);
 
   async function onSubmit(values: z.infer<typeof loginSchema>) {
-    const { apiUrl, apiKey } = values;
+    const { apiKey } = values;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    if (!apiUrl) {
+      toast.error("API URL is not configured. Please set NEXT_PUBLIC_API_URL environment variable.");
+      return;
+    }
+
     console.log('onSubmit - apiUrl:', apiUrl, 'apiKey:', apiKey);
 
-    // Update localStorage based on current checkbox state
-    if (isRemembered && apiUrl) {
-      localStorage.setItem("rememberedApiUrl", apiUrl);
-    } else if (!isRemembered) {
-      localStorage.removeItem("rememberedApiUrl");
-    }
+    // Show a loading toast before the API call
+    const loadingToastId = toast.loading("Authenticating...");
 
     const result = await login(apiUrl, apiKey);
 
+    // Dismiss the loading toast
+    toast.dismiss(loadingToastId);
+
     if (result.success) {
       storeLogin(result.token!, apiUrl);
-      // Log the state immediately after updating the store
       console.log('Auth store state after login:', useAuthStore.getState());
-      router.push('/home'); // Redirect to home or dashboard after successful login
+      const successMessage = encodeURIComponent("Login successful!");
+      router.push(`/home?status=success&message=${successMessage}`);
     } else {
-      // Display error message to the user
-      alert(result.message || "Login failed");
-  
+      const errorMessage = encodeURIComponent(result.message || "Login failed");
+      router.push(`/home?status=error&message=${errorMessage}`);
     }
   }
 
   return (
     <Card className="w-full max-w-md mx-auto p-4 sm:p-8">
-      <CardHeader className="text-center">
+      <CardHeader className="text-center relative">
         <CardTitle>TankCtl</CardTitle>
         <CardDescription>Login to your TankCtl account</CardDescription>
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid w-full items-center gap-4">
-            <div className="flex flex-col space-y-1.5">
-              <Label htmlFor="apiUrl">API Server URL</Label>
-              <Input
-                id="apiUrl"
-                placeholder="e.g., http://localhost:8080"
-                {...form.register('apiUrl')}
-              />
-              {form.formState.errors.apiUrl && (
-                <p className="text-red-500 text-sm">
-                  {form.formState.errors.apiUrl.message}
-                </p>
-              )}
-            </div>
             <div className="flex flex-col space-y-1.5">
               <Label htmlFor="apiKey">ADMIN_API_KEY</Label>
               <Input
@@ -92,26 +88,6 @@ export function LoginForm() {
                 placeholder="Your ADMIN_API_KEY"
                 {...form.register('apiKey')}
               />
-              {form.formState.errors.apiKey && (
-                <p className="text-red-500 text-sm">
-                  {form.formState.errors.apiKey.message}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="rememberUrl"
-                checked={isRemembered}
-                onCheckedChange={(checked) => {
-                  setIsRemembered(checked === true);
-                  // The localStorage update will happen in onSubmit if the form is submitted
-                  // or explicitly here if needed immediately, but better to tie to form state
-                  if (!checked) {
-                    localStorage.removeItem("rememberedApiUrl");
-                  }
-                }}
-              />
-              <Label htmlFor="rememberUrl">Remember API URL</Label>
             </div>
           </div>
           <Button type="submit" className="w-full">

@@ -61,8 +61,8 @@ const useAuthStore = create<AuthState>()(
         // Optional: onRehydrateStorage for custom rehydration logic
         onRehydrateStorage: (state) => {
           console.log('hydration starts');
-          if (state) {
-            (state as AuthState).isAuthenticated = !!state.token; 
+          if (state && state.token) { // Check if state and token exist
+            (state as AuthState).isAuthenticated = true; // Set isAuthenticated to true if token exists
           }
           return (persistedState, currentState) => {
             console.log('hydration finished', persistedState, currentState);

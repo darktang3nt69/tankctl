@@ -1,5 +1,5 @@
 # Security contact information
-Contact: mailto:security@tankctl.com
+Contact: mailto:lokeshreddy19997@gmail.com
 Encryption: https://tankctl.com/.well-known/pgp-key.txt
 Acknowledgments: https://tankctl.com/security-hall-of-fame
 Policy: https://tankctl.com/security-policy

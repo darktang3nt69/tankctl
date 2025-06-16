@@ -30,6 +30,10 @@ export async function login(apiUrl: string, apiKey: string): Promise<AuthRespons
       setToken(response.data.access_token);
       return { success: true, token: response.data.access_token };
     } else {
+      // Check for specific backend error messages to provide better frontend feedback
+      if (response.error === "Incorrect username or password") {
+        return { success: false, message: "Invalid ADMIN_API_KEY" };
+      }
       return { success: false, message: response.error || "Authentication failed." };
     }
   } catch (error: any) {
