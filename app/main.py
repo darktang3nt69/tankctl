@@ -168,6 +168,7 @@ def list_tanks():
                     "location": t.location,
                     "is_online": t.is_online,
                     "last_seen": t.last_seen.isoformat() if t.last_seen else None,
+                    "light_status": t.light_state,
                 }
                 for t in tanks
             ]

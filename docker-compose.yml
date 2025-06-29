@@ -50,6 +50,16 @@ services:
     container_name: tankctl_redis
     ports: ["6379:6379"]  # Expose Redis port
 
+  # ───── Discord Bot ─────
+  bot:
+    build:
+      context: ./tankctl-bot
+      dockerfile: Dockerfile
+    container_name: tankctl-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+
   # ───── FastAPI Web Server (Uvicorn) ─────
   web:
     <<: *app-defaults

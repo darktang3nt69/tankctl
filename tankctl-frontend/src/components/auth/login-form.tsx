@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useEffect } from 'react';
 import { login } from '@/lib/auth/authService';
+import { Loader2 } from 'lucide-react';
+import packageJson from '../../../package.json';
 
 export function LoginForm() {
   const router = useRouter();
@@ -84,46 +86,74 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto p-4 sm:p-8">
-      <CardHeader className="text-center relative">
-        <CardTitle>TankCtl</CardTitle>
-        <CardDescription>Login to your TankCtl account</CardDescription>
-        <div className="absolute top-4 right-4">
-          <ThemeToggle />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid w-full items-center gap-4">
-            <div className="flex flex-col space-y-1.5">
-              <Label htmlFor="apiKey">ADMIN_API_KEY</Label>
+    <div className="min-h-screen flex items-center justify-center p-4 arcane-gradient">
+      <Card className="w-full max-w-md arcane-card">
+        <CardHeader className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-3xl font-bold tracking-tight arcane-text-gradient">TankCtl</CardTitle>
+              <CardDescription className="text-muted-foreground/80 mt-1">
+                Login to your TankCtl account
+              </CardDescription>
+            </div>
+            <ThemeToggle />
+          </div>
+        </CardHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="apiKey" className="text-sm font-medium text-muted-foreground/90">
+                API Key
+              </Label>
               <Input
                 id="apiKey"
                 type="password"
-                placeholder="Your ADMIN_API_KEY"
+                placeholder="Enter your API key"
+                className="arcane-input h-11"
                 {...form.register('apiKey')}
+                disabled={form.formState.isSubmitting}
               />
             </div>
-          </div>
-          <Button type="submit" className="w-full">
-            Authenticate
-          </Button>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-4">
+            <Button 
+              type="submit" 
+              className="w-full arcane-button h-11"
+              disabled={form.formState.isSubmitting}
+            >
+              {form.formState.isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                'Authenticate'
+              )}
+            </Button>
+            <div className="text-center text-sm text-muted-foreground/70 space-y-2">
+              <p className="font-medium">Version {packageJson.version}</p>
+              <div className="flex items-center justify-center space-x-3">
+                <a 
+                  href="https://docs.tankctl.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary/90 hover:text-primary transition-colors arcane-border px-3 py-1 rounded-md"
+                >
+                  Documentation
+                </a>
+                <a 
+                  href="https://support.tankctl.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary/90 hover:text-primary transition-colors arcane-border px-3 py-1 rounded-md"
+                >
+                  Support
+                </a>
+              </div>
+            </div>
+          </CardFooter>
         </form>
-      </CardContent>
-      <CardFooter className="flex-col text-center text-sm text-muted-foreground">
-        <p>TankCtl v0.1.0</p>
-        <p>
-          <a href="#" className="underline underline-offset-4 hover:text-primary">
-            Documentation
-          </a>
-          {' '}
-          •
-          {' '}
-          <a href="#" className="underline underline-offset-4 hover:text-primary">
-            Support
-          </a>
-        </p>
-      </CardFooter>
-    </Card>
+      </Card>
+    </div>
   );
 }

@@ -14,6 +14,7 @@ ENV/
 *.env.*
 ./tankctl
 tankctl/*
+tankctl-bot/python_venv/*
 # ------------------------
 # Docker
 # ------------------------
