@@ -26,8 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger("tankctl-bot")
 
 # API Config
-BASE_URL = os.getenv("API_BASE_URL",)
-
+BASE_URL = os.getenv("API_BASE_URL")
 
 class TankAPI:
     def __init__(self):
@@ -61,7 +60,6 @@ class TankAPI:
             logger.error(f"Error sending command: {e}")
             return False
 
-
 api_client = TankAPI()
 
 class TankBot(commands.Bot):
@@ -74,7 +72,6 @@ class TankBot(commands.Bot):
     
     async def setup_hook(self):
         logger.info("Setting up tankctl-bot...")
-        
         try:
             if self.guild_id:
                 guild = discord.Object(id=self.guild_id)
@@ -114,7 +111,6 @@ async def tank_status(interaction: discord.Interaction):
     await interaction.response.defer()
     try:
         tanks = await api_client.get_tanks()
-        
         if not tanks:
             embed = discord.Embed(title="🐠 Tank Status", description="No tanks found or API unavailable.", color=discord.Color.orange())
             await interaction.followup.send(embed=embed)
@@ -167,178 +163,239 @@ async def tank_status(interaction: discord.Interaction):
         logger.error(f"Error in tank status: {e}")
         await interaction.followup.send("❌ Error fetching tank status", ephemeral=True)
 
-# FEED
+# ---- Feed command (multi-select + ALL + confirm) ----
 
 class FeedDropdown(discord.ui.Select):
-    def __init__(self, tanks):
-        options = []
+    def __init__(self, tanks, parent_view):
+        self.parent_view = parent_view
+        options = [
+            discord.SelectOption(label="ALL TANKS", value="ALL", emoji="🪄")
+        ]
         for tank in tanks:
             if tank.get("is_online", False):
                 options.append(discord.SelectOption(
-                    label=f"{tank.get('tank_name', 'Unknown')} ({tank.get('location', 'Unknown')})",
-                    value=tank.get("tank_id", ""),
+                    label=f"{tank['tank_name']} ({tank['location']})",
+                    value=tank['tank_id'],
                     emoji="🟢"
                 ))
-        if not options:
+        if len(options) == 1:
             options = [discord.SelectOption(label="No online tanks", value="none", emoji="🔴")]
-        super().__init__(placeholder="Select a tank to feed...", options=options[:25])
+
+        super().__init__(
+            placeholder="Select tank(s) to feed...",
+            min_values=1, max_values=len(options),
+            options=options
+        )
         self.tanks = tanks
-    
+
     async def callback(self, interaction: discord.Interaction):
-        if self.values[0] == "none":
+        if "none" in self.values:
             await interaction.response.send_message("❌ No online tanks available", ephemeral=True)
             return
-        
-        tank_id = self.values[0]
-        tank = next((t for t in self.tanks if t.get("tank_id") == tank_id), None)
-        
-        if not tank:
-            await interaction.response.send_message("❌ Tank not found", ephemeral=True)
-            return
-        
-        await interaction.response.defer(ephemeral=True)
-        success = await api_client.send_command(tank_id, "feed")
-        
-        if success:
-            embed = discord.Embed(
-                title="🍽️ Feed Command Sent",
-                description=f"Successfully fed **{tank.get('tank_name')}** in **{tank.get('location')}**",
-                color=discord.Color.green()
+
+        if "ALL" in self.values:
+            self.parent_view.selected_tanks = self.tanks
+            await interaction.response.send_message(
+                "⚠️ Please confirm feeding **ALL tanks** below.",
+                view=ConfirmFeedView(self.tanks),
+                ephemeral=True
             )
-            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            await interaction.followup.send("❌ Failed to send feed command", ephemeral=True)
+            self.parent_view.selected_tanks = [
+                t for t in self.tanks if t['tank_id'] in self.values
+            ]
+            await self.parent_view.execute(interaction)
 
 class FeedView(discord.ui.View):
     def __init__(self, tanks):
         super().__init__(timeout=300)
-        self.add_item(FeedDropdown(tanks))
+        self.selected_tanks = []
+        self.add_item(FeedDropdown(tanks, self))
 
-@tank_group.command(name="feed", description="Feed fish in a selected tank")
+    async def execute(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        success_msgs = []
+        for tank in self.selected_tanks:
+            ok = await api_client.send_command(tank['tank_id'], "feed")
+            if ok:
+                success_msgs.append(f"🍽️ Fed **{tank['tank_name']}** in **{tank['location']}**")
+
+        title = "✅ Feed Command Sent" if success_msgs else "❌ Feed Failed"
+        embed = discord.Embed(
+            title=title,
+            description="\n".join(success_msgs) or "No commands succeeded.",
+            color=discord.Color.green() if success_msgs else discord.Color.red()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+class ConfirmFeedView(discord.ui.View):
+    def __init__(self, tanks):
+        super().__init__(timeout=60)
+        self.tanks = tanks
+
+    @discord.ui.button(label="✅ Confirm Feed ALL", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        success_msgs = []
+        for tank in self.tanks:
+            ok = await api_client.send_command(tank['tank_id'], "feed")
+            if ok:
+                success_msgs.append(f"🍽️ Fed **{tank['tank_name']}** in **{tank['location']}**")
+
+        title = "✅ Feed Command Sent (ALL)" if success_msgs else "❌ Feed Failed"
+        embed = discord.Embed(
+            title=title,
+            description="\n".join(success_msgs) or "No commands succeeded.",
+            color=discord.Color.green() if success_msgs else discord.Color.red()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Cancelled feeding all tanks.", ephemeral=True)
+
+@tank_group.command(name="feed", description="Feed fish in selected tank(s)")
 async def tank_feed(interaction: discord.Interaction):
     await interaction.response.defer()
     try:
         tanks = await api_client.get_tanks()
-        if not tanks:
-            await interaction.followup.send("❌ No tanks available", ephemeral=True)
-            return
-        
-        online_tanks = [t for t in tanks if t.get("is_online", False)]
-        if not online_tanks:
+        online = [t for t in tanks if t.get("is_online", False)]
+        if not online:
             await interaction.followup.send("❌ No online tanks available", ephemeral=True)
             return
-        
-        embed = discord.Embed(title="🍽️ Feed Fish", description="Select a tank to feed:", color=discord.Color.blue())
-        view = FeedView(tanks)
+
+        embed = discord.Embed(title="🍽️ Feed Fish", description="Select tank(s) to feed:", color=discord.Color.blue())
+        view = FeedView(online)
         await interaction.followup.send(embed=embed, view=view)
     except Exception as e:
         logger.error(f"Error in tank feed: {e}")
         await interaction.followup.send("❌ Error preparing feed command", ephemeral=True)
 
-# LIGHT
-
-class LightButtons(discord.ui.View):
-    def __init__(self, tank_id, tank_name, location):
-        super().__init__(timeout=300)
-        self.tank_id = tank_id
-        self.tank_name = tank_name
-        self.location = location
-    
-    @discord.ui.button(label="Turn ON", style=discord.ButtonStyle.green, emoji="💡")
-    async def light_on(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        success = await api_client.send_command(self.tank_id, "light_on")
-        if success:
-            embed = discord.Embed(
-                title="🟢 Light ON",
-                description=f"✅ Light turned **ON** for **{self.tank_name}** in **{self.location}**",
-                color=discord.Color.green()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        else:
-            await interaction.followup.send("❌ Failed to turn light ON", ephemeral=True)
-    
-    @discord.ui.button(label="Turn OFF", style=discord.ButtonStyle.red, emoji="🌙")
-    async def light_off(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        success = await api_client.send_command(self.tank_id, "light_off")
-        if success:
-            embed = discord.Embed(
-                title="🔴 Light OFF",
-                description=f"✅ Light turned **OFF** for **{self.tank_name}** in **{self.location}**",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        else:
-            await interaction.followup.send("❌ Failed to turn light OFF", ephemeral=True)
+# ---- Light command (multi-select + ALL + confirm) ----
 
 class LightDropdown(discord.ui.Select):
-    def __init__(self, tanks):
-        options = []
+    def __init__(self, tanks, parent_view):
+        self.parent_view = parent_view
+        options = [
+            discord.SelectOption(label="ALL TANKS", value="ALL", emoji="🪄")
+        ]
         for tank in tanks:
             if tank.get("is_online", False):
                 options.append(discord.SelectOption(
-                    label=f"{tank.get('tank_name', 'Unknown')} ({tank.get('location', 'Unknown')})",
-                    value=tank.get("tank_id", ""),
+                    label=f"{tank['tank_name']} ({tank['location']})",
+                    value=tank['tank_id'],
                     emoji="🟢"
                 ))
-        if not options:
+        if len(options) == 1:
             options = [discord.SelectOption(label="No online tanks", value="none", emoji="🔴")]
-        super().__init__(placeholder="Select a tank to control lights...", options=options[:25])
+
+        super().__init__(
+            placeholder="Select tank(s) to control lights...",
+            min_values=1, max_values=len(options),
+            options=options
+        )
         self.tanks = tanks
-    
+
     async def callback(self, interaction: discord.Interaction):
-        if self.values[0] == "none":
+        if "none" in self.values:
             await interaction.response.send_message("❌ No online tanks available", ephemeral=True)
             return
-        
-        tank_id = self.values[0]
-        tank = next((t for t in self.tanks if t.get("tank_id") == tank_id), None)
-        
-        if not tank:
-            await interaction.response.send_message("❌ Tank not found", ephemeral=True)
-            return
-        
-        tank_name = tank.get("tank_name", "Unknown")
-        location = tank.get("location", "Unknown")
-        light_status = tank.get("light_status")
-        light_status_text = "💡 Light is ON" if light_status else "🌙 Light is OFF" if light_status is not None else "❓ Light status unknown"
 
-        embed = discord.Embed(
-            title="💡 Light Control",
-            description=f"Control lights for **{tank_name}**\n**Location:** {location}\n**Current:** {light_status_text}",
-            color=discord.Color.blue()
-        )
-        view = LightButtons(tank_id, tank_name, location)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        if "ALL" in self.values:
+            await interaction.response.send_message(
+                "⚠️ Please confirm light control for **ALL tanks** below.",
+                view=ConfirmLightView(self.tanks),
+                ephemeral=True
+            )
+        else:
+            parent = self.parent_view
+            parent.selected_tanks = [t for t in self.tanks if t['tank_id'] in self.values]
+            await parent.show_controls(interaction)
 
 class LightView(discord.ui.View):
     def __init__(self, tanks):
         super().__init__(timeout=300)
-        self.add_item(LightDropdown(tanks))
+        self.selected_tanks = []
+        self.add_item(LightDropdown(tanks, self))
 
-@tank_group.command(name="light", description="Control lights in a selected tank")
+    async def show_controls(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        embed = discord.Embed(
+            title="💡 Light Control",
+            description=f"Control lights for **{len(self.selected_tanks)}** selected tank(s)",
+            color=discord.Color.blue()
+        )
+        await interaction.followup.send(embed=embed, view=LightButtons(self.selected_tanks), ephemeral=True)
+
+class LightButtons(discord.ui.View):
+    def __init__(self, tanks):
+        super().__init__(timeout=300)
+        self.tanks = tanks
+
+    @discord.ui.button(label="Turn ON", style=discord.ButtonStyle.green, emoji="💡")
+    async def light_on(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        msgs = []
+        for tank in self.tanks:
+            ok = await api_client.send_command(tank['tank_id'], "light_on")
+            if ok:
+                msgs.append(f"🟢 Light turned **ON** for **{tank['tank_name']}** in **{tank['location']}**")
+        title = "🟢 Light ON" if msgs else "❌ Light ON Failed"
+        embed = discord.Embed(title=title, description="\n".join(msgs) or "No lights were turned on.", color=discord.Color.green() if msgs else discord.Color.red())
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="Turn OFF", style=discord.ButtonStyle.red, emoji="🌙")
+    async def light_off(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        msgs = []
+        for tank in self.tanks:
+            ok = await api_client.send_command(tank['tank_id'], "light_off")
+            if ok:
+                msgs.append(f"🔴 Light turned **OFF** for **{tank['tank_name']}** in **{tank['location']}**")
+        title = "🔴 Light OFF" if msgs else "❌ Light OFF Failed"
+        embed = discord.Embed(title=title, description="\n".join(msgs) or "No lights were turned off.", color=discord.Color.red() if msgs else discord.Color.red())
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+class ConfirmLightView(discord.ui.View):
+    def __init__(self, tanks):
+        super().__init__(timeout=60)
+        self.tanks = tanks
+
+    @discord.ui.button(label="✅ Confirm Light Control (ALL)", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="💡 Light Control for ALL Tanks",
+                description="Choose ON or OFF below.",
+                color=discord.Color.gold()
+            ),
+            view=LightButtons(self.tanks),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Cancelled light control for all tanks.", ephemeral=True)
+
+@tank_group.command(name="light", description="Control lights in selected tank(s)")
 async def tank_light(interaction: discord.Interaction):
     await interaction.response.defer()
     try:
         tanks = await api_client.get_tanks()
-        if not tanks:
-            await interaction.followup.send("❌ No tanks available", ephemeral=True)
-            return
-        
-        online_tanks = [t for t in tanks if t.get("is_online", False)]
-        if not online_tanks:
+        online = [t for t in tanks if t.get("is_online", False)]
+        if not online:
             await interaction.followup.send("❌ No online tanks available", ephemeral=True)
             return
-        
-        embed = discord.Embed(title="💡 Light Control", description="Select a tank to control lights:", color=discord.Color.blue())
-        view = LightView(tanks)
+
+        embed = discord.Embed(title="💡 Light Control", description="Select tank(s) to control lights:", color=discord.Color.blue())
+        view = LightView(online)
         await interaction.followup.send(embed=embed, view=view)
     except Exception as e:
         logger.error(f"Error in tank light: {e}")
         await interaction.followup.send("❌ Error preparing light control", ephemeral=True)
 
-# Entry
+# ---- Bot entrypoint ----
+
 async def main():
     token = os.getenv('DISCORD_BOT_TOKEN')
     if not token:
