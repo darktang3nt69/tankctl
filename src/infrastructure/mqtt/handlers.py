@@ -6,6 +6,7 @@ Handlers implement the MessageHandler interface and route incoming MQTT messages
 
 from src.infrastructure.db.database import db
 from src.infrastructure.mqtt.mqtt_client import MessageHandler
+from src.services.command_service import CommandService
 from src.services.device_service import DeviceService
 from src.services.shadow_service import ShadowService
 from src.services.telemetry_service import TelemetryService
@@ -62,6 +63,19 @@ class ReportedStateHandler(MessageHandler):
 
             # Update shadow with reported state
             shadow_service.handle_reported_state(device_id, payload)
+
+            # Mark matching pending commands as executed based on reported state
+            command_service = CommandService(session)
+            pending_commands = command_service.get_pending_commands(device_id)
+
+            for command in pending_commands:
+                if command.id is None:
+                    continue
+
+                if command.command == "set_light" and payload.get("light") == command.value:
+                    command_service.mark_command_executed(command.id)
+                elif command.command == "set_pump" and payload.get("pump") == command.value:
+                    command_service.mark_command_executed(command.id)
 
             logger.info("reported_state_handled", device_id=device_id)
             session.close()

@@ -34,6 +34,9 @@ class Command:
     command: str
     """Command name (e.g., 'set_light', 'reboot_device')"""
 
+    id: int | None = None
+    """Database command ID"""
+
     value: str | None = None
     """Command parameter value"""
 

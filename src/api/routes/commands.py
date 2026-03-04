@@ -69,7 +69,7 @@ def send_command(
         )
         
         return CommandResponse(
-            command_id=command.device_id,
+            command_id=str(command.id) if command.id is not None else None,
             device_id=command.device_id,
             command=command.command,
             value=command.value,
@@ -111,7 +111,7 @@ def get_command_history(
         
         command_list = [
             CommandResponse(
-                command_id=c.device_id,
+                command_id=str(c.id) if c.id is not None else None,
                 device_id=c.device_id,
                 command=c.command,
                 value=c.value,
@@ -180,7 +180,7 @@ def set_light(
         logger.info("light_command_sent", device_id=device_id, state=state)
         
         return CommandResponse(
-            command_id=command.device_id,
+            command_id=str(command.id) if command.id is not None else None,
             device_id=command.device_id,
             command=command.command,
             value=command.value,
@@ -244,7 +244,7 @@ def set_pump(
         logger.info("pump_command_sent", device_id=device_id, state=state)
         
         return CommandResponse(
-            command_id=command.device_id,
+            command_id=str(command.id) if command.id is not None else None,
             device_id=command.device_id,
             command=command.command,
             value=command.value,

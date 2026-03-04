@@ -50,6 +50,7 @@ class CommandRepository:
             )
             self.session.add(db_command)
             self.session.commit()
+            command.id = db_command.id
             logger.debug(
                 "command_created",
                 device_id=command.device_id,
@@ -171,6 +172,7 @@ class CommandRepository:
     def _model_to_domain(self, db_command: CommandModel) -> Command:
         """Convert database model to domain model."""
         return Command(
+            id=db_command.id,
             device_id=db_command.device_id,
             command=db_command.command,
             value=db_command.value,

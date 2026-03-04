@@ -183,13 +183,33 @@ class SimulatedDevice:
                 self.state.last_command_version = version
                 logger.info(f"[{self.device_id}] state_updated pump={self.state.pump}")
 
-            # Publish reported state
-            asyncio.create_task(self._publish_reported_state())
+            # Publish reported state (from MQTT callback thread)
+            self._publish_reported_state_sync()
 
         except json.JSONDecodeError as e:
             logger.error(f"[{self.device_id}] invalid_json_command error={str(e)}")
         except Exception as e:
             logger.error(f"[{self.device_id}] command_processing_error error={str(e)}")
+
+    def _publish_reported_state_sync(self) -> None:
+        """Publish reported state synchronously (safe for MQTT callback thread)."""
+        if not self.connected or self.client is None:
+            return
+
+        topic = f"tankctl/{self.device_id}/reported"
+        payload = json.dumps(
+            {"light": self.state.light, "pump": self.state.pump},
+            separators=(",", ":"),
+        )
+
+        try:
+            self.client.publish(topic, payload, qos=1, retain=True)
+            logger.debug(
+                f"[{self.device_id}] reported_state_published_sync "
+                f"light={self.state.light} pump={self.state.pump}"
+            )
+        except Exception as e:
+            logger.error(f"[{self.device_id}] publish_error topic={topic} error={str(e)}")
 
     async def _publish_reported_state(self) -> None:
         """Publish device's current state to reported topic."""

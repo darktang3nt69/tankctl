@@ -84,6 +84,11 @@ class CommandService:
             # Mark as sent
             cmd.mark_sent()
 
+            if cmd.id is not None:
+                updated = self.repo.update_status(cmd.id, CommandStatus.SENT)
+                if updated:
+                    cmd = updated
+
             logger.info(
                 "command_sent",
                 device_id=device_id,

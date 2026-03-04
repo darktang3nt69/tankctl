@@ -45,7 +45,14 @@ class DeviceShadow:
         Returns:
             True if desired == reported
         """
-        return self.desired == self.reported
+        if not self.desired:
+            return True
+
+        for key, desired_value in self.desired.items():
+            if self.reported.get(key) != desired_value:
+                return False
+
+        return True
 
     def increment_version(self) -> int:
         """
@@ -75,7 +82,7 @@ class DeviceShadow:
         Args:
             state: New reported state from device
         """
-        self.reported = state
+        self.reported = {**self.reported, **state}
         self.updated_at = datetime.utcnow()
 
     def get_delta(self) -> dict:
