@@ -1,0 +1,167 @@
+"""
+Shadow reconciliation service.
+
+Handles shadow state reconciliation between desired and reported state.
+"""
+
+from typing import Optional
+
+from sqlalchemy.orm import Session
+
+from src.domain.device_shadow import DeviceShadow
+from src.infrastructure.db.database import db
+from src.infrastructure.mqtt.mqtt_client import mqtt_client
+from src.infrastructure.mqtt.mqtt_topics import MQTTTopics
+from src.repository.device_repository import DeviceShadowRepository
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class ShadowService:
+    """Service for device shadow reconciliation."""
+
+    def __init__(self, session: Optional[Session] = None):
+        """Initialize service with optional session."""
+        self.session = session or db.get_session()
+        self.shadow_repo = DeviceShadowRepository(self.session)
+
+    def reconcile_shadow(self, device_id: str) -> None:
+        """
+        Reconcile device shadow.
+
+        If desired != reported, sends a command to bring device into desired state.
+
+        Args:
+            device_id: Device ID to reconcile
+        """
+        logger.debug("shadow_reconciliation_started", device_id=device_id)
+
+        try:
+            shadow = self.shadow_repo.get_by_device_id(device_id)
+            if not shadow:
+                logger.warning("shadow_not_found", device_id=device_id)
+                return
+
+            # Check if already synchronized
+            if shadow.is_synchronized():
+                logger.debug("shadow_already_synchronized", device_id=device_id)
+                return
+
+            # Get delta between desired and reported
+            delta = shadow.get_delta()
+            if not delta:
+                logger.debug("shadow_delta_empty", device_id=device_id)
+                return
+
+            logger.info(
+                "shadow_reconciliation_needed",
+                device_id=device_id,
+                delta=delta,
+            )
+
+            # For each difference, we would send a command
+            # This is often done by the scheduler or command handler
+            for key, desired_value in delta.items():
+                logger.debug(
+                    "shadow_delta_item",
+                    device_id=device_id,
+                    key=key,
+                    desired=desired_value,
+                    reported=shadow.reported.get(key),
+                )
+
+        except Exception as e:
+            logger.error("shadow_reconciliation_failed", device_id=device_id, error=str(e))
+
+    def reconcile_all_shadows(self) -> dict[str, bool]:
+        """
+        Reconcile all device shadows.
+
+        Returns:
+            Dictionary mapping device_id to reconciliation status
+        """
+        logger.debug("reconciling_all_shadows")
+
+        results = {}
+        try:
+            # This would typically iterate over all devices
+            # Implementation depends on repository having get_all_shadows()
+            logger.info("shadow_reconciliation_complete")
+            return results
+        except Exception as e:
+            logger.error("shadow_reconciliation_all_failed", error=str(e))
+            raise
+
+    def handle_reported_state(
+        self,
+        device_id: str,
+        reported_state: dict,
+    ) -> Optional[DeviceShadow]:
+        """
+        Handle reported state update from device.
+
+        Updates the reported state in shadow and checks for reconciliation.
+
+        Args:
+            device_id: Device ID
+            reported_state: Reported state from device
+
+        Returns:
+            Updated shadow or None if not found
+        """
+        logger.debug("handling_reported_state", device_id=device_id)
+
+        try:
+            shadow = self.shadow_repo.update_reported(device_id, reported_state)
+            if shadow:
+                logger.debug(
+                    "shadow_reported_state_updated",
+                    device_id=device_id,
+                    synchronized=shadow.is_synchronized(),
+                )
+            return shadow
+        except Exception as e:
+            logger.error("handle_reported_state_failed", device_id=device_id, error=str(e))
+            raise
+
+    def set_desired_state(self, device_id: str, desired_state: dict) -> Optional[DeviceShadow]:
+        """
+        Set the desired state for a device.
+
+        Args:
+            device_id: Device ID
+            desired_state: New desired state
+
+        Returns:
+            Updated shadow or None if not found
+        """
+        logger.info("setting_desired_state", device_id=device_id)
+
+        try:
+            shadow = self.shadow_repo.get_by_device_id(device_id)
+            if not shadow:
+                logger.warning("shadow_not_found", device_id=device_id)
+                return None
+
+            shadow.update_desired(desired_state)
+            updated = self.shadow_repo.update(shadow)
+
+            logger.info(
+                "desired_state_updated",
+                device_id=device_id,
+                version=updated.version,
+            )
+
+            return updated
+        except Exception as e:
+            logger.error("set_desired_state_failed", device_id=device_id, error=str(e))
+            raise
+
+    def close(self) -> None:
+        """Close the session."""
+        self.session.close()
+
+
+# Alias for backwards compatibility
+ShadowRepository = DeviceShadowRepository

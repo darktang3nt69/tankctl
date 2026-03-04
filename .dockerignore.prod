@@ -1,0 +1,48 @@
+# Production .dockerignore for minimal image
+# This file is an alternative for strict production builds
+
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.pyc
+.pyo
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+
+# IDE & Editor
+.vscode/
+.idea/
+.sublime-project
+.sublime-workspace
+
+# Environment
+.env
+
+# Testing
+tests/
+pytest.ini
+
+# Documentation
+docs/
+README.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Development tools
+tools/
+migrations/
+Dockerfile.dev
+
+# Other
+*.log
+.DS_Store

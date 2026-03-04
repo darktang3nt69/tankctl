@@ -1,0 +1,133 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: tankctl-postgres
+    environment:
+      POSTGRES_DB: tankctl
+      POSTGRES_USER: tankctl
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tankctl"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tankctl-network
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: tankctl-timescaledb
+    environment:
+      POSTGRES_DB: tankctl_telemetry
+      POSTGRES_USER: tankctl
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tankctl -d tankctl_telemetry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tankctl-network
+
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: tankctl-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/#' | head -n 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tankctl-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tankctl-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: grafana-worldmap-panel,grafana-piechart-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - timescaledb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tankctl-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tankctl-backend
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_DEBUG: "false"
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      MQTT_USERNAME: tankctl
+      MQTT_PASSWORD: password
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: tankctl
+      POSTGRES_USER: tankctl
+      POSTGRES_PASSWORD: password
+      TIMESCALE_HOST: timescaledb
+      TIMESCALE_PORT: 5432
+      TIMESCALE_DB: tankctl_telemetry
+      TIMESCALE_USER: tankctl
+      TIMESCALE_PASSWORD: password
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - tankctl-network
+
+volumes:
+  postgres_data:
+  timescale_data:
+  mosquitto_data:
+  mosquitto_logs:
+  grafana_data:
+
+networks:
+  tankctl-network:
+    driver: bridge
+

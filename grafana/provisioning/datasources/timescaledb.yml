@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: timescaledb:5432
+    database: tankctl_telemetry
+    user: tankctl
+    secureJsonData:
+      password: password
+    isDefault: true
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      tlsMode: disable
+      tlsSkipVerify: true

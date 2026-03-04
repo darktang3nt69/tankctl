@@ -1,0 +1,143 @@
+"""
+TankCtl API - RESTful interface for device management.
+
+FastAPI application with routes for device management, commands, and telemetry.
+"""
+
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+
+from src.config.settings import settings
+from src.infrastructure.db.database import db
+from src.infrastructure.mqtt.handlers import (
+    HeartbeatHandler,
+    ReportedStateHandler,
+    TelemetryHandler,
+)
+from src.infrastructure.mqtt.mqtt_client import mqtt_client
+from src.infrastructure.scheduler.scheduler import TankCtlScheduler
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Global scheduler instance
+scheduler: TankCtlScheduler | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events.
+    
+    Startup:
+    - Initialize database
+    - Connect to MQTT
+    - Start scheduler
+    
+    Shutdown:
+    - Stop scheduler
+    - Disconnect MQTT
+    - Close database
+    """
+    # Startup
+    logger.info("api_starting")
+    
+    try:
+        # Initialize database
+        logger.info("database_initializing")
+        db.init_db()
+        logger.info("database_ready")
+        
+        # Connect to MQTT
+        logger.info("mqtt_connecting")
+        mqtt_client.register_handler("telemetry", TelemetryHandler())
+        mqtt_client.register_handler("reported", ReportedStateHandler())
+        mqtt_client.register_handler("heartbeat", HeartbeatHandler())
+        mqtt_client.connect()
+        logger.info("mqtt_ready")
+        
+        # Start scheduler
+        logger.info("scheduler_starting")
+        global scheduler
+        scheduler = TankCtlScheduler()
+        scheduler.start()
+        logger.info("scheduler_ready")
+        
+        logger.info("api_ready")
+        
+    except Exception as e:
+        logger.error("api_startup_failed", error=str(e))
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("api_shutting_down")
+    
+    try:
+        # Stop scheduler
+        if scheduler:
+            scheduler.stop()
+            logger.info("scheduler_stopped")
+        
+        # Disconnect MQTT
+        mqtt_client.disconnect()
+        logger.info("mqtt_disconnected")
+        
+        # Close database
+        db.close()
+        logger.info("database_closed")
+        
+        logger.info("api_shutdown_complete")
+        
+    except Exception as e:
+        logger.error("api_shutdown_error", error=str(e))
+
+
+def create_app() -> FastAPI:
+    """
+    Create and configure FastAPI application.
+    
+    Returns:
+        Configured FastAPI application
+    """
+    app = FastAPI(
+        title="TankCtl Backend API",
+        description="Self-hosted IoT controller for water tank devices",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Include route modules
+    from src.api.routes import devices, commands, telemetry, health
+    
+    app.include_router(health.router)
+    app.include_router(devices.router)
+    app.include_router(commands.router)
+    app.include_router(telemetry.router)
+    
+    return app
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        app,
+        host=settings.api.host,
+        port=settings.api.port,
+        debug=settings.api.debug,
+    )
