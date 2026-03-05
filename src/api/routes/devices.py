@@ -15,6 +15,7 @@ from src.api.schemas import (
     DeviceResponse,
     DeviceShadowResponse,
     DeviceRegisterRequest,
+    DeviceShadowUpdateRequest,
 )
 from src.infrastructure.db.database import db
 from src.services.device_service import DeviceService
@@ -183,7 +184,7 @@ def get_shadow(device_id: str, session: Session = Depends(get_db)):
 
 
 @router.put("/{device_id}/shadow", response_model=DeviceShadowResponse)
-def update_shadow(device_id: str, request: dict, session: Session = Depends(get_db)):
+def update_shadow(device_id: str, request: DeviceShadowUpdateRequest, session: Session = Depends(get_db)):
     """
     Update device shadow desired state.
     
@@ -195,13 +196,10 @@ def update_shadow(device_id: str, request: dict, session: Session = Depends(get_
         Updated shadow state
     """
     try:
-        if "desired" not in request:
-            raise HTTPException(status_code=400, detail="Request must include 'desired' field")
-        
         logger.info("updating_shadow", device_id=device_id)
         
         shadow_service = ShadowService(session)
-        shadow = shadow_service.set_desired_state(device_id, request["desired"])
+        shadow = shadow_service.set_desired_state(device_id, request.desired)
         
         if not shadow:
             logger.warning("shadow_not_found", device_id=device_id)

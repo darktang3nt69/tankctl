@@ -183,6 +183,28 @@ class SimulatedDevice:
                 self.state.last_command_version = version
                 logger.info(f"[{self.device_id}] state_updated pump={self.state.pump}")
 
+            elif command == "request_status":
+                # Immediately publish reported state and telemetry
+                self.state.last_command_version = version
+                logger.info(f"[{self.device_id}] status_requested")
+                self._publish_reported_state_sync()
+                # Note: Telemetry will be published on next cycle
+                return
+
+            elif command == "reboot_device":
+                # Publish reported state before "rebooting"
+                self.state.last_command_version = version
+                logger.info(f"[{self.device_id}] reboot_requested")
+                self._publish_reported_state_sync()
+                # In a real device, this would trigger a restart
+                # For simulator, we just log it
+                logger.warning(f"[{self.device_id}] device_rebooted (simulated)")
+                return
+
+            else:
+                logger.warning(f"[{self.device_id}] unknown_command command={command}")
+                return
+
             # Publish reported state (from MQTT callback thread)
             self._publish_reported_state_sync()
 
