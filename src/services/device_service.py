@@ -6,16 +6,32 @@ Handles business logic for device operations: registration, status tracking, hea
 
 from datetime import datetime
 from typing import Optional
+import secrets
 
 from sqlalchemy.orm import Session
 
 from src.domain.device import Device
 from src.domain.device_shadow import DeviceShadow
 from src.infrastructure.db.database import db
+from src.infrastructure.events.event_publisher import event_publisher
+from src.domain.event import device_registered_event, device_online_event, device_offline_event
 from src.repository.device_repository import DeviceRepository, DeviceShadowRepository
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def generate_device_secret(length: int = 16) -> str:
+    """
+    Generate a cryptographically secure random device secret.
+    
+    Args:
+        length: Length of the secret (default 16 characters)
+    
+    Returns:
+        Random hex string suitable for device authentication
+    """
+    return secrets.token_hex(length // 2)
 
 
 class DeviceService:
@@ -30,20 +46,20 @@ class DeviceService:
     def register_device(
         self,
         device_id: str,
-        device_secret: str,
     ) -> Device:
         """
         Register a new device.
 
+        AUTO-GENERATES a secure device_secret that must be provisioned into the device.
+
         Args:
             device_id: Unique device identifier
-            device_secret: Device authentication secret
 
         Returns:
-            Registered device
+            Registered device with auto-generated secret
 
         Raises:
-            Exception: If device already exists or registration fails
+            ValueError: If device already exists
         """
         logger.info("device_registration_started", device_id=device_id)
 
@@ -52,6 +68,9 @@ class DeviceService:
         if existing:
             logger.warning("device_already_exists", device_id=device_id)
             raise ValueError(f"Device {device_id} already registered")
+
+        # Generate secure secret
+        device_secret = generate_device_secret()
 
         # Create device
         device = Device(
@@ -67,6 +86,11 @@ class DeviceService:
         self.shadow_repo.create(shadow)
 
         logger.info("device_registered", device_id=device_id)
+        
+        # Publish device_registered event
+        event = device_registered_event(device_id=device_id)
+        event_publisher.publish(event)
+        
         return registered
 
     def get_device(self, device_id: str) -> Optional[Device]:
@@ -105,10 +129,15 @@ class DeviceService:
             return
 
         # Mark device as online
+        was_offline = device.status != "online"
         device.mark_online()
         self.device_repo.update(device)
 
         logger.debug("device_heartbeat_received", device_id=device_id)
+        
+        # Publish device_online event
+        event = device_online_event(device_id=device_id)
+        event_publisher.publish(event)
 
     def check_device_health(self, timeout_seconds: int = 60) -> dict[str, str]:
         """
@@ -136,6 +165,10 @@ class DeviceService:
                 self.device_repo.update(device)
                 status_changes[device.device_id] = "online"
                 logger.info("device_came_online", device_id=device.device_id)
+                
+                # Publish device_online event
+                event = device_online_event(device_id=device.device_id)
+                event_publisher.publish(event)
 
             elif not should_be_online and currently_online:
                 # Device went offline
@@ -147,6 +180,10 @@ class DeviceService:
                     device_id=device.device_id,
                     last_seen=device.last_seen.isoformat(),
                 )
+                
+                # Publish device_offline event
+                event = device_offline_event(device_id=device.device_id)
+                event_publisher.publish(event)
 
         return status_changes
 

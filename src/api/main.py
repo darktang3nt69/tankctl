@@ -17,6 +17,9 @@ from src.infrastructure.mqtt.handlers import (
 )
 from src.infrastructure.mqtt.mqtt_client import mqtt_client
 from src.infrastructure.scheduler.scheduler import TankCtlScheduler
+from src.infrastructure.events.event_publisher import event_publisher
+from src.infrastructure.events.event_store import event_store_handler
+from src.services.scheduling_service import SchedulingService
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,6 +52,11 @@ async def lifespan(app: FastAPI):
         db.init_db()
         logger.info("database_ready")
         
+        # Initialize event system
+        logger.info("event_system_initializing")
+        event_publisher.subscribe_all(event_store_handler)
+        logger.info("event_system_ready")
+        
         # Connect to MQTT
         logger.info("mqtt_connecting")
         mqtt_client.register_handler("telemetry", TelemetryHandler())
@@ -63,6 +71,19 @@ async def lifespan(app: FastAPI):
         scheduler = TankCtlScheduler()
         scheduler.start()
         logger.info("scheduler_ready")
+        
+        # Load existing light schedules
+        logger.info("loading_schedules")
+        session = db.get_session()
+        try:
+            scheduling_service = SchedulingService(session, scheduler.scheduler)
+            scheduling_service.load_all_schedules()
+            logger.info("schedules_loaded")
+        except Exception as e:
+            logger.error("schedule_loading_failed", error=str(e))
+            # Don't fail startup if schedule loading fails
+        finally:
+            session.close()
         
         logger.info("api_ready")
         
@@ -119,12 +140,13 @@ def create_app() -> FastAPI:
     )
     
     # Include route modules
-    from src.api.routes import devices, commands, telemetry, health
+    from src.api.routes import devices, commands, telemetry, health, events
     
     app.include_router(health.router)
     app.include_router(devices.router)
     app.include_router(commands.router)
     app.include_router(telemetry.router)
+    app.include_router(events.router)
     
     return app
 

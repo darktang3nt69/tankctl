@@ -13,7 +13,10 @@ from typing import Optional, Dict, Literal
 # ============================================================================
 
 class DeviceRegisterRequest(BaseModel):
-    """Request to register a new device."""
+    """Request to register a new device.
+    
+    Backend auto-generates the device_secret.
+    """
     
     model_config = {"str_strip_whitespace": True}
 
@@ -25,16 +28,25 @@ class DeviceRegisterRequest(BaseModel):
         description="Device identifier (alphanumeric, underscore, hyphen only)",
         examples=["tank1", "greenhouse-pump", "sensor_01"]
     )
+
+
+class DeviceRegisterResponse(BaseModel):
+    """Response from device registration.
+    
+    Contains the auto-generated device_secret that must be provisioned into the device.
+    """
+
+    device_id: str
     device_secret: str = Field(
         ...,
-        min_length=8,
-        max_length=256,
-        description="Device authentication secret"
+        description="Auto-generated authentication secret - must be provisioned into device"
     )
+    status: Literal["offline", "online"]
+    created_at: Optional[str] = None
 
 
 class DeviceResponse(BaseModel):
-    """Device response model."""
+    """Device response model (overview without sensitive data)."""
 
     device_id: str
     status: Literal["online", "offline"]
@@ -181,3 +193,51 @@ class HealthResponse(BaseModel):
 
     status: Literal["healthy", "unhealthy", "degraded"]
     message: str
+
+
+# ============================================================================
+# Light Scheduling Schemas
+# ============================================================================
+
+class ScheduleRequest(BaseModel):
+    """Request to create or update a light schedule.
+    
+    Times must be in 24-hour HH:MM format (e.g., "18:00", "06:30").
+    Schedule can cross midnight (e.g., on_time="18:00", off_time="06:00").
+    """
+    
+    model_config = {"str_strip_whitespace": True}
+
+    on_time: str = Field(
+        ...,
+        pattern=r"^([01]\d|2[0-3]):([0-5]\d)$",
+        description="Time to turn light on in HH:MM format (24-hour)",
+        examples=["18:00", "06:30", "23:45"]
+    )
+    off_time: str = Field(
+        ...,
+        pattern=r"^([01]\d|2[0-3]):([0-5]\d)$",
+        description="Time to turn light off in HH:MM format (24-hour)",
+        examples=["06:00", "22:30", "00:15"]
+    )
+    enabled: bool = Field(
+        True,
+        description="Whether the schedule is enabled"
+    )
+
+
+class ScheduleResponse(BaseModel):
+    """Response with light schedule details."""
+
+    device_id: str
+    on_time: str = Field(
+        ...,
+        description="Time to turn light on in HH:MM format"
+    )
+    off_time: str = Field(
+        ...,
+        description="Time to turn light off in HH:MM format"
+    )
+    enabled: bool
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None

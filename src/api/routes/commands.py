@@ -11,7 +11,6 @@ POST /devices/{device_id}/request-status - Request immediate status update
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from typing import Optional
 
 from src.api.schemas import (
     CommandRequest,

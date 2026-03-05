@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from src.domain.device_shadow import DeviceShadow
 from src.infrastructure.db.database import db
+from src.infrastructure.events.event_publisher import event_publisher
+from src.domain.event import shadow_drifted_event, shadow_synchronized_event
 from src.services.command_service import CommandService
 from src.repository.device_repository import DeviceShadowRepository
 from src.utils.logger import get_logger
@@ -58,6 +60,15 @@ class ShadowService:
                 device_id=device_id,
                 delta=delta,
             )
+            
+            # Publish shadow_drifted event
+            event = shadow_drifted_event(
+                device_id=device_id,
+                desired=shadow.desired,
+                reported=shadow.reported,
+                delta=delta,
+            )
+            event_publisher.publish(event)
 
             command_service = CommandService(self.session)
 
@@ -128,11 +139,24 @@ class ShadowService:
         try:
             shadow = self.shadow_repo.update_reported(device_id, reported_state)
             if shadow:
+                was_drifted = not shadow.is_synchronized() or (shadow.desired != reported_state)
+                
                 logger.debug(
                     "shadow_reported_state_updated",
                     device_id=device_id,
                     synchronized=shadow.is_synchronized(),
                 )
+                
+                # Check if shadow just became synchronized
+                if shadow.is_synchronized():
+                    # Publish shadow_synchronized event
+                    event = shadow_synchronized_event(
+                        device_id=device_id,
+                        desired=shadow.desired,
+                        reported=shadow.reported,
+                        version=shadow.version,
+                    )
+                    event_publisher.publish(event)
             return shadow
         except Exception as e:
             logger.error("handle_reported_state_failed", device_id=device_id, error=str(e))

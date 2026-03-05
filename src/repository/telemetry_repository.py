@@ -6,6 +6,7 @@ Handles database access for telemetry stored in TimescaleDB.
 
 from datetime import datetime, timedelta
 from typing import Optional
+import json
 
 from sqlalchemy import text, desc
 from sqlalchemy.orm import Session
@@ -213,10 +214,15 @@ class TelemetryRepository:
             Exception: If insertion fails
         """
         try:
+            # Serialize metadata to JSON if present
+            metadata_json = None
+            if metadata:
+                metadata_json = json.dumps(metadata)
+            
             # Use raw SQL for direct TimescaleDB insertion
             query = text("""
                 INSERT INTO telemetry (time, device_id, temperature, humidity, pressure, metadata)
-                VALUES (NOW() AT TIME ZONE 'UTC', :device_id, :temperature, :humidity, :pressure, :metadata)
+                VALUES (NOW() AT TIME ZONE 'UTC', :device_id, :temperature, :humidity, :pressure, :metadata::JSONB)
             """)
             
             self.session.execute(
@@ -226,7 +232,7 @@ class TelemetryRepository:
                     "temperature": temperature,
                     "humidity": humidity,
                     "pressure": pressure,
-                    "metadata": metadata,
+                    "metadata": metadata_json,
                 },
             )
             self.session.commit()
@@ -378,7 +384,8 @@ class TelemetryRepository:
         """
         Get hourly aggregated telemetry for device.
 
-        Uses the pre-aggregated continuous aggregate view for efficiency.
+        Tries to use the pre-aggregated continuous aggregate view if available,
+        otherwise computes hourly aggregates on-the-fly from raw telemetry.
 
         Args:
             device_id: Device identifier
@@ -388,6 +395,7 @@ class TelemetryRepository:
             List of hourly aggregated records
         """
         try:
+            # First, try using the materialized view (if it exists)
             query = text("""
                 SELECT
                     hour,
@@ -432,14 +440,76 @@ class TelemetryRepository:
                 "hourly_rollup_retrieved",
                 device_id=device_id,
                 count=len(rollup_list),
+                source="materialized_view",
             )
             
             return rollup_list
-        except Exception as e:
-            logger.error(
-                "hourly_rollup_failed",
-                device_id=device_id,
-                error=str(e),
-            )
-            raise
+            
+        except Exception as view_error:
+            # Fallback: compute hourly aggregates directly from raw telemetry
+            try:
+                logger.debug(
+                    "hourly_view_unavailable_fallback",
+                    device_id=device_id,
+                    reason=str(view_error)[:100],
+                )
+                
+                fallback_query = text("""
+                    SELECT
+                        time_bucket('1 hour', time) as hour,
+                        device_id,
+                        AVG(temperature) as temp_avg,
+                        MAX(temperature) as temp_max,
+                        MIN(temperature) as temp_min,
+                        AVG(humidity) as humidity_avg,
+                        MAX(humidity) as humidity_max,
+                        MIN(humidity) as humidity_min,
+                        COUNT(*) as sample_count
+                    FROM telemetry
+                    WHERE device_id = :device_id AND time > NOW() - (:hours * INTERVAL '1 hour')
+                    GROUP BY hour, device_id
+                    ORDER BY hour DESC
+                """)
+                
+                results = self.session.execute(
+                    fallback_query,
+                    {"device_id": device_id, "hours": hours},
+                ).fetchall()
+                
+                # Convert to list of dicts
+                rollup_list = []
+                for row in results:
+                    rollup_list.append({
+                        "hour": row[0].isoformat() if row[0] else None,
+                        "device_id": row[1],
+                        "temperature": {
+                            "avg": float(row[2]) if row[2] else None,
+                            "max": float(row[3]) if row[3] else None,
+                            "min": float(row[4]) if row[4] else None,
+                        },
+                        "humidity": {
+                            "avg": float(row[5]) if row[5] else None,
+                            "max": float(row[6]) if row[6] else None,
+                            "min": float(row[7]) if row[7] else None,
+                        },
+                        "sample_count": row[8],
+                    })
+                
+                logger.debug(
+                    "hourly_rollup_retrieved",
+                    device_id=device_id,
+                    count=len(rollup_list),
+                    source="computed_from_raw",
+                )
+                
+                return rollup_list
+                
+            except Exception as fallback_error:
+                logger.error(
+                    "hourly_rollup_failed",
+                    device_id=device_id,
+                    view_error=str(view_error)[:100],
+                    fallback_error=str(fallback_error)[:100],
+                )
+                raise
 
