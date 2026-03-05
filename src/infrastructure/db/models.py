@@ -5,8 +5,9 @@ These models map to PostgreSQL and TimescaleDB tables.
 """
 
 from datetime import datetime
+import json
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -77,3 +78,37 @@ class TelemetryModel(Base):
 
     def __repr__(self):
         return f"<TelemetryModel(device_id={self.device_id}, metric={self.metric_name})>"
+
+
+class EventRecord(Base):
+    """Event record table model for audit trail and observability."""
+
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event = Column(String(100), nullable=False, index=True)
+    device_id = Column(String(100), nullable=True, index=True)
+    timestamp = Column(Float, nullable=False, index=True)
+    metadata = Column(Text, nullable=True)  # JSON string
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<EventRecord(id={self.id}, event={self.event}, device_id={self.device_id})>"
+    
+    def to_domain(self):
+        """Convert database record to domain event."""
+        from src.domain.event import Event
+        
+        metadata = {}
+        if self.metadata:
+            try:
+                metadata = json.loads(self.metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+        
+        return Event(
+            event=self.event,
+            timestamp=self.timestamp,
+            device_id=self.device_id,
+            metadata=metadata,
+        )

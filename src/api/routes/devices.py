@@ -9,12 +9,12 @@ POST /devices - Register new device
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from typing import Optional
 
 from src.api.schemas import (
     DeviceResponse,
     DeviceShadowResponse,
     DeviceRegisterRequest,
+    DeviceRegisterResponse,
     DeviceShadowUpdateRequest,
 )
 from src.infrastructure.db.database import db
@@ -109,16 +109,18 @@ def get_device(device_id: str, session: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("", response_model=DeviceResponse, status_code=201)
+@router.post("", response_model=DeviceRegisterResponse, status_code=201)
 def register_device(request: DeviceRegisterRequest, session: Session = Depends(get_db)):
     """
     Register a new device.
     
+    Backend auto-generates a secure device_secret that must be provisioned into the device firmware.
+    
     Args:
-        request: Device registration request
+        request: Device registration request (device_id only)
     
     Returns:
-        Registered device information
+        Registered device with auto-generated device_secret
     """
     try:
         logger.info("registering_device", device_id=request.device_id)
@@ -126,17 +128,15 @@ def register_device(request: DeviceRegisterRequest, session: Session = Depends(g
         device_service = DeviceService(session)
         device = device_service.register_device(
             device_id=request.device_id,
-            device_secret=request.device_secret,
         )
         
         logger.info("device_registered", device_id=device.device_id)
         
-        return DeviceResponse(
+        return DeviceRegisterResponse(
             device_id=device.device_id,
+            device_secret=device.device_secret,
             status=device.status,
-            firmware_version=device.firmware_version,
             created_at=device.created_at.isoformat() if device.created_at else None,
-            last_seen=device.last_seen.isoformat() if device.last_seen else None,
         )
         
     except ValueError as e:

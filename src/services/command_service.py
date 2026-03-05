@@ -12,6 +12,8 @@ from src.domain.command import Command, CommandStatus
 from src.infrastructure.db.database import db
 from src.infrastructure.mqtt.mqtt_client import mqtt_client
 from src.infrastructure.mqtt.mqtt_topics import MQTTTopics
+from src.infrastructure.events.event_publisher import event_publisher
+from src.domain.event import command_sent_event, command_executed_event, command_failed_event
 from src.repository.telemetry_repository import CommandRepository
 from src.utils.logger import get_logger
 
@@ -94,6 +96,15 @@ class CommandService:
                 device_id=device_id,
                 command=command,
             )
+            
+            # Publish command_sent event
+            event = command_sent_event(
+                device_id=device_id,
+                command=command,
+                value=value,
+                version=version,
+            )
+            event_publisher.publish(event)
 
             return cmd
 
@@ -142,7 +153,18 @@ class CommandService:
             Updated command or None if not found
         """
         logger.debug("marking_command_executed", command_id=command_id)
-        return self.repo.update_status(command_id, CommandStatus.EXECUTED)
+        updated = self.repo.update_status(command_id, CommandStatus.EXECUTED)
+        
+        if updated:
+            # Publish command_executed event
+            event = command_executed_event(
+                device_id=updated.device_id,
+                command=updated.command,
+                command_id=command_id,
+            )
+            event_publisher.publish(event)
+        
+        return updated
 
     def mark_command_failed(self, command_id: int) -> Optional[Command]:
         """
@@ -155,7 +177,18 @@ class CommandService:
             Updated command or None if not found
         """
         logger.warning("marking_command_failed", command_id=command_id)
-        return self.repo.update_status(command_id, CommandStatus.FAILED)
+        updated = self.repo.update_status(command_id, CommandStatus.FAILED)
+        
+        if updated:
+            # Publish command_failed event
+            event = command_failed_event(
+                device_id=updated.device_id,
+                command=updated.command,
+                command_id=command_id,
+            )
+            event_publisher.publish(event)
+        
+        return updated
 
     def close(self) -> None:
         """Close the session."""

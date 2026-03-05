@@ -13,7 +13,10 @@ from typing import Optional, Dict, Literal
 # ============================================================================
 
 class DeviceRegisterRequest(BaseModel):
-    """Request to register a new device."""
+    """Request to register a new device.
+    
+    Backend auto-generates the device_secret.
+    """
     
     model_config = {"str_strip_whitespace": True}
 
@@ -25,16 +28,25 @@ class DeviceRegisterRequest(BaseModel):
         description="Device identifier (alphanumeric, underscore, hyphen only)",
         examples=["tank1", "greenhouse-pump", "sensor_01"]
     )
+
+
+class DeviceRegisterResponse(BaseModel):
+    """Response from device registration.
+    
+    Contains the auto-generated device_secret that must be provisioned into the device.
+    """
+
+    device_id: str
     device_secret: str = Field(
         ...,
-        min_length=8,
-        max_length=256,
-        description="Device authentication secret"
+        description="Auto-generated authentication secret - must be provisioned into device"
     )
+    status: Literal["offline", "online"]
+    created_at: Optional[str] = None
 
 
 class DeviceResponse(BaseModel):
-    """Device response model."""
+    """Device response model (overview without sensitive data)."""
 
     device_id: str
     status: Literal["online", "offline"]

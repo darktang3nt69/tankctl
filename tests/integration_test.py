@@ -43,11 +43,11 @@ def test_device_registration():
     # Register device
     device = device_service.register_device(
         device_id="tank1",
-        device_secret="abc123xyz"
     )
 
     print(f"✓ Device registered: {device.device_id}")
     print(f"  Status: {device.status}")
+    print(f"  Secret: {device.device_secret}")
     print(f"  Created at: {device.created_at}")
 
     # Get device

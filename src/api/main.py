@@ -17,6 +17,8 @@ from src.infrastructure.mqtt.handlers import (
 )
 from src.infrastructure.mqtt.mqtt_client import mqtt_client
 from src.infrastructure.scheduler.scheduler import TankCtlScheduler
+from src.infrastructure.events.event_publisher import event_publisher
+from src.infrastructure.events.event_store import event_store_handler
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,6 +50,11 @@ async def lifespan(app: FastAPI):
         logger.info("database_initializing")
         db.init_db()
         logger.info("database_ready")
+        
+        # Initialize event system
+        logger.info("event_system_initializing")
+        event_publisher.subscribe_all(event_store_handler)
+        logger.info("event_system_ready")
         
         # Connect to MQTT
         logger.info("mqtt_connecting")
@@ -119,12 +126,13 @@ def create_app() -> FastAPI:
     )
     
     # Include route modules
-    from src.api.routes import devices, commands, telemetry, health
+    from src.api.routes import devices, commands, telemetry, health, events
     
     app.include_router(health.router)
     app.include_router(devices.router)
     app.include_router(commands.router)
     app.include_router(telemetry.router)
+    app.include_router(events.router)
     
     return app
 
