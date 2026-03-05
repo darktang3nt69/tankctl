@@ -5,7 +5,7 @@ Provides endpoints for querying system events and device-specific events.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException
 from pydantic import BaseModel, Field
 
 from src.infrastructure.events.event_store import EventStore
@@ -71,7 +71,7 @@ async def get_events(
 
 @router.get("/devices/{device_id}", response_model=list[EventResponse])
 async def get_device_events(
-    device_id: str = Query(..., description="Device ID"),
+    device_id: str = Path(..., description="Device ID"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of events to return"),
 ) -> list[EventResponse]:
     """

@@ -5,10 +5,14 @@ GET /devices - List all devices
 GET /devices/{device_id} - Get device status
 GET /devices/{device_id}/shadow - Get device shadow state
 POST /devices - Register new device
+POST /devices/{device_id}/schedule - Create or update light schedule
+GET /devices/{device_id}/schedule - Get light schedule
+DELETE /devices/{device_id}/schedule - Delete light schedule
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from datetime import time as dt_time
 
 from src.api.schemas import (
     DeviceResponse,
@@ -16,10 +20,13 @@ from src.api.schemas import (
     DeviceRegisterRequest,
     DeviceRegisterResponse,
     DeviceShadowUpdateRequest,
+    ScheduleRequest,
+    ScheduleResponse,
 )
 from src.infrastructure.db.database import db
 from src.services.device_service import DeviceService
 from src.services.shadow_service import ShadowService
+from src.services.scheduling_service import SchedulingService
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -34,6 +41,14 @@ def get_db():
         yield session
     finally:
         session.close()
+
+
+def get_scheduler():
+    """Dependency: Get scheduler instance."""
+    from src.api.main import scheduler
+    if not scheduler:
+        raise HTTPException(status_code=503, detail="Scheduler not available")
+    return scheduler
 
 
 @router.get("", response_model=dict)
@@ -219,4 +234,143 @@ def update_shadow(device_id: str, request: DeviceShadowUpdateRequest, session: S
         raise
     except Exception as e:
         logger.error("update_shadow_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================================
+# Light Schedule Endpoints
+# ============================================================================
+
+@router.post("/{device_id}/schedule", response_model=ScheduleResponse, status_code=201)
+def create_schedule(
+    device_id: str,
+    request: ScheduleRequest,
+    session: Session = Depends(get_db),
+    scheduler = Depends(get_scheduler)
+):
+    """
+    Create or update light schedule for a device.
+    
+    Args:
+        device_id: Device identifier
+        request: Schedule with on_time and off_time in HH:MM format
+    
+    Returns:
+        Created or updated schedule
+    """
+    try:
+        logger.info("creating_schedule", device_id=device_id, on_time=request.on_time, off_time=request.off_time)
+        
+        # Verify device exists
+        device_service = DeviceService(session)
+        device = device_service.get_device(device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        
+        # Parse time strings to time objects
+        try:
+            on_hour, on_minute = map(int, request.on_time.split(':'))
+            off_hour, off_minute = map(int, request.off_time.split(':'))
+            on_time = dt_time(on_hour, on_minute)
+            off_time = dt_time(off_hour, off_minute)
+        except ValueError as e:
+            logger.error("invalid_time_format", device_id=device_id, error=str(e))
+            raise HTTPException(status_code=400, detail=f"Invalid time format: {str(e)}")
+        
+        # Create schedule
+        scheduling_service = SchedulingService(session, scheduler.scheduler)
+        schedule = scheduling_service.create_schedule(device_id, on_time, off_time, request.enabled)
+        
+        logger.info("schedule_created", device_id=device_id, on_time=request.on_time, off_time=request.off_time)
+        
+        return ScheduleResponse(
+            device_id=schedule.device_id,
+            on_time=schedule.on_time.strftime("%H:%M"),
+            off_time=schedule.off_time.strftime("%H:%M"),
+            enabled=schedule.enabled,
+            created_at=schedule.created_at.isoformat() if schedule.created_at else None,
+            updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("create_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{device_id}/schedule", response_model=ScheduleResponse)
+def get_schedule(
+    device_id: str,
+    session: Session = Depends(get_db),
+    scheduler = Depends(get_scheduler)
+):
+    """
+    Get light schedule for a device.
+    
+    Args:
+        device_id: Device identifier
+    
+    Returns:
+        Schedule details or 404 if not found
+    """
+    try:
+        logger.debug("getting_schedule", device_id=device_id)
+        
+        scheduling_service = SchedulingService(session, scheduler.scheduler)
+        schedule = scheduling_service.get_schedule(device_id)
+        
+        if not schedule:
+            logger.warning("schedule_not_found", device_id=device_id)
+            raise HTTPException(status_code=404, detail=f"Schedule for device {device_id} not found")
+        
+        return ScheduleResponse(
+            device_id=schedule.device_id,
+            on_time=schedule.on_time.strftime("%H:%M"),
+            off_time=schedule.off_time.strftime("%H:%M"),
+            enabled=schedule.enabled,
+            created_at=schedule.created_at.isoformat() if schedule.created_at else None,
+            updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/{device_id}/schedule", status_code=204)
+def delete_schedule(
+    device_id: str,
+    session: Session = Depends(get_db),
+    scheduler = Depends(get_scheduler)
+):
+    """
+    Delete light schedule for a device.
+    
+    Args:
+        device_id: Device identifier
+    
+    Returns:
+        204 No Content on success
+    """
+    try:
+        logger.info("deleting_schedule", device_id=device_id)
+        
+        scheduling_service = SchedulingService(session, scheduler.scheduler)
+        deleted = scheduling_service.delete_schedule(device_id)
+        
+        if not deleted:
+            logger.warning("schedule_not_found", device_id=device_id)
+            raise HTTPException(status_code=404, detail=f"Schedule for device {device_id} not found")
+        
+        logger.info("schedule_deleted", device_id=device_id)
+        
+        # No content to return (204 status)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_schedule_error", device_id=device_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -88,3 +88,9 @@ temp/
 .pylintrc
 .flake8
 pyproject.toml.bak
+
+# Arduino firmware
+.build/
+*.elf
+*.hex
+*.bin

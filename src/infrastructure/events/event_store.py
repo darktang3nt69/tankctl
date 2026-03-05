@@ -39,7 +39,7 @@ class EventStore:
                 event=event.event,
                 device_id=event.device_id,
                 timestamp=event.timestamp,
-                metadata=metadata_json,
+                event_metadata=metadata_json,
             )
             
             self.session.add(record)

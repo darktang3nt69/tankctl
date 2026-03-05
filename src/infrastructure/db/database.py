@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 
 from src.config.settings import settings
-from src.infrastructure.db.models import Base, CommandModel, DeviceModel, DeviceShadowModel, EventRecord
+from src.infrastructure.db.models import Base, CommandModel, DeviceModel, DeviceShadowModel, EventRecord, LightScheduleModel
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -57,6 +57,7 @@ class Database:
                     DeviceShadowModel.__table__,
                     CommandModel.__table__,
                     EventRecord.__table__,
+                    LightScheduleModel.__table__,
                 ],
             )
             self._init_timescale_schema()
