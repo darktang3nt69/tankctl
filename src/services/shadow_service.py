@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.device_shadow import DeviceShadow
 from src.infrastructure.db.database import db
-from src.infrastructure.mqtt.mqtt_client import mqtt_client
-from src.infrastructure.mqtt.mqtt_topics import MQTTTopics
+from src.services.command_service import CommandService
 from src.repository.device_repository import DeviceShadowRepository
 from src.utils.logger import get_logger
 
@@ -26,7 +25,7 @@ class ShadowService:
         self.session = session or db.get_session()
         self.shadow_repo = DeviceShadowRepository(self.session)
 
-    def reconcile_shadow(self, device_id: str) -> None:
+    def reconcile_shadow(self, device_id: str) -> Optional[DeviceShadow]:
         """
         Reconcile device shadow.
 
@@ -41,18 +40,18 @@ class ShadowService:
             shadow = self.shadow_repo.get_by_device_id(device_id)
             if not shadow:
                 logger.warning("shadow_not_found", device_id=device_id)
-                return
+                return None
 
             # Check if already synchronized
             if shadow.is_synchronized():
                 logger.debug("shadow_already_synchronized", device_id=device_id)
-                return
+                return shadow
 
             # Get delta between desired and reported
             delta = shadow.get_delta()
             if not delta:
                 logger.debug("shadow_delta_empty", device_id=device_id)
-                return
+                return shadow
 
             logger.info(
                 "shadow_reconciliation_needed",
@@ -60,19 +59,33 @@ class ShadowService:
                 delta=delta,
             )
 
-            # For each difference, we would send a command
-            # This is often done by the scheduler or command handler
+            command_service = CommandService(self.session)
+
             for key, desired_value in delta.items():
+                command_name = f"set_{key}"
+                command_value = str(desired_value)
+
+                command_service.send_command(
+                    device_id=device_id,
+                    command=command_name,
+                    value=command_value,
+                    version=shadow.version,
+                )
+
                 logger.debug(
-                    "shadow_delta_item",
+                    "shadow_delta_command_sent",
                     device_id=device_id,
                     key=key,
                     desired=desired_value,
                     reported=shadow.reported.get(key),
+                    command=command_name,
                 )
+
+            return shadow
 
         except Exception as e:
             logger.error("shadow_reconciliation_failed", device_id=device_id, error=str(e))
+            return None
 
     def reconcile_all_shadows(self) -> dict[str, bool]:
         """

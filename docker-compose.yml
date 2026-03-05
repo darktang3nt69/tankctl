@@ -55,6 +55,18 @@ services:
     networks:
       - tankctl-network
 
+  mqttx-web:
+    image: emqx/mqttx-web:latest
+    container_name: tankctl-mqttx-web
+    ports:
+      - "8083:80"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tankctl-network
+
   grafana:
     image: grafana/grafana:latest
     container_name: tankctl-grafana
