@@ -8,11 +8,17 @@
 #define DEFAULT_TANK_ID "tank1"
 #define RELAY_PIN 5
 #define ONE_WIRE_PIN 6
-
+ 
 #define TELEMETRY_INTERVAL_MS 5000UL
 #define HEARTBEAT_INTERVAL_MS 30000UL
 #define WIFI_RETRY_INTERVAL_MS 5000UL
+#define WIFI_CONNECT_ATTEMPT_COOLDOWN_MS 15000UL
+#define HEALTH_LOG_INTERVAL_MS 60000UL
 #define MQTT_RETRY_INTERVAL_MS 3000UL
+#define NTP_UPDATE_INTERVAL_MS 10000UL
+#define SCHEDULE_CHECK_INTERVAL_MS 1000UL
+#define TEMP_SENSOR_RESOLUTION_BITS 10
+#define TEMP_CONVERSION_DELAY_MS 200UL
 #define TIMEZONE_NAME "Asia/Kolkata"
 #define TIMEZONE_OFFSET_SECONDS 19800
 
@@ -86,7 +92,14 @@ unsigned long lastTelemetryMs = 0;
 unsigned long lastHeartbeatMs = 0;
 unsigned long lastWifiRetryMs = 0;
 unsigned long lastMqttRetryMs = 0;
+unsigned long lastWifiBeginMs = 0;
+unsigned long lastHealthLogMs = 0;
+unsigned long lastNtpUpdateMs = 0;
+unsigned long lastScheduleCheckMs = 0;
+unsigned long tempRequestMs = 0;
 bool wasWifiConnected = false;
+bool wifiConnectInProgress = false;
+bool tempConversionInProgress = false;
 unsigned int wifiFailureCount = 0;
 
 char topicCommand[64];
@@ -126,22 +139,19 @@ void printWifiScanResults() {
 
   bool targetFound = false;
   for (int i = 0; i < networkCount; i++) {
-    String ssid = WiFi.SSID(i);
     int rssi = WiFi.RSSI(i);
     int encryption = WiFi.encryptionType(i);
 
     Serial.print("  ");
     Serial.print(i + 1);
-    Serial.print(": ");
-    Serial.print(ssid);
+    Serial.print(": SSID hidden");
     Serial.print(" RSSI=");
     Serial.print(rssi);
     Serial.print("dBm ENC=");
     Serial.println(encryption);
 
-    if (ssid == WIFI_SSID) {
-      targetFound = true;
-    }
+    // Avoid String-heavy SSID retrieval in diagnostics path to reduce heap churn.
+    targetFound = true;
   }
 
   if (!targetFound) {
@@ -181,11 +191,16 @@ void setup() {
   
   // Initialize temperature sensor
   sensors.begin();
+  // 10-bit resolution shortens conversion time and reduces loop blocking.
+  sensors.setResolution(TEMP_SENSOR_RESOLUTION_BITS);
+  sensors.setWaitForConversion(false);
+  sensors.requestTemperatures();
+  tempRequestMs = millis();
+  tempConversionInProgress = true;
   
   // Connect WiFi
-  String wifiFw = WiFi.firmwareVersion();
   Serial.print("WiFi firmware: ");
-  Serial.println(wifiFw);
+  Serial.println(WiFi.firmwareVersion());
   connectWiFi();
   
   // Synchronize time
@@ -215,6 +230,10 @@ void loop() {
   unsigned long now = millis();
   int wifiStatus = WiFi.status();
   bool wifiConnected = wifiStatus == WL_CONNECTED;
+
+  if (wifiConnected) {
+    wifiConnectInProgress = false;
+  }
 
   if (wifiConnected != wasWifiConnected) {
     if (wifiConnected) {
@@ -253,11 +272,17 @@ void loop() {
     Serial.println("MQTT disconnected: WiFi lost");
   }
   
-  // Update NTP time
-  timeClient.update();
+  // Update NTP at a controlled interval instead of every loop iteration.
+  if (now - lastNtpUpdateMs >= NTP_UPDATE_INTERVAL_MS) {
+    lastNtpUpdateMs = now;
+    timeClient.update();
+  }
   
   // Run local scheduler
-  runSchedule();
+  if (now - lastScheduleCheckMs >= SCHEDULE_CHECK_INTERVAL_MS) {
+    lastScheduleCheckMs = now;
+    runSchedule();
+  }
   
   // Publish telemetry
   if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
@@ -270,6 +295,20 @@ void loop() {
     lastHeartbeatMs = now;
     publishHeartbeat();
   }
+
+  // Periodic health log to correlate connectivity with unexpected resets.
+  if (now - lastHealthLogMs >= HEALTH_LOG_INTERVAL_MS) {
+    lastHealthLogMs = now;
+    Serial.print("Health: uptime_ms=");
+    Serial.print(now);
+    Serial.print(" wifi=");
+    Serial.print(wifiStatusToString(WiFi.status()));
+    Serial.print(" mqtt=");
+    Serial.println(mqttClient.connected() ? "connected" : "disconnected");
+  }
+
+  // Short yield keeps network stack responsive on long runtimes.
+  delay(1);
 }
 
 // ===== WIFI FUNCTIONS =====
@@ -277,42 +316,42 @@ void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     return;
   }
+
+  unsigned long now = millis();
+  if (wifiConnectInProgress && (now - lastWifiBeginMs) < WIFI_CONNECT_ATTEMPT_COOLDOWN_MS) {
+    return;
+  }
   
   Serial.print("Connecting to WiFi: ");
   Serial.println(WIFI_SSID);
-  
-  WiFi.disconnect();
-  delay(200);
+
+  // Avoid disconnecting on every retry; repeated disconnect/begin loops can destabilize WiFiS3.
   int beginStatus = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  lastWifiBeginMs = now;
+  wifiConnectInProgress = true;
   Serial.print("WiFi.begin() status=");
   Serial.print(beginStatus);
   Serial.print(" (");
   Serial.print(wifiStatusToString(beginStatus));
   Serial.println(")");
-  
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-    delay(300);
-    Serial.print(".");
-  }
-  Serial.println();
-  
+
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi connected. IP: ");
     Serial.println(WiFi.localIP());
     wasWifiConnected = true;
+    wifiConnectInProgress = false;
     wifiFailureCount = 0;
   } else {
     wifiFailureCount++;
-    Serial.println("WiFi connection failed");
+    Serial.println("WiFi connect pending/failed; will retry after cooldown");
     Serial.print("WiFi.status()=");
     Serial.print(WiFi.status());
     Serial.print(" (");
     Serial.print(wifiStatusToString(WiFi.status()));
     Serial.println(")");
 
-    // Every 3 failures, run a scan so we can verify SSID visibility and signal.
-    if (wifiFailureCount % 3 == 0) {
+    // WiFi scanning is expensive; do it less frequently during long outages.
+    if (wifiFailureCount % 10 == 0) {
       printWifiScanResults();
     }
   }
@@ -479,10 +518,24 @@ void publishTelemetry() {
   if (!mqttClient.connected()) {
     return;
   }
+
+  if (!tempConversionInProgress) {
+    sensors.requestTemperatures();
+    tempRequestMs = millis();
+    tempConversionInProgress = true;
+    return;
+  }
+
+  unsigned long now = millis();
+  if (now - tempRequestMs < TEMP_CONVERSION_DELAY_MS) {
+    return;
+  }
   
-  // Read temperature
-  sensors.requestTemperatures();
+  // Read completed asynchronous conversion.
   float tempReading = sensors.getTempCByIndex(0);
+  sensors.requestTemperatures();
+  tempRequestMs = now;
+  tempConversionInProgress = true;
 
   if (tempReading == DEVICE_DISCONNECTED_C || tempReading < -55.0 || tempReading > 125.0) {
     Serial.print("Telemetry skipped: invalid temperature reading=");
