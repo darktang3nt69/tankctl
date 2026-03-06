@@ -9,6 +9,7 @@ Manages periodic tasks:
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
+from zoneinfo import ZoneInfo
 
 from src.config.settings import settings
 from src.infrastructure.db.database import db
@@ -24,7 +25,9 @@ class TankCtlScheduler:
     
     def __init__(self):
         """Initialize scheduler."""
-        self.scheduler = BackgroundScheduler()
+        self.scheduler = BackgroundScheduler(
+            timezone=ZoneInfo(settings.app.timezone)
+        )
         self._is_running = False
     
     def start(self):

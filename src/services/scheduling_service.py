@@ -13,6 +13,7 @@ from src.domain.light_schedule import LightSchedule
 from src.infrastructure.db.database import db
 from src.repository.light_schedule_repository import LightScheduleRepository
 from src.services.shadow_service import ShadowService
+from src.utils.datetime_utils import now_in_app_timezone
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -260,7 +261,9 @@ class SchedulingService:
         
         Called when schedule is created/updated to immediately set correct state.
         """
-        current_state = schedule.get_current_desired_state()
+        current_state = schedule.get_current_desired_state(
+            now_in_app_timezone().time()
+        )
         
         logger.info(
             "applying_current_schedule_state",

@@ -67,6 +67,23 @@ services:
     networks:
       - tankctl-network
 
+  whatsapp-bot:
+    build:
+      context: ./whatsapp-bot
+      dockerfile: Dockerfile
+    container_name: tankctl-whatsapp-bot
+    volumes:
+      - ./whatsapp-bot/session:/app/session
+    environment:
+      WHATSAPP_BOT_PORT: 3001
+      WHATSAPP_SESSION_PATH: /app/session
+      WHATSAPP_ALLOWED_NUMBERS: ""
+      CHROME_EXECUTABLE_PATH: /usr/bin/chromium
+      NODE_ENV: production
+    restart: unless-stopped
+    networks:
+      - tankctl-network
+
   grafana:
     image: grafana/grafana:latest
     container_name: tankctl-grafana
@@ -113,6 +130,15 @@ services:
       TIMESCALE_DB: tankctl_telemetry
       TIMESCALE_USER: tankctl
       TIMESCALE_PASSWORD: password
+      APP_TIMEZONE: Asia/Kolkata
+      WHATSAPP_ENABLED: "true"
+      WHATSAPP_BOT_URL: http://whatsapp-bot:3001/send
+      WHATSAPP_PHONE_NUMBER: ""
+      WHATSAPP_REQUEST_TIMEOUT_SECONDS: 5
+      ALERTS_ENABLED: "true"
+      ALERT_MIN_INTERVAL_SECONDS: 600
+      ALERT_TEMPERATURE_HIGH_C: 30
+      ALERT_TEMPERATURE_LOW_C: 20
     ports:
       - "8000:8000"
     depends_on:
@@ -122,6 +148,8 @@ services:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
+      whatsapp-bot:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

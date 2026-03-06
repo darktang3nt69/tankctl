@@ -21,6 +21,7 @@ from src.api.schemas import (
 from src.infrastructure.db.database import db
 from src.services.command_service import CommandService
 from src.services.shadow_service import ShadowService
+from src.utils.datetime_utils import isoformat_in_app_timezone
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -81,6 +82,7 @@ def send_command(
             value=command.value,
             version=command.version,
             status=command.status,
+            created_at=isoformat_in_app_timezone(command.created_at),
         )
         
     except Exception as e:
@@ -123,6 +125,7 @@ def get_command_history(
                 value=c.value,
                 version=c.version,
                 status=c.status,
+                created_at=isoformat_in_app_timezone(c.created_at),
             )
             for c in commands
         ]
@@ -187,6 +190,7 @@ def set_light(
             value=command.value,
             version=command.version,
             status=command.status,
+            created_at=isoformat_in_app_timezone(command.created_at),
         )
         
     except HTTPException:
@@ -246,6 +250,7 @@ def set_pump(
             value=command.value,
             version=command.version,
             status=command.status,
+            created_at=isoformat_in_app_timezone(command.created_at),
         )
         
     except HTTPException:
@@ -291,6 +296,7 @@ def reboot_device(
             value=command.value,
             version=command.version,
             status=command.status,
+            created_at=isoformat_in_app_timezone(command.created_at),
         )
         
     except Exception as e:
@@ -333,6 +339,7 @@ def request_status(
             value=command.value,
             version=command.version,
             status=command.status,
+            created_at=isoformat_in_app_timezone(command.created_at),
         )
         
     except Exception as e:

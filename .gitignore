@@ -94,3 +94,7 @@ pyproject.toml.bak
 *.elf
 *.hex
 *.bin
+
+# WhatsApp bot
+whatsapp-bot/node_modules/
+whatsapp-bot/session/

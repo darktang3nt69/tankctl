@@ -19,6 +19,7 @@ from src.infrastructure.mqtt.mqtt_client import mqtt_client
 from src.infrastructure.scheduler.scheduler import TankCtlScheduler
 from src.infrastructure.events.event_publisher import event_publisher
 from src.infrastructure.events.event_store import event_store_handler
+from src.services.alert_service import AlertService
 from src.services.scheduling_service import SchedulingService
 from src.utils.logger import get_logger
 
@@ -26,6 +27,7 @@ logger = get_logger(__name__)
 
 # Global scheduler instance
 scheduler: TankCtlScheduler | None = None
+alert_service: AlertService | None = None
 
 
 @asynccontextmanager
@@ -55,6 +57,11 @@ async def lifespan(app: FastAPI):
         # Initialize event system
         logger.info("event_system_initializing")
         event_publisher.subscribe_all(event_store_handler)
+        global alert_service
+        alert_service = AlertService()
+        event_publisher.subscribe("device_offline", alert_service.handle_device_offline_event)
+        event_publisher.subscribe("device_online", alert_service.handle_device_online_event)
+        event_publisher.subscribe("telemetry_received", alert_service.handle_telemetry_event)
         logger.info("event_system_ready")
         
         # Connect to MQTT

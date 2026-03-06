@@ -13,6 +13,8 @@
 #define HEARTBEAT_INTERVAL_MS 30000UL
 #define WIFI_RETRY_INTERVAL_MS 5000UL
 #define MQTT_RETRY_INTERVAL_MS 3000UL
+#define TIMEZONE_NAME "Asia/Kolkata"
+#define TIMEZONE_OFFSET_SECONDS 19800
 
 // EEPROM addresses
 #define EEPROM_ADDR_TANK_ID 0
@@ -41,7 +43,7 @@
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
+NTPClient timeClient(ntpUDP, "pool.ntp.org", TIMEZONE_OFFSET_SECONDS, 60000);
 
 OneWire oneWire(ONE_WIRE_PIN);
 DallasTemperature sensors(&oneWire);
@@ -187,6 +189,11 @@ void setup() {
   connectWiFi();
   
   // Synchronize time
+  Serial.print("Timezone: ");
+  Serial.print(TIMEZONE_NAME);
+  Serial.print(" (UTC+");
+  Serial.print(TIMEZONE_OFFSET_SECONDS / 3600);
+  Serial.println(":30)");
   timeClient.begin();
   Serial.println("Synchronizing time with NTP...");
   timeClient.update();

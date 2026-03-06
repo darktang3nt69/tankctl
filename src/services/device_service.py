@@ -135,9 +135,10 @@ class DeviceService:
 
         logger.debug("device_heartbeat_received", device_id=device_id)
         
-        # Publish device_online event
-        event = device_online_event(device_id=device_id)
-        event_publisher.publish(event)
+        # Publish device_online only on offline -> online transition
+        if was_offline:
+            event = device_online_event(device_id=device_id)
+            event_publisher.publish(event)
 
     def check_device_health(self, timeout_seconds: int = 60) -> dict[str, str]:
         """

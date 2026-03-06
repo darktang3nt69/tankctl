@@ -27,6 +27,7 @@ from src.infrastructure.db.database import db
 from src.services.device_service import DeviceService
 from src.services.shadow_service import ShadowService
 from src.services.scheduling_service import SchedulingService
+from src.utils.datetime_utils import isoformat_in_app_timezone
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -70,8 +71,8 @@ def list_devices(session: Session = Depends(get_db)):
                 device_id=d.device_id,
                 status=d.status,
                 firmware_version=d.firmware_version,
-                created_at=d.created_at.isoformat() if d.created_at else None,
-                last_seen=d.last_seen.isoformat() if d.last_seen else None,
+                created_at=isoformat_in_app_timezone(d.created_at),
+                last_seen=isoformat_in_app_timezone(d.last_seen),
             )
             for d in devices
         ]
@@ -113,8 +114,8 @@ def get_device(device_id: str, session: Session = Depends(get_db)):
             device_id=device.device_id,
             status=device.status,
             firmware_version=device.firmware_version,
-            created_at=device.created_at.isoformat() if device.created_at else None,
-            last_seen=device.last_seen.isoformat() if device.last_seen else None,
+            created_at=isoformat_in_app_timezone(device.created_at),
+            last_seen=isoformat_in_app_timezone(device.last_seen),
         )
         
     except HTTPException:
@@ -151,7 +152,7 @@ def register_device(request: DeviceRegisterRequest, session: Session = Depends(g
             device_id=device.device_id,
             device_secret=device.device_secret,
             status=device.status,
-            created_at=device.created_at.isoformat() if device.created_at else None,
+            created_at=isoformat_in_app_timezone(device.created_at),
         )
         
     except ValueError as e:
@@ -288,8 +289,8 @@ def create_schedule(
             on_time=schedule.on_time.strftime("%H:%M"),
             off_time=schedule.off_time.strftime("%H:%M"),
             enabled=schedule.enabled,
-            created_at=schedule.created_at.isoformat() if schedule.created_at else None,
-            updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
+            created_at=isoformat_in_app_timezone(schedule.created_at),
+            updated_at=isoformat_in_app_timezone(schedule.updated_at),
         )
         
     except HTTPException:
@@ -329,8 +330,8 @@ def get_schedule(
             on_time=schedule.on_time.strftime("%H:%M"),
             off_time=schedule.off_time.strftime("%H:%M"),
             enabled=schedule.enabled,
-            created_at=schedule.created_at.isoformat() if schedule.created_at else None,
-            updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
+            created_at=isoformat_in_app_timezone(schedule.created_at),
+            updated_at=isoformat_in_app_timezone(schedule.updated_at),
         )
         
     except HTTPException:

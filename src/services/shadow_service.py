@@ -64,8 +64,7 @@ class ShadowService:
             # Publish shadow_drifted event
             event = shadow_drifted_event(
                 device_id=device_id,
-                desired=shadow.desired,
-                reported=shadow.reported,
+                version=shadow.version,
                 delta=delta,
             )
             event_publisher.publish(event)
@@ -152,8 +151,6 @@ class ShadowService:
                     # Publish shadow_synchronized event
                     event = shadow_synchronized_event(
                         device_id=device_id,
-                        desired=shadow.desired,
-                        reported=shadow.reported,
                         version=shadow.version,
                     )
                     event_publisher.publish(event)
