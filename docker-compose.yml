@@ -73,7 +73,7 @@ services:
       dockerfile: Dockerfile
     container_name: tankctl-whatsapp-bot
     volumes:
-      - ./whatsapp-bot/session:/app/session
+      - whatsapp_session:/app/session
     environment:
       WHATSAPP_BOT_PORT: 3001
       WHATSAPP_SESSION_PATH: /app/session
@@ -166,6 +166,7 @@ volumes:
   mosquitto_data:
   mosquitto_logs:
   grafana_data:
+  whatsapp_session:
 
 networks:
   tankctl-network:

@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
         event_publisher.subscribe("device_offline", alert_service.handle_device_offline_event)
         event_publisher.subscribe("device_online", alert_service.handle_device_online_event)
         event_publisher.subscribe("telemetry_received", alert_service.handle_telemetry_event)
+        event_publisher.subscribe("light_state_changed", alert_service.handle_light_state_change_event)
         logger.info("event_system_ready")
         
         # Connect to MQTT

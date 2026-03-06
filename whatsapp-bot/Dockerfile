@@ -31,15 +31,16 @@ RUN npm ci --omit=dev
 # Copy app files
 COPY . .
 
+# Copy and setup entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh /app/bot.js
+
 # Create session directory
 RUN mkdir -p /app/session
-
-# Set executable permissions
-RUN chmod +x /app/bot.js
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
 
-# Start bot
-CMD ["node", "bot.js"]
+# Start bot with cleanup
+ENTRYPOINT ["/app/entrypoint.sh"]
