@@ -57,22 +57,13 @@ class AlertService:
         device_id = event.device_id or "unknown"
         alert_key = f"offline:{device_id}"
         timestamp = self._get_timestamp()
-        message = f"""╔══════════════════════════════════╗
-║  🚨 DEVICE OFFLINE ALERT 🚨     ║
-╚══════════════════════════════════╝
+        message = f"""🚨 DEVICE OFFLINE 🚨
 
 📍 Device: {device_id}
 ❌ Status: DISCONNECTED
 ⏰ Time: {timestamp}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ WARNING: Your device has lost connection!
-
-🔧 Action Required:
-  • Check network connectivity
-  • Verify device power
-  • Review firewall settings
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+Check: Power & Network"""
         self._send_rate_limited(alert_key, message)
 
     def handle_device_online_event(self, event: Event) -> None:
@@ -80,22 +71,34 @@ class AlertService:
         device_id = event.device_id or "unknown"
         alert_key = f"online:{device_id}"
         timestamp = self._get_timestamp()
-        message = f"""╔══════════════════════════════════╗
-║  ✅ DEVICE RECONNECTED ✅        ║
-╚══════════════════════════════════╝
+        message = f"""✅ DEVICE RECOVERED ✅
 
 📍 Device: {device_id}
 🟢 Status: ONLINE
 ⏰ Time: {timestamp}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎉 Connection Restored!
+System resumed normal operation"""
+        self._send_rate_limited(alert_key, message)
 
-✨ System Status:
-  ✓ All sensors operational
-  ✓ Data collection active
-  ✓ Normal operation resumed
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+    def handle_light_state_change_event(self, event: Event) -> None:
+        """Handle light state change based on reported state (not reconciliation)."""
+        # Skip if this is from shadow reconciliation
+        if event.metadata.get("_from_reconciliation") is True:
+            return
+
+        device_id = event.device_id or "unknown"
+        light_state = event.metadata.get("light") if event.metadata else None
+        if light_state is None:
+            return
+
+        alert_key = f"light_state:{device_id}"
+        timestamp = self._get_timestamp()
+        state_text = "ON" if light_state.lower() == "on" else "OFF"
+        message = f"""💡 LIGHT {state_text} 💡
+
+📍 Device: {device_id}
+💡 State: {state_text}
+⏰ Time: {timestamp}"""
         self._send_rate_limited(alert_key, message)
 
     def handle_telemetry_event(self, event: Event) -> None:
@@ -115,48 +118,24 @@ class AlertService:
         if temp_c > settings.alerts.temperature_high_c:
             alert_key = f"temp_high:{device_id}"
             temp_diff = temp_c - settings.alerts.temperature_high_c
-            message = f"""╔══════════════════════════════════╗
-║  🔥 TEMPERATURE CRITICAL 🔥       ║
-╚══════════════════════════════════╝
+            message = f"""🔥 TEMPERATURE HIGH 🔥
 
 📍 Device: {device_id}
-🌡️  Reading: {temp_c:.1f}°C ⬆️ (+{temp_diff:.1f}°C)
+🌡️  Reading: {temp_c:.1f}°C (⬆️ +{temp_diff:.1f}°C)
 ⚠️  Threshold: >{settings.alerts.temperature_high_c}°C
 ⏰ Time: {timestamp}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚨 CRITICAL: Tank temperature is rising!
-
-🏃 URGENT ACTION REQUIRED:
-  1️⃣  Check cooling system
-  2️⃣  Activate heat dissipation
-  3️⃣  Increase water circulation
-  4️⃣  Monitor continuously
-
-Do NOT delay! Risk of damage!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+Action: Check cooling system"""
             self._send_rate_limited(alert_key, message)
         elif temp_c < settings.alerts.temperature_low_c:
             alert_key = f"temp_low:{device_id}"
             temp_diff = settings.alerts.temperature_low_c - temp_c
-            message = f"""╔══════════════════════════════════╗
-║  ❄️  TEMPERATURE CRITICAL ❄️      ║
-╚══════════════════════════════════╝
+            message = f"""❄️ TEMPERATURE LOW ❄️
 
 📍 Device: {device_id}
-🌡️  Reading: {temp_c:.1f}°C ⬇️ (-{temp_diff:.1f}°C)
+🌡️  Reading: {temp_c:.1f}°C (⬇️ -{temp_diff:.1f}°C)
 ⚠️  Threshold: <{settings.alerts.temperature_low_c}°C
 ⏰ Time: {timestamp}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🥶 CRITICAL: Tank temperature is dropping!
-
-🏃 URGENT ACTION REQUIRED:
-  1️⃣  Check heating element
-  2️⃣  Increase temperature setting
-  3️⃣  Inspect for leaks
-  4️⃣  Monitor continuously
-
-Do NOT delay! Risk of freezing!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+Action: Check heating system"""
             self._send_rate_limited(alert_key, message)

@@ -28,6 +28,9 @@ EventType = Literal[
     # Telemetry
     "telemetry_received",
     
+    # Device state
+    "light_state_changed",
+    
     # Scheduler
     "scheduled_command_triggered",
     "shadow_reconciliation_started",
