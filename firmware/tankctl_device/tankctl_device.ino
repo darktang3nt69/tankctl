@@ -443,6 +443,8 @@ void handleCommand(JsonDocument& doc) {
     handleSetLight(doc);
   } else if (strcmp(command, "set_schedule") == 0) {
     handleSetSchedule(doc);
+  } else if (strcmp(command, "reboot_device") == 0) {
+    handleRebootDevice();
   } else {
     Serial.print("Unknown command: ");
     Serial.println(command);
@@ -494,13 +496,35 @@ void handleSetSchedule(JsonDocument& doc) {
   
   // Save to EEPROM
   saveSchedule();
-  
+
   Serial.print("Schedule updated: ON ");
   Serial.print(onTime);
   Serial.print(", OFF ");
   Serial.println(offTime);
   
   publishReportedState();
+}
+
+void handleRebootDevice() {
+  Serial.println("Reboot command received");
+
+  // Publish final state before reset so backend has a fresh reported snapshot.
+  publishReportedState();
+  publishHeartbeat();
+
+  // Give MQTT a brief window to flush outbound packets.
+  unsigned long flushStart = millis();
+  while (millis() - flushStart < 300) {
+    mqttClient.loop();
+    delay(10);
+  }
+
+  Serial.println("Rebooting now...");
+  Serial.flush();
+  delay(100);
+
+  // UNO R4 WiFi is Cortex-M based; use core reset.
+  NVIC_SystemReset();
 }
 
 // ===== LIGHT CONTROL =====
