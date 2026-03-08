@@ -1,5 +1,11 @@
+x-common: &common
+  restart: unless-stopped
+  networks:
+    - tankctl-network
+
 services:
   postgres:
+    <<: *common
     image: postgres:15-alpine
     container_name: tankctl-postgres
     environment:
@@ -15,10 +21,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   timescaledb:
+    <<: *common
     image: timescale/timescaledb:latest-pg15
     container_name: tankctl-timescaledb
     environment:
@@ -34,10 +39,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   mosquitto:
+    <<: *common
     image: eclipse-mosquitto:latest
     container_name: tankctl-mosquitto
     ports:
@@ -52,10 +56,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   mqttx-web:
+    <<: *common
     image: emqx/mqttx-web:latest
     container_name: tankctl-mqttx-web
     ports:
@@ -63,11 +66,9 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - tankctl-network
 
   whatsapp-bot:
+    <<: *common
     build:
       context: ./whatsapp-bot
       dockerfile: Dockerfile
@@ -80,11 +81,9 @@ services:
       WHATSAPP_ALLOWED_NUMBERS: ""
       CHROME_EXECUTABLE_PATH: /usr/bin/chromium
       NODE_ENV: production
-    restart: unless-stopped
-    networks:
-      - tankctl-network
 
   grafana:
+    <<: *common
     image: grafana/grafana:latest
     container_name: tankctl-grafana
     environment:
@@ -97,6 +96,7 @@ services:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
     depends_on:
       - timescaledb
     healthcheck:
@@ -104,10 +104,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   backend:
+    <<: *common
     build:
       context: .
       dockerfile: Dockerfile
@@ -156,9 +155,6 @@ services:
       timeout: 10s
       start_period: 5s
       retries: 3
-    restart: unless-stopped
-    networks:
-      - tankctl-network
 
 volumes:
   postgres_data:

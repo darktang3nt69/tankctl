@@ -6,16 +6,16 @@
 #define MQTT_PORT 1883
 
 #define DEFAULT_TANK_ID "tank1"
-#define RELAY_PIN 5
+#define RELAY_PIN 4 // Using pin 4 for the relay
 #define ONE_WIRE_PIN 6
- 
-#define TELEMETRY_INTERVAL_MS 5000UL
+
+#define TELEMETRY_INTERVAL_MS 10000UL
 #define HEARTBEAT_INTERVAL_MS 30000UL
 #define WIFI_RETRY_INTERVAL_MS 5000UL
 #define WIFI_CONNECT_ATTEMPT_COOLDOWN_MS 15000UL
 #define HEALTH_LOG_INTERVAL_MS 60000UL
 #define MQTT_RETRY_INTERVAL_MS 3000UL
-#define NTP_UPDATE_INTERVAL_MS 10000UL
+#define NTP_UPDATE_INTERVAL_MS 3600000UL // Sync once every hour
 #define SCHEDULE_CHECK_INTERVAL_MS 1000UL
 #define TEMP_SENSOR_RESOLUTION_BITS 10
 #define TEMP_CONVERSION_DELAY_MS 200UL
@@ -176,8 +176,10 @@ void setup() {
   Serial.println("TankCtl Device Starting...");
   
   // Initialize relay pin
+  // Set as output first, then explicitly drive it
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  // Default to OFF (For Active-LOW relays, this is HIGH)
+  digitalWrite(RELAY_PIN, HIGH);
 
   // Initialize LED matrix and show current light state
   matrix.begin();
@@ -530,10 +532,15 @@ void handleRebootDevice() {
 // ===== LIGHT CONTROL =====
 void setLight(bool state) {
   lightState = state;
-  digitalWrite(RELAY_PIN, state ? HIGH : LOW);
+  // Make sure we print the state being written so we can debug it
+  int pinState = state ? LOW : HIGH;
+  Serial.print("Writing pin state: ");
+  Serial.println(pinState == HIGH ? "HIGH" : "LOW");
+  
+  digitalWrite(RELAY_PIN, pinState);
   showLightStateOnMatrix(state);
   
-  Serial.print("Light: ");
+  Serial.print("Light logic state: ");
   Serial.println(state ? "ON" : "OFF");
 }
 
