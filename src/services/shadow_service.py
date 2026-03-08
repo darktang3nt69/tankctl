@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from src.domain.device_shadow import DeviceShadow
 from src.infrastructure.db.database import db
 from src.infrastructure.events.event_publisher import event_publisher
-from src.domain.event import shadow_drifted_event, shadow_synchronized_event
+from src.domain.event import shadow_drifted_event, shadow_synchronized_event, Event
 from src.services.command_service import CommandService
 from src.repository.device_repository import DeviceShadowRepository
 from src.utils.logger import get_logger
@@ -64,8 +64,7 @@ class ShadowService:
             # Publish shadow_drifted event
             event = shadow_drifted_event(
                 device_id=device_id,
-                desired=shadow.desired,
-                reported=shadow.reported,
+                version=shadow.version,
                 delta=delta,
             )
             event_publisher.publish(event)
@@ -137,6 +136,11 @@ class ShadowService:
         logger.debug("handling_reported_state", device_id=device_id)
 
         try:
+            # Get old state before updating
+            old_shadow = self.shadow_repo.get_by_device_id(device_id)
+            old_light_state = old_shadow.reported.get("light") if old_shadow else None
+            
+            # Update reported state
             shadow = self.shadow_repo.update_reported(device_id, reported_state)
             if shadow:
                 was_drifted = not shadow.is_synchronized() or (shadow.desired != reported_state)
@@ -147,13 +151,25 @@ class ShadowService:
                     synchronized=shadow.is_synchronized(),
                 )
                 
+                # Publish light_state_changed event if light state actually changed
+                new_light_state = reported_state.get("light")
+                if new_light_state and new_light_state != old_light_state:
+                    event = Event(
+                        event="light_state_changed",
+                        device_id=device_id,
+                        metadata={
+                            "light": new_light_state,
+                            "_from_reconciliation": False,
+                        }
+                    )
+                    event_publisher.publish(event)
+                    logger.info("light_state_changed_event_published", device_id=device_id, light=new_light_state)
+                
                 # Check if shadow just became synchronized
                 if shadow.is_synchronized():
                     # Publish shadow_synchronized event
                     event = shadow_synchronized_event(
                         device_id=device_id,
-                        desired=shadow.desired,
-                        reported=shadow.reported,
                         version=shadow.version,
                     )
                     event_publisher.publish(event)

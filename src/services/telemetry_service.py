@@ -9,6 +9,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from src.infrastructure.db.database import db
+from src.infrastructure.events.event_publisher import event_publisher
+from src.domain.event import telemetry_received_event
 from src.repository.telemetry_repository import TelemetryRepository
 from src.utils.logger import get_logger
 
@@ -82,6 +84,17 @@ class TelemetryService:
                 humidity=humidity,
                 pressure=pressure,
                 metadata=metadata,
+            )
+
+            event_publisher.publish(
+                telemetry_received_event(
+                    device_id=device_id,
+                    metrics={
+                        "temperature": temperature,
+                        "humidity": humidity,
+                        "pressure": pressure,
+                    },
+                )
             )
             
             logger.info(

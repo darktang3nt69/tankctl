@@ -24,6 +24,9 @@ class DeviceModel(Base):
     firmware_version = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow)
+    uptime_ms = Column(Integer, nullable=True)
+    rssi = Column(Integer, nullable=True)
+    wifi_status = Column(String(50), nullable=True)
 
     def __repr__(self):
         return f"<DeviceModel(device_id={self.device_id}, status={self.status})>"

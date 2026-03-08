@@ -1,5 +1,11 @@
+x-common: &common
+  restart: unless-stopped
+  networks:
+    - tankctl-network
+
 services:
   postgres:
+    <<: *common
     image: postgres:15-alpine
     container_name: tankctl-postgres
     environment:
@@ -15,10 +21,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   timescaledb:
+    <<: *common
     image: timescale/timescaledb:latest-pg15
     container_name: tankctl-timescaledb
     environment:
@@ -34,10 +39,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   mosquitto:
+    <<: *common
     image: eclipse-mosquitto:latest
     container_name: tankctl-mosquitto
     ports:
@@ -52,10 +56,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   mqttx-web:
+    <<: *common
     image: emqx/mqttx-web:latest
     container_name: tankctl-mqttx-web
     ports:
@@ -63,11 +66,24 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - tankctl-network
+
+  whatsapp-bot:
+    <<: *common
+    build:
+      context: ./whatsapp-bot
+      dockerfile: Dockerfile
+    container_name: tankctl-whatsapp-bot
+    volumes:
+      - whatsapp_session:/app/session
+    environment:
+      WHATSAPP_BOT_PORT: 3001
+      WHATSAPP_SESSION_PATH: /app/session
+      WHATSAPP_ALLOWED_NUMBERS: ""
+      CHROME_EXECUTABLE_PATH: /usr/bin/chromium
+      NODE_ENV: production
 
   grafana:
+    <<: *common
     image: grafana/grafana:latest
     container_name: tankctl-grafana
     environment:
@@ -80,6 +96,7 @@ services:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
     depends_on:
       - timescaledb
     healthcheck:
@@ -87,10 +104,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - tankctl-network
 
   backend:
+    <<: *common
     build:
       context: .
       dockerfile: Dockerfile
@@ -113,6 +129,14 @@ services:
       TIMESCALE_DB: tankctl_telemetry
       TIMESCALE_USER: tankctl
       TIMESCALE_PASSWORD: password
+      APP_TIMEZONE: Asia/Kolkata
+      WHATSAPP_ENABLED: "true"
+      WHATSAPP_BOT_URL: http://whatsapp-bot:3001/send
+      WHATSAPP_REQUEST_TIMEOUT_SECONDS: 5
+      ALERTS_ENABLED: "true"
+      ALERT_MIN_INTERVAL_SECONDS: 600
+      ALERT_TEMPERATURE_HIGH_C: 30
+      ALERT_TEMPERATURE_LOW_C: 20
     ports:
       - "8000:8000"
     depends_on:
@@ -122,15 +146,14 @@ services:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
+      whatsapp-bot:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       start_period: 5s
       retries: 3
-    restart: unless-stopped
-    networks:
-      - tankctl-network
 
 volumes:
   postgres_data:
@@ -138,6 +161,7 @@ volumes:
   mosquitto_data:
   mosquitto_logs:
   grafana_data:
+  whatsapp_session:
 
 networks:
   tankctl-network:

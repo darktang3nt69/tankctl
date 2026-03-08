@@ -46,6 +46,9 @@ class DeviceRepository:
                 firmware_version=device.firmware_version,
                 created_at=device.created_at,
                 last_seen=device.last_seen,
+                uptime_ms=device.uptime_ms,
+                rssi=device.rssi,
+                wifi_status=device.wifi_status,
             )
             self.session.add(db_device)
             self.session.commit()
@@ -81,6 +84,9 @@ class DeviceRepository:
                 firmware_version=db_device.firmware_version,
                 created_at=db_device.created_at,
                 last_seen=db_device.last_seen,
+                uptime_ms=db_device.uptime_ms,
+                rssi=db_device.rssi,
+                wifi_status=db_device.wifi_status,
             )
         except Exception as e:
             logger.error("device_get_failed", device_id=device_id, error=str(e))
@@ -106,6 +112,9 @@ class DeviceRepository:
                         firmware_version=db_device.firmware_version,
                         created_at=db_device.created_at,
                         last_seen=db_device.last_seen,
+                        uptime_ms=db_device.uptime_ms,
+                        rssi=db_device.rssi,
+                        wifi_status=db_device.wifi_status,
                     )
                 )
 
@@ -138,6 +147,9 @@ class DeviceRepository:
             db_device.status = device.status
             db_device.firmware_version = device.firmware_version
             db_device.last_seen = device.last_seen
+            db_device.uptime_ms = device.uptime_ms
+            db_device.rssi = device.rssi
+            db_device.wifi_status = device.wifi_status
 
             self.session.commit()
             logger.info("device_updated", device_id=device.device_id)

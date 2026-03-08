@@ -28,6 +28,9 @@ EventType = Literal[
     # Telemetry
     "telemetry_received",
     
+    # Device state
+    "light_state_changed",
+    
     # Scheduler
     "scheduled_command_triggered",
     "shadow_reconciliation_started",
@@ -96,11 +99,13 @@ def device_offline_event(device_id: str) -> Event:
     )
 
 
-def command_sent_event(device_id: str, command: str, value: Optional[str] = None) -> Event:
+def command_sent_event(device_id: str, command: str, value: Optional[str] = None, version: Optional[int] = None) -> Event:
     """Command sent event."""
     metadata = {"command": command}
     if value is not None:
         metadata["value"] = value
+    if version is not None:
+        metadata["version"] = version
     
     return Event(
         event="command_sent",

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.command import Command, CommandStatus
 from src.infrastructure.db.models import CommandModel
+from src.utils.datetime_utils import isoformat_in_app_timezone
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -222,7 +223,14 @@ class TelemetryRepository:
             # Use raw SQL for direct TimescaleDB insertion
             query = text("""
                 INSERT INTO telemetry (time, device_id, temperature, humidity, pressure, metadata)
-                VALUES (NOW() AT TIME ZONE 'UTC', :device_id, :temperature, :humidity, :pressure, :metadata::JSONB)
+                VALUES (
+                    NOW() AT TIME ZONE 'UTC',
+                    :device_id,
+                    :temperature,
+                    :humidity,
+                    :pressure,
+                    CAST(:metadata AS JSONB)
+                )
             """)
             
             self.session.execute(
@@ -294,7 +302,7 @@ class TelemetryRepository:
             telemetry_list = []
             for row in results:
                 telemetry_list.append({
-                    "time": row[0].isoformat() if row[0] else None,
+                    "time": isoformat_in_app_timezone(row[0]),
                     "device_id": row[1],
                     "temperature": row[2],
                     "humidity": row[3],
@@ -354,7 +362,7 @@ class TelemetryRepository:
             metric_list = []
             for row in results:
                 metric_list.append({
-                    "time": row[0].isoformat() if row[0] else None,
+                    "time": isoformat_in_app_timezone(row[0]),
                     "device_id": row[1],
                     "value": row[2],
                 })
@@ -421,7 +429,7 @@ class TelemetryRepository:
             rollup_list = []
             for row in results:
                 rollup_list.append({
-                    "hour": row[0].isoformat() if row[0] else None,
+                    "hour": isoformat_in_app_timezone(row[0]),
                     "device_id": row[1],
                     "temperature": {
                         "avg": row[2],
@@ -448,6 +456,9 @@ class TelemetryRepository:
         except Exception as view_error:
             # Fallback: compute hourly aggregates directly from raw telemetry
             try:
+                # Rollback the failed transaction before the fallback query
+                self.session.rollback()
+                
                 logger.debug(
                     "hourly_view_unavailable_fallback",
                     device_id=device_id,
@@ -480,7 +491,7 @@ class TelemetryRepository:
                 rollup_list = []
                 for row in results:
                     rollup_list.append({
-                        "hour": row[0].isoformat() if row[0] else None,
+                        "hour": isoformat_in_app_timezone(row[0]),
                         "device_id": row[1],
                         "temperature": {
                             "avg": float(row[2]) if row[2] else None,

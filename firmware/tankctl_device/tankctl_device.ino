@@ -1,18 +1,26 @@
 // ===== CONFIG =====
-#define WIFI_SSID "EMPIRE_2.4G"
+#define WIFI_SSID "EMPIRE"
 #define WIFI_PASSWORD "30379718"
 
 #define MQTT_SERVER "192.168.1.100"
 #define MQTT_PORT 1883
 
 #define DEFAULT_TANK_ID "tank1"
-#define RELAY_PIN 5
+#define RELAY_PIN 4 // Using pin 4 for the relay
 #define ONE_WIRE_PIN 6
 
-#define TELEMETRY_INTERVAL_MS 5000UL
+#define TELEMETRY_INTERVAL_MS 10000UL
 #define HEARTBEAT_INTERVAL_MS 30000UL
 #define WIFI_RETRY_INTERVAL_MS 5000UL
+#define WIFI_CONNECT_ATTEMPT_COOLDOWN_MS 15000UL
+#define HEALTH_LOG_INTERVAL_MS 60000UL
 #define MQTT_RETRY_INTERVAL_MS 3000UL
+#define NTP_UPDATE_INTERVAL_MS 3600000UL // Sync once every hour
+#define SCHEDULE_CHECK_INTERVAL_MS 1000UL
+#define TEMP_SENSOR_RESOLUTION_BITS 10
+#define TEMP_CONVERSION_DELAY_MS 200UL
+#define TIMEZONE_NAME "Asia/Kolkata"
+#define TIMEZONE_OFFSET_SECONDS 19800
 
 // EEPROM addresses
 #define EEPROM_ADDR_TANK_ID 0
@@ -35,15 +43,39 @@
 #include <EEPROM.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <Arduino_LED_Matrix.h>
 
 // ===== GLOBAL STATE =====
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
+NTPClient timeClient(ntpUDP, "pool.ntp.org", TIMEZONE_OFFSET_SECONDS, 60000);
 
 OneWire oneWire(ONE_WIRE_PIN);
 DallasTemperature sensors(&oneWire);
+ArduinoLEDMatrix matrix;
+
+uint8_t MATRIX_ON_BITMAP[8][12] = {
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0},
+  {0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0},
+  {0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0},
+  {0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0},
+  {0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
+
+uint8_t MATRIX_OFF_BITMAP[8][12] = {
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  {1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0},
+  {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0},
+  {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
 
 char tankId[TANK_ID_MAX_LEN] = {0};
 bool lightState = false;
@@ -60,22 +92,98 @@ unsigned long lastTelemetryMs = 0;
 unsigned long lastHeartbeatMs = 0;
 unsigned long lastWifiRetryMs = 0;
 unsigned long lastMqttRetryMs = 0;
+unsigned long lastWifiBeginMs = 0;
+unsigned long lastHealthLogMs = 0;
+unsigned long lastNtpUpdateMs = 0;
+unsigned long lastScheduleCheckMs = 0;
+unsigned long tempRequestMs = 0;
+bool wasWifiConnected = false;
+bool wifiConnectInProgress = false;
+bool tempConversionInProgress = false;
+unsigned int wifiFailureCount = 0;
 
 char topicCommand[64];
 char topicReported[64];
 char topicTelemetry[64];
 char topicHeartbeat[64];
 
+const char* wifiStatusToString(int status) {
+  switch (status) {
+    case WL_IDLE_STATUS:
+      return "WL_IDLE_STATUS";
+    case WL_NO_SSID_AVAIL:
+      return "WL_NO_SSID_AVAIL";
+    case WL_SCAN_COMPLETED:
+      return "WL_SCAN_COMPLETED";
+    case WL_CONNECTED:
+      return "WL_CONNECTED";
+    case WL_CONNECT_FAILED:
+      return "WL_CONNECT_FAILED";
+    case WL_CONNECTION_LOST:
+      return "WL_CONNECTION_LOST";
+    case WL_DISCONNECTED:
+      return "WL_DISCONNECTED";
+    default:
+      return "WL_UNKNOWN";
+  }
+}
+
+void printWifiScanResults() {
+  Serial.println("Scanning nearby WiFi networks...");
+  int networkCount = WiFi.scanNetworks();
+
+  if (networkCount <= 0) {
+    Serial.println("No WiFi networks found");
+    return;
+  }
+
+  bool targetFound = false;
+  for (int i = 0; i < networkCount; i++) {
+    int rssi = WiFi.RSSI(i);
+    int encryption = WiFi.encryptionType(i);
+
+    Serial.print("  ");
+    Serial.print(i + 1);
+    Serial.print(": SSID hidden");
+    Serial.print(" RSSI=");
+    Serial.print(rssi);
+    Serial.print("dBm ENC=");
+    Serial.println(encryption);
+
+    // Avoid String-heavy SSID retrieval in diagnostics path to reduce heap churn.
+    targetFound = true;
+  }
+
+  if (!targetFound) {
+    Serial.print("Target SSID not visible: ");
+    Serial.println(WIFI_SSID);
+  }
+}
+
+void showLightStateOnMatrix(bool state) {
+  if (state) {
+    matrix.renderBitmap(MATRIX_ON_BITMAP, 8, 12);
+  } else {
+    matrix.renderBitmap(MATRIX_OFF_BITMAP, 8, 12);
+  }
+}
+
 // ===== SETUP =====
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(1000);
   
   Serial.println("TankCtl Device Starting...");
   
   // Initialize relay pin
+  // Set as output first, then explicitly drive it
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  // Default to OFF (For Active-LOW relays, this is HIGH)
+  digitalWrite(RELAY_PIN, HIGH);
+
+  // Initialize LED matrix and show current light state
+  matrix.begin();
+  showLightStateOnMatrix(lightState);
   
   // Load configuration from EEPROM
   loadConfig();
@@ -85,11 +193,24 @@ void setup() {
   
   // Initialize temperature sensor
   sensors.begin();
+  // 10-bit resolution shortens conversion time and reduces loop blocking.
+  sensors.setResolution(TEMP_SENSOR_RESOLUTION_BITS);
+  sensors.setWaitForConversion(false);
+  sensors.requestTemperatures();
+  tempRequestMs = millis();
+  tempConversionInProgress = true;
   
   // Connect WiFi
+  Serial.print("WiFi firmware: ");
+  Serial.println(WiFi.firmwareVersion());
   connectWiFi();
   
   // Synchronize time
+  Serial.print("Timezone: ");
+  Serial.print(TIMEZONE_NAME);
+  Serial.print(" (UTC+");
+  Serial.print(TIMEZONE_OFFSET_SECONDS / 3600);
+  Serial.println(":30)");
   timeClient.begin();
   Serial.println("Synchronizing time with NTP...");
   timeClient.update();
@@ -97,7 +218,11 @@ void setup() {
   // Connect MQTT
   mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
-  connectMQTT();
+  if (WiFi.status() == WL_CONNECTED) {
+    connectMQTT();
+  } else {
+    Serial.println("Skipping MQTT connect: WiFi not connected");
+  }
   
   Serial.println("TankCtl Device Ready");
 }
@@ -105,30 +230,61 @@ void setup() {
 // ===== MAIN LOOP =====
 void loop() {
   unsigned long now = millis();
+  int wifiStatus = WiFi.status();
+  bool wifiConnected = wifiStatus == WL_CONNECTED;
+
+  if (wifiConnected) {
+    wifiConnectInProgress = false;
+  }
+
+  if (wifiConnected != wasWifiConnected) {
+    if (wifiConnected) {
+      Serial.print("WiFi connected. IP: ");
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.print("WiFi disconnected. WiFi.status()=");
+      Serial.print(wifiStatus);
+      Serial.print(" (");
+      Serial.print(wifiStatusToString(wifiStatus));
+      Serial.println(")");
+    }
+    wasWifiConnected = wifiConnected;
+  }
   
   // Ensure WiFi connection
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!wifiConnected) {
     if (now - lastWifiRetryMs >= WIFI_RETRY_INTERVAL_MS) {
       lastWifiRetryMs = now;
       connectWiFi();
     }
   }
   
-  // Ensure MQTT connection
-  if (!mqttClient.connected()) {
-    if (now - lastMqttRetryMs >= MQTT_RETRY_INTERVAL_MS) {
-      lastMqttRetryMs = now;
-      connectMQTT();
+  // Ensure MQTT connection only when WiFi is available
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!mqttClient.connected()) {
+      if (now - lastMqttRetryMs >= MQTT_RETRY_INTERVAL_MS) {
+        lastMqttRetryMs = now;
+        connectMQTT();
+      }
+    } else {
+      mqttClient.loop();
     }
-  } else {
-    mqttClient.loop();
+  } else if (mqttClient.connected()) {
+    mqttClient.disconnect();
+    Serial.println("MQTT disconnected: WiFi lost");
   }
   
-  // Update NTP time
-  timeClient.update();
+  // Update NTP at a controlled interval instead of every loop iteration.
+  if (now - lastNtpUpdateMs >= NTP_UPDATE_INTERVAL_MS) {
+    lastNtpUpdateMs = now;
+    timeClient.update();
+  }
   
   // Run local scheduler
-  runSchedule();
+  if (now - lastScheduleCheckMs >= SCHEDULE_CHECK_INTERVAL_MS) {
+    lastScheduleCheckMs = now;
+    runSchedule();
+  }
   
   // Publish telemetry
   if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
@@ -141,6 +297,20 @@ void loop() {
     lastHeartbeatMs = now;
     publishHeartbeat();
   }
+
+  // Periodic health log to correlate connectivity with unexpected resets.
+  if (now - lastHealthLogMs >= HEALTH_LOG_INTERVAL_MS) {
+    lastHealthLogMs = now;
+    Serial.print("Health: uptime_ms=");
+    Serial.print(now);
+    Serial.print(" wifi=");
+    Serial.print(wifiStatusToString(WiFi.status()));
+    Serial.print(" mqtt=");
+    Serial.println(mqttClient.connected() ? "connected" : "disconnected");
+  }
+
+  // Short yield keeps network stack responsive on long runtimes.
+  delay(1);
 }
 
 // ===== WIFI FUNCTIONS =====
@@ -148,30 +318,55 @@ void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     return;
   }
+
+  unsigned long now = millis();
+  if (wifiConnectInProgress && (now - lastWifiBeginMs) < WIFI_CONNECT_ATTEMPT_COOLDOWN_MS) {
+    return;
+  }
   
   Serial.print("Connecting to WiFi: ");
   Serial.println(WIFI_SSID);
-  
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-    delay(300);
-    Serial.print(".");
-  }
-  Serial.println();
-  
+
+  // Avoid disconnecting on every retry; repeated disconnect/begin loops can destabilize WiFiS3.
+  int beginStatus = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  lastWifiBeginMs = now;
+  wifiConnectInProgress = true;
+  Serial.print("WiFi.begin() status=");
+  Serial.print(beginStatus);
+  Serial.print(" (");
+  Serial.print(wifiStatusToString(beginStatus));
+  Serial.println(")");
+
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi connected. IP: ");
     Serial.println(WiFi.localIP());
+    wasWifiConnected = true;
+    wifiConnectInProgress = false;
+    wifiFailureCount = 0;
   } else {
-    Serial.println("WiFi connection failed");
+    wifiFailureCount++;
+    Serial.println("WiFi connect pending/failed; will retry after cooldown");
+    Serial.print("WiFi.status()=");
+    Serial.print(WiFi.status());
+    Serial.print(" (");
+    Serial.print(wifiStatusToString(WiFi.status()));
+    Serial.println(")");
+
+    // WiFi scanning is expensive; do it less frequently during long outages.
+    if (wifiFailureCount % 10 == 0) {
+      printWifiScanResults();
+    }
   }
 }
 
 // ===== MQTT FUNCTIONS =====
 void connectMQTT() {
   if (mqttClient.connected()) {
+    return;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Skipping MQTT connect: WiFi not connected");
     return;
   }
   
@@ -250,6 +445,8 @@ void handleCommand(JsonDocument& doc) {
     handleSetLight(doc);
   } else if (strcmp(command, "set_schedule") == 0) {
     handleSetSchedule(doc);
+  } else if (strcmp(command, "reboot_device") == 0) {
+    handleRebootDevice();
   } else {
     Serial.print("Unknown command: ");
     Serial.println(command);
@@ -301,7 +498,7 @@ void handleSetSchedule(JsonDocument& doc) {
   
   // Save to EEPROM
   saveSchedule();
-  
+
   Serial.print("Schedule updated: ON ");
   Serial.print(onTime);
   Serial.print(", OFF ");
@@ -310,12 +507,40 @@ void handleSetSchedule(JsonDocument& doc) {
   publishReportedState();
 }
 
+void handleRebootDevice() {
+  Serial.println("Reboot command received");
+
+  // Publish final state before reset so backend has a fresh reported snapshot.
+  publishReportedState();
+  publishHeartbeat();
+
+  // Give MQTT a brief window to flush outbound packets.
+  unsigned long flushStart = millis();
+  while (millis() - flushStart < 300) {
+    mqttClient.loop();
+    delay(10);
+  }
+
+  Serial.println("Rebooting now...");
+  Serial.flush();
+  delay(100);
+
+  // UNO R4 WiFi is Cortex-M based; use core reset.
+  NVIC_SystemReset();
+}
+
 // ===== LIGHT CONTROL =====
 void setLight(bool state) {
   lightState = state;
-  digitalWrite(RELAY_PIN, state ? HIGH : LOW);
+  // Make sure we print the state being written so we can debug it
+  int pinState = state ? LOW : HIGH;
+  Serial.print("Writing pin state: ");
+  Serial.println(pinState == HIGH ? "HIGH" : "LOW");
   
-  Serial.print("Light: ");
+  digitalWrite(RELAY_PIN, pinState);
+  showLightStateOnMatrix(state);
+  
+  Serial.print("Light logic state: ");
   Serial.println(state ? "ON" : "OFF");
 }
 
@@ -324,10 +549,32 @@ void publishTelemetry() {
   if (!mqttClient.connected()) {
     return;
   }
+
+  if (!tempConversionInProgress) {
+    sensors.requestTemperatures();
+    tempRequestMs = millis();
+    tempConversionInProgress = true;
+    return;
+  }
+
+  unsigned long now = millis();
+  if (now - tempRequestMs < TEMP_CONVERSION_DELAY_MS) {
+    return;
+  }
   
-  // Read temperature
+  // Read completed asynchronous conversion.
+  float tempReading = sensors.getTempCByIndex(0);
   sensors.requestTemperatures();
-  temperature = sensors.getTempCByIndex(0);
+  tempRequestMs = now;
+  tempConversionInProgress = true;
+
+  if (tempReading == DEVICE_DISCONNECTED_C || tempReading < -55.0 || tempReading > 125.0) {
+    Serial.print("Telemetry skipped: invalid temperature reading=");
+    Serial.println(tempReading);
+    return;
+  }
+
+  temperature = tempReading;
   
   // Build JSON
   StaticJsonDocument<128> doc;
@@ -348,10 +595,13 @@ void publishHeartbeat() {
     return;
   }
   
-  StaticJsonDocument<64> doc;
+  StaticJsonDocument<128> doc;
   doc["status"] = "online";
+  doc["uptime_ms"] = millis();
+  doc["rssi"] = WiFi.RSSI();
+  doc["wifi"] = wifiStatusToString(WiFi.status());
   
-  char buffer[64];
+  char buffer[128];
   serializeJson(doc, buffer);
   
   mqttClient.publish(topicHeartbeat, buffer);

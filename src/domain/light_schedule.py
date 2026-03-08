@@ -57,12 +57,12 @@ class LightSchedule:
         # Normal schedule (e.g., 06:00 - 18:00)
         return self.on_time <= check_time < self.off_time
     
-    def get_current_desired_state(self) -> str:
+    def get_current_desired_state(self, check_time: Optional[time] = None) -> str:
         """
         Get the desired light state based on current time.
         
         Returns:
             "on" or "off"
         """
-        now = datetime.now().time()
+        now = check_time or datetime.now().time()
         return "on" if self.is_light_on_at(now) else "off"

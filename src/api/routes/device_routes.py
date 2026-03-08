@@ -46,6 +46,9 @@ def register_device(
             firmware_version=device.firmware_version,
             created_at=device.created_at.isoformat() if device.created_at else None,
             last_seen=device.last_seen.isoformat() if device.last_seen else None,
+            uptime_ms=device.uptime_ms,
+            rssi=device.rssi,
+            wifi_status=device.wifi_status,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -70,6 +73,9 @@ def get_device(device_id: str, session: Session = Depends(get_db)):
             firmware_version=device.firmware_version,
             created_at=device.created_at.isoformat() if device.created_at else None,
             last_seen=device.last_seen.isoformat() if device.last_seen else None,
+            uptime_ms=device.uptime_ms,
+            rssi=device.rssi,
+            wifi_status=device.wifi_status,
         )
     except HTTPException:
         raise
@@ -92,6 +98,9 @@ def list_devices(session: Session = Depends(get_db)):
                 firmware_version=d.firmware_version,
                 created_at=d.created_at.isoformat() if d.created_at else None,
                 last_seen=d.last_seen.isoformat() if d.last_seen else None,
+                uptime_ms=d.uptime_ms,
+                rssi=d.rssi,
+                wifi_status=d.wifi_status,
             )
             for d in devices
         ]

@@ -160,7 +160,7 @@ class CommandService:
             event = command_executed_event(
                 device_id=updated.device_id,
                 command=updated.command,
-                command_id=command_id,
+                value=updated.value,
             )
             event_publisher.publish(event)
         
@@ -184,7 +184,6 @@ class CommandService:
             event = command_failed_event(
                 device_id=updated.device_id,
                 command=updated.command,
-                command_id=command_id,
             )
             event_publisher.publish(event)
         

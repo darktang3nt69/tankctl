@@ -53,6 +53,9 @@ class DeviceResponse(BaseModel):
     firmware_version: Optional[str] = None
     created_at: Optional[str] = None
     last_seen: Optional[str] = None
+    uptime_ms: Optional[int] = None
+    rssi: Optional[int] = None
+    wifi_status: Optional[str] = None
 
 
 # ============================================================================

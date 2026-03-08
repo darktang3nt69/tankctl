@@ -82,6 +82,33 @@ class SchedulerSettings:
     )
 
 
+@dataclass
+class WhatsAppSettings:
+    """WhatsApp bot notification configuration."""
+
+    enabled: bool = os.getenv("WHATSAPP_ENABLED", "false").lower() == "true"
+    bot_url: str = os.getenv("WHATSAPP_BOT_URL", "http://whatsapp-bot:3001/send")
+    phone_number: str = os.getenv("WHATSAPP_PHONE_NUMBER", "")
+    request_timeout_seconds: int = int(os.getenv("WHATSAPP_REQUEST_TIMEOUT_SECONDS", "5"))
+
+
+@dataclass
+class AlertSettings:
+    """Alert thresholds and suppression settings."""
+
+    enabled: bool = os.getenv("ALERTS_ENABLED", "true").lower() == "true"
+    min_interval_seconds: int = int(os.getenv("ALERT_MIN_INTERVAL_SECONDS", "600"))
+    temperature_high_c: float = float(os.getenv("ALERT_TEMPERATURE_HIGH_C", "30"))
+    temperature_low_c: float = float(os.getenv("ALERT_TEMPERATURE_LOW_C", "20"))
+
+
+@dataclass
+class AppSettings:
+    """Application-wide settings."""
+
+    timezone: str = os.getenv("APP_TIMEZONE", "Asia/Kolkata")
+
+
 class Settings:
     """Main settings container."""
 
@@ -90,6 +117,9 @@ class Settings:
     timescale = TimescaleSettings()
     api = APISettings()
     scheduler = SchedulerSettings()
+    whatsapp = WhatsAppSettings()
+    alerts = AlertSettings()
+    app = AppSettings()
 
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
