@@ -33,7 +33,12 @@ class HeartbeatHandler(MessageHandler):
             session = db.get_session()
             service = DeviceService(session)
 
-            service.handle_heartbeat(device_id)
+            service.handle_heartbeat(
+                device_id,
+                uptime_ms=payload.get("uptime_ms"),
+                rssi=payload.get("rssi"),
+                wifi_status=payload.get("wifi"),
+            )
 
             logger.info("device_heartbeat_handled", device_id=device_id)
             session.close()

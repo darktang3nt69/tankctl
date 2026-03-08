@@ -32,6 +32,15 @@ class Device:
     last_seen: datetime = field(default_factory=datetime.utcnow)
     """Timestamp of last heartbeat or activity"""
 
+    uptime_ms: int | None = None
+    """Device uptime in milliseconds from last boot"""
+
+    rssi: int | None = None
+    """WiFi signal strength in dBm"""
+
+    wifi_status: str | None = None
+    """WiFi connection status string from device"""
+
     def is_online(self, timeout_seconds: int = 60) -> bool:
         """
         Check if device is currently online.

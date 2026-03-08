@@ -595,10 +595,13 @@ void publishHeartbeat() {
     return;
   }
   
-  StaticJsonDocument<64> doc;
+  StaticJsonDocument<128> doc;
   doc["status"] = "online";
+  doc["uptime_ms"] = millis();
+  doc["rssi"] = WiFi.RSSI();
+  doc["wifi"] = wifiStatusToString(WiFi.status());
   
-  char buffer[64];
+  char buffer[128];
   serializeJson(doc, buffer);
   
   mqttClient.publish(topicHeartbeat, buffer);

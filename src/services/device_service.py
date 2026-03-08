@@ -114,7 +114,13 @@ class DeviceService:
         """
         return self.device_repo.get_all()
 
-    def handle_heartbeat(self, device_id: str) -> None:
+    def handle_heartbeat(
+        self,
+        device_id: str,
+        uptime_ms: int | None = None,
+        rssi: int | None = None,
+        wifi_status: str | None = None,
+    ) -> None:
         """
         Handle device heartbeat message.
 
@@ -122,15 +128,24 @@ class DeviceService:
 
         Args:
             device_id: Device ID
+            uptime_ms: Device uptime in milliseconds
+            rssi: WiFi signal strength in dBm
+            wifi_status: WiFi connection status string
         """
         device = self.device_repo.get_by_id(device_id)
         if not device:
             logger.warning("heartbeat_device_not_found", device_id=device_id)
             return
 
-        # Mark device as online
+        # Mark device as online and update heartbeat diagnostics
         was_offline = device.status != "online"
         device.mark_online()
+        if uptime_ms is not None:
+            device.uptime_ms = uptime_ms
+        if rssi is not None:
+            device.rssi = rssi
+        if wifi_status is not None:
+            device.wifi_status = wifi_status
         self.device_repo.update(device)
 
         logger.debug("device_heartbeat_received", device_id=device_id)

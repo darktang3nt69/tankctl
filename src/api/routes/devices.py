@@ -73,6 +73,9 @@ def list_devices(session: Session = Depends(get_db)):
                 firmware_version=d.firmware_version,
                 created_at=isoformat_in_app_timezone(d.created_at),
                 last_seen=isoformat_in_app_timezone(d.last_seen),
+                uptime_ms=d.uptime_ms,
+                rssi=d.rssi,
+                wifi_status=d.wifi_status,
             )
             for d in devices
         ]
@@ -116,6 +119,9 @@ def get_device(device_id: str, session: Session = Depends(get_db)):
             firmware_version=device.firmware_version,
             created_at=isoformat_in_app_timezone(device.created_at),
             last_seen=isoformat_in_app_timezone(device.last_seen),
+            uptime_ms=device.uptime_ms,
+            rssi=device.rssi,
+            wifi_status=device.wifi_status,
         )
         
     except HTTPException:
