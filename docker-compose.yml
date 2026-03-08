@@ -132,7 +132,6 @@ services:
       APP_TIMEZONE: Asia/Kolkata
       WHATSAPP_ENABLED: "true"
       WHATSAPP_BOT_URL: http://whatsapp-bot:3001/send
-      WHATSAPP_PHONE_NUMBER: ""
       WHATSAPP_REQUEST_TIMEOUT_SECONDS: 5
       ALERTS_ENABLED: "true"
       ALERT_MIN_INTERVAL_SECONDS: 600
