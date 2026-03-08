@@ -1,8 +1,8 @@
-# TankCtl Backend Implementation
+# TankCtrl Backend Implementation
 
 ## Overview
 
-TankCtl is a self-hosted IoT controller for managing water tank devices. This implementation provides a complete backend following a **layered architecture** with:
+TankCtrl is a self-hosted IoT controller for managing water tank devices. This implementation provides a complete backend following a **layered architecture** with:
 
 - **API Layer** (FastAPI) → Routes handle HTTP requests
 - **Service Layer** → Business logic and domain operations

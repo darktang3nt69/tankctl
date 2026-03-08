@@ -2,9 +2,9 @@
 
 ## Overview
 
-This document defines the **Arduino firmware design for TankCtl devices**.
+This document defines the **Arduino firmware design for TankCtrl devices**.
 
-Each Arduino device controls **one tank** and communicates with the TankCtl backend through MQTT.
+Each Arduino device controls **one tank** and communicates with the TankCtrl backend through MQTT.
 
 The firmware is intentionally designed to use **a single Arduino file (`.ino`)** to keep development simple and compatible with the Arduino IDE.
 
@@ -542,7 +542,7 @@ Lights remain operational.
 
 # Design Goals
 
-The TankCtl Arduino firmware is designed to be:
+The TankCtrl Arduino firmware is designed to be:
 
 * simple
 * reliable

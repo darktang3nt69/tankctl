@@ -2,9 +2,9 @@
 
 ## Project
 
-**TankCtl**
+**TankCtrl**
 
-TankCtl is a self-hosted IoT controller for managing water tank devices built with:
+TankCtrl is a self-hosted IoT controller for managing water tank devices built with:
 
 * Python backend
 * MQTT (Mosquitto broker)
@@ -17,7 +17,7 @@ The backend manages device state, commands, and telemetry while devices execute 
 
 # Architecture Overview
 
-TankCtl follows a **Layered Architecture**.
+TankCtrl follows a **Layered Architecture**.
 
 ```
 API → Services → Domain → Repository → Infrastructure
@@ -249,7 +249,7 @@ Never skip layers.
 
 # Goals
 
-TankCtl should remain:
+TankCtrl should remain:
 
 * Simple
 * Self-hosted
@@ -261,7 +261,7 @@ TankCtl should remain:
 
 # Non-Goals
 
-TankCtl is **not** intended to be:
+TankCtrl is **not** intended to be:
 
 * a full cloud IoT platform
 * a distributed microservice system
