@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.device import Device
 from src.domain.device_shadow import DeviceShadow
-from src.infrastructure.db.models import DeviceModel, DeviceShadowModel
+from src.infrastructure.db.models import DeviceModel, DeviceShadowModel, EventRecord
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -200,7 +200,7 @@ class DeviceRepository:
             self.session.rollback()
             logger.error("device_status_update_failed", device_id=device_id, error=str(e))
 
-    def delete(self, device_id: str) -> None:
+    def delete(self, device_id: str) -> bool:
         """
         Delete a device.
 
@@ -208,14 +208,38 @@ class DeviceRepository:
             device_id: Device ID
         """
         try:
-            self.session.query(DeviceModel).filter(
+            deleted = self.session.query(DeviceModel).filter(
                 DeviceModel.device_id == device_id
             ).delete()
             self.session.commit()
-            logger.info("device_deleted", device_id=device_id)
+            logger.info("device_deleted", device_id=device_id, deleted=deleted > 0)
+            return deleted > 0
         except Exception as e:
             self.session.rollback()
             logger.error("device_deletion_failed", device_id=device_id, error=str(e))
+            raise
+
+    def delete_events(self, device_id: str) -> int:
+        """
+        Delete stored events for a device.
+
+        Args:
+            device_id: Device ID
+
+        Returns:
+            Number of deleted event rows
+        """
+        try:
+            deleted = self.session.query(EventRecord).filter(
+                EventRecord.device_id == device_id
+            ).delete()
+            self.session.commit()
+            logger.info("device_events_deleted", device_id=device_id, count=deleted)
+            return deleted
+        except Exception as e:
+            self.session.rollback()
+            logger.error("device_events_delete_failed", device_id=device_id, error=str(e))
+            raise
 
 
 class DeviceShadowRepository:
@@ -353,4 +377,26 @@ class DeviceShadowRepository:
         except Exception as e:
             self.session.rollback()
             logger.error("shadow_reported_update_failed", device_id=device_id, error=str(e))
+            raise
+
+    def delete(self, device_id: str) -> bool:
+        """
+        Delete a device shadow.
+
+        Args:
+            device_id: Device ID
+
+        Returns:
+            True if deleted, False otherwise
+        """
+        try:
+            deleted = self.session.query(DeviceShadowModel).filter(
+                DeviceShadowModel.device_id == device_id
+            ).delete()
+            self.session.commit()
+            logger.info("shadow_deleted", device_id=device_id, deleted=deleted > 0)
+            return deleted > 0
+        except Exception as e:
+            self.session.rollback()
+            logger.error("shadow_delete_failed", device_id=device_id, error=str(e))
             raise

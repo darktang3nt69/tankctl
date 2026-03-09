@@ -19,6 +19,7 @@ from src.infrastructure.mqtt.mqtt_client import mqtt_client
 from src.infrastructure.scheduler.scheduler import TankCtlScheduler
 from src.infrastructure.events.event_publisher import event_publisher
 from src.infrastructure.events.event_store import event_store_handler
+from src.infrastructure.events.websocket_manager import websocket_manager
 from src.services.alert_service import AlertService
 from src.services.scheduling_service import SchedulingService
 from src.utils.logger import get_logger
@@ -56,7 +57,9 @@ async def lifespan(app: FastAPI):
         
         # Initialize event system
         logger.info("event_system_initializing")
+        await websocket_manager.start()
         event_publisher.subscribe_all(event_store_handler)
+        event_publisher.subscribe_all(websocket_manager.enqueue_event)
         global alert_service
         alert_service = AlertService()
         event_publisher.subscribe("device_offline", alert_service.handle_device_offline_event)
@@ -109,6 +112,10 @@ async def lifespan(app: FastAPI):
         if scheduler:
             scheduler.stop()
             logger.info("scheduler_stopped")
+
+        event_publisher.unsubscribe_all(websocket_manager.enqueue_event)
+        await websocket_manager.stop()
+        logger.info("websocket_manager_shutdown_complete")
         
         # Disconnect MQTT
         mqtt_client.disconnect()
@@ -148,13 +155,14 @@ def create_app() -> FastAPI:
     )
     
     # Include route modules
-    from src.api.routes import devices, commands, telemetry, health, events
+    from src.api.routes import devices, commands, telemetry, health, events, live
     
     app.include_router(health.router)
     app.include_router(devices.router)
     app.include_router(commands.router)
     app.include_router(telemetry.router)
     app.include_router(events.router)
+    app.include_router(live.router)
     
     return app
 

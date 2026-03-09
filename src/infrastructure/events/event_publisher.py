@@ -42,6 +42,17 @@ class EventPublisher:
         """
         self.all_subscribers.append(handler)
         logger.debug("Subscribed to all events")
+
+    def unsubscribe_all(self, handler: Callable[[Event], None]) -> None:
+        """
+        Unsubscribe from all event types.
+
+        Args:
+            handler: The handler to remove
+        """
+        if handler in self.all_subscribers:
+            self.all_subscribers.remove(handler)
+            logger.debug("Unsubscribed from all events")
     
     def unsubscribe(self, event_type: EventType, handler: Callable[[Event], None]) -> None:
         """

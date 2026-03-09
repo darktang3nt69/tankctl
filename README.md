@@ -1,8 +1,8 @@
-# TankCtl Backend Implementation
+# TankCtl
 
 ## Overview
 
-TankCtrl is a self-hosted IoT controller for managing water tank devices. This implementation provides a complete backend following a **layered architecture** with:
+TankCtl is a self-hosted IoT controller for managing water tank devices. The backend follows a **layered architecture** with:
 
 - **API Layer** (FastAPI) → Routes handle HTTP requests
 - **Service Layer** → Business logic and domain operations
@@ -15,7 +15,7 @@ TankCtrl is a self-hosted IoT controller for managing water tank devices. This i
 ```
 API (FastAPI)
     ↓
-Services (Device, Shadow, Command, Telemetry)
+Services (Device, Shadow, Command, Telemetry, Scheduling, Alerts)
     ↓
 Repositories (Database access)
     ↓
@@ -36,35 +36,48 @@ Infrastructure (MQTT, DB, Scheduler)
 src/
 ├── api/
 │   ├── routes/
-│   │   ├── device_routes.py     # Device management endpoints
-│   │   └── health_routes.py      # Health check endpoints
-│   └── schemas.py                 # Pydantic request/response models
+│   │   ├── devices.py           # Device management endpoints
+│   │   ├── commands.py          # Command endpoints
+│   │   ├── telemetry.py         # Telemetry query endpoints
+│   │   ├── events.py            # Event log endpoints
+│   │   └── health.py            # Health check endpoint
+│   └── schemas.py               # Pydantic request/response models
 ├── domain/
-│   ├── device.py                 # Device domain model
-│   ├── device_shadow.py          # Shadow state model
-│   └── command.py                # Command model
+│   ├── device.py                # Device domain model
+│   ├── device_shadow.py         # Shadow state model
+│   ├── command.py               # Command model
+│   ├── event.py                 # Event model
+│   └── light_schedule.py        # Light schedule model
 ├── services/
-│   ├── device_service.py         # Device business logic
-│   ├── telemetry_service.py      # Telemetry handling
-│   ├── command_service.py        # Command orchestration
-│   └── shadow_service.py         # Shadow reconciliation
+│   ├── device_service.py        # Device business logic
+│   ├── shadow_service.py        # Shadow reconciliation
+│   ├── command_service.py       # Command orchestration
+│   ├── telemetry_service.py     # Telemetry handling
+│   ├── scheduling_service.py    # Light schedule management
+│   ├── alert_service.py         # Alert thresholds and suppression
+│   └── notification_service.py  # WhatsApp notifications
 ├── repository/
-│   ├── device_repository.py      # Device data access
-│   └── telemetry_repository.py   # Telemetry & command repositories
+│   ├── device_repository.py     # Device & shadow data access
+│   ├── telemetry_repository.py  # Telemetry & command repositories
+│   └── light_schedule_repository.py
 ├── infrastructure/
 │   ├── mqtt/
-│   │   ├── mqtt_client.py        # MQTT connection manager
-│   │   ├── mqtt_topics.py        # Topic definitions
-│   │   └── handlers.py           # Message handlers
-│   └── db/
-│       ├── database.py           # Database session manager
-│       └── models.py             # SQLAlchemy models
+│   │   ├── mqtt_client.py       # MQTT connection manager
+│   │   ├── mqtt_topics.py       # Topic definitions
+│   │   └── handlers.py          # Message handlers
+│   ├── db/
+│   │   ├── database.py          # Database session manager
+│   │   └── models.py            # SQLAlchemy models
+│   ├── scheduler/
+│   │   └── scheduler.py         # APScheduler periodic tasks
+│   └── events/
+│       └── event_publisher.py   # Internal event bus
 ├── config/
-│   └── settings.py               # Configuration via environment
+│   └── settings.py              # Configuration via environment
 ├── utils/
-│   └── logger.py                 # Structured logging
-├── main.py                       # Backend entry point
-└── server.py                     # FastAPI application
+│   └── logger.py                # Structured logging
+├── main.py                      # Backend entry point
+└── server.py                    # FastAPI application
 ```
 
 ## Components
@@ -73,160 +86,133 @@ src/
 
 **mqtt_client.py**
 - Connects to Mosquitto broker
-- Subscribes to device topics: `tankctl/+/telemetry`, `tankctl/+/reported`, `tankctl/+/heartbeat`
-- Routes messages to handlers
+- Subscribes to: `tankctl/+/telemetry`, `tankctl/+/reported`, `tankctl/+/heartbeat`
 - Publishes commands to `tankctl/{device_id}/command`
 
-**mqtt_topics.py**
-- Topic naming conventions
-- Device ID extraction from topic
-
 **handlers.py**
-- `HeartbeatHandler`: Marks devices online
-- `ReportedStateHandler`: Updates device shadow
-- `TelemetryHandler`: Stores sensor data
+- `HeartbeatHandler`: Marks device online, stores `uptime_ms`, `rssi`, `wifi_status`
+- `ReportedStateHandler`: Updates device shadow reported state
+- `TelemetryHandler`: Stores sensor data in TimescaleDB
 
 ### 2. Services (`services/`)
 
-**DeviceService**
-- Device registration
-- Device status tracking
-- Heartbeat handling
-- Health monitoring
+**DeviceService** — registration, status tracking, heartbeat handling
 
-**TelemetryService**
-- Stores telemetry in TimescaleDB
-- Retrieves historical metrics
+**ShadowService** — reconciles desired vs. reported state, publishes commands on delta
 
-**CommandService**
-- Sends commands to devices
-- Tracks command status
-- Handles command history
+**CommandService** — sends commands, tracks command status and history
 
-**ShadowService**
-- Reconciles desired vs. reported state
-- Manages device shadow state
-- Publishes commands when delta exists
+**TelemetryService** — stores and retrieves time-series sensor data
+
+**SchedulingService** — manages light schedules per device (on/off time + days)
+
+**AlertService** — monitors telemetry against thresholds, suppresses duplicate alerts
+
+**NotificationService** — sends WhatsApp notifications via the whatsapp-bot sidecar
 
 ### 3. Domain Models (`domain/`)
 
-**Device**
-- Stable device identity
-- Authentication secret
-- Status tracking (online/offline)
-- Last seen timestamp
+**Device** — identity, auth secret, status (online/offline), last_seen, `uptime_ms`, `rssi`, `wifi_status`
 
-**DeviceShadow**
-- Desired state (backend → device)
-- Reported state (device → backend)
-- Version number for idempotency
-- Synchronization checking
+**DeviceShadow** — desired/reported state, version number, sync check
 
-**Command**
-- Command name and value
-- Version for idempotency
-- Status tracking (pending, sent, executed, failed)
+**Command** — name, value, version, status (pending → sent → executed/failed)
 
-### 4. Repository Layer (`repository/`)
+**LightSchedule** — on_time, off_time, days of week, enabled flag
 
-**DeviceRepository**
-- CRUD operations for devices
-- Status updates
-- Last seen tracking
+### 4. Scheduler (`infrastructure/scheduler/`)
 
-**DeviceShadowRepository**
-- Shadow persistence
-- State updates
-
-**CommandRepository**
-- Command storage
-- Status tracking
-
-**TelemetryRepository**
-- Telemetry data storage in TimescaleDB
-- Metric queries
+Periodic APScheduler tasks:
+- **Shadow reconciliation**: publishes command when desired ≠ reported
+- **Offline detection**: marks devices offline after `DEVICE_OFFLINE_TIMEOUT` seconds
+- **Light schedule execution**: turns light on/off at configured times
 
 ### 5. Database Models (`infrastructure/db/`)
 
-**devices**: Device registry
+**devices**
 ```sql
 CREATE TABLE devices (
-    device_id VARCHAR(50) PRIMARY KEY,
-    device_secret VARCHAR(100) NOT NULL,
-    status VARCHAR(20),
+    device_id       VARCHAR(50) PRIMARY KEY,
+    device_secret   VARCHAR(100) NOT NULL,
+    status          VARCHAR(20),
     firmware_version VARCHAR(50),
-    created_at TIMESTAMP,
-    last_seen TIMESTAMP
+    created_at      TIMESTAMP,
+    last_seen       TIMESTAMP,
+    uptime_ms       INTEGER,
+    rssi            INTEGER,
+    wifi_status     VARCHAR(50)
 );
 ```
 
-**device_shadows**: Shadow state
+**device_shadows**
 ```sql
 CREATE TABLE device_shadows (
-    device_id VARCHAR(50) PRIMARY KEY,
-    desired TEXT,
-    reported TEXT,
-    version INTEGER,
+    device_id  VARCHAR(50) PRIMARY KEY,
+    desired    TEXT,
+    reported   TEXT,
+    version    INTEGER,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
 ```
 
-**commands**: Command history
+**commands**
 ```sql
 CREATE TABLE commands (
-    id SERIAL PRIMARY KEY,
-    device_id VARCHAR(50),
-    command VARCHAR(100),
-    value VARCHAR(250),
-    version INTEGER,
-    status VARCHAR(20),
-    created_at TIMESTAMP,
-    sent_at TIMESTAMP,
+    id          SERIAL PRIMARY KEY,
+    device_id   VARCHAR(50),
+    command     VARCHAR(100),
+    value       VARCHAR(250),
+    version     INTEGER,
+    status      VARCHAR(20),
+    created_at  TIMESTAMP,
+    sent_at     TIMESTAMP,
     executed_at TIMESTAMP
 );
 ```
 
-**telemetry**: Time-series data (TimescaleDB)
+**telemetry** (TimescaleDB hypertable)
 ```sql
 CREATE TABLE telemetry (
-    id SERIAL,
-    device_id VARCHAR(50),
-    timestamp TIMESTAMP,
-    metric_name VARCHAR(100),
+    id           SERIAL,
+    device_id    VARCHAR(50),
+    timestamp    TIMESTAMP,
+    metric_name  VARCHAR(100),
     metric_value FLOAT,
-    metadata TEXT
+    metadata     TEXT
 );
-SELECT create_hypertable('telemetry', 'timestamp', if_not_exists => TRUE);
+```
 ```
 
 ## MQTT Topic Structure
 
 ```
 tankctl/{device_id}/command        ← Backend sends commands
-tankctl/{device_id}/reported       ← Device sends state
+tankctl/{device_id}/reported       ← Device sends shadow state
 tankctl/{device_id}/telemetry      ← Device sends sensor data
-tankctl/{device_id}/heartbeat      ← Device sends status
+tankctl/{device_id}/heartbeat      ← Device sends status/diagnostics
 ```
 
 ## Environment Configuration
 
+See [.env.example](.env.example) for the full list. Key variables:
+
 ```bash
 # MQTT
-MQTT_BROKER_HOST=localhost
+MQTT_BROKER_HOST=mosquitto
 MQTT_BROKER_PORT=1883
 MQTT_USERNAME=tankctl
-MQTT_PASSWORD=secret
+MQTT_PASSWORD=password
 
-# PostgreSQL (operations)
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=tankctl
-DB_USER=tankctl
-DB_PASSWORD=password
+# PostgreSQL (operational DB)
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_DB=tankctl
+POSTGRES_USER=tankctl
+POSTGRES_PASSWORD=password
 
-# TimescaleDB (telemetry)
-TIMESCALE_HOST=localhost
+# TimescaleDB (telemetry DB)
+TIMESCALE_HOST=timescaledb
 TIMESCALE_PORT=5432
 TIMESCALE_DB=tankctl_telemetry
 TIMESCALE_USER=tankctl
@@ -237,94 +223,152 @@ API_HOST=0.0.0.0
 API_PORT=8000
 DEBUG=false
 
+# Application
+APP_TIMEZONE=Asia/Kolkata
+
 # Scheduler
 SCHEDULER_ENABLED=true
 DEVICE_OFFLINE_TIMEOUT=60
-HEARTBEAT_CHECK_INTERVAL=30
-SHADOW_RECONCILIATION_INTERVAL=60
+SHADOW_RECONCILIATION_INTERVAL=10
+OFFLINE_DETECTION_INTERVAL=30
 
-# Logging
-LOG_LEVEL=INFO
+# Alerts
+ALERTS_ENABLED=true
+ALERT_MIN_INTERVAL_SECONDS=600
+ALERT_TEMPERATURE_HIGH_C=30
+ALERT_TEMPERATURE_LOW_C=20
+
+# WhatsApp notifications (optional)
+WHATSAPP_ENABLED=false
+WHATSAPP_BOT_URL=http://whatsapp-bot:3001/send
+WHATSAPP_PHONE_NUMBER=
+WHATSAPP_REQUEST_TIMEOUT_SECONDS=5
+
+# Grafana
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=admin
 ```
+
+> Use Docker service names (`mosquitto`, `postgres`, `timescaledb`) when running inside Docker. Change to `localhost` for local development outside Docker.
 
 ## API Endpoints
 
-### Device Management
+### Devices
 
-**Register Device**
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/devices` | Register a new device (auto-generates secret) |
+| `GET` | `/devices` | List all devices |
+| `GET` | `/devices/{device_id}` | Get device status + diagnostics |
+| `GET` | `/devices/{device_id}/shadow` | Get shadow state |
+| `PUT` | `/devices/{device_id}/shadow` | Update desired state |
+
+### Commands
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/devices/{device_id}/commands` | Send a raw command |
+| `GET` | `/devices/{device_id}/commands` | Get command history |
+| `POST` | `/devices/{device_id}/light` | Turn light on/off |
+| `POST` | `/devices/{device_id}/pump` | Turn pump on/off |
+| `POST` | `/devices/{device_id}/reboot` | Reboot device |
+| `POST` | `/devices/{device_id}/request-status` | Request status from device |
+
+### Light Schedule
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/devices/{device_id}/schedule` | Create/update light schedule |
+| `GET` | `/devices/{device_id}/schedule` | Get light schedule |
+| `DELETE` | `/devices/{device_id}/schedule` | Delete light schedule |
+
+### Telemetry
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/devices/{device_id}/telemetry` | Get recent telemetry |
+| `GET` | `/devices/{device_id}/telemetry/{metric}` | Get specific metric history |
+| `GET` | `/devices/{device_id}/telemetry/hourly/summary` | Get hourly aggregates |
+
+### Events
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/events` | List all events |
+| `GET` | `/events/devices/{device_id}` | Events for a device |
+| `GET` | `/events/types` | List event types |
+
+### Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+
+### Examples
+
+**Register a device**
 ```bash
-POST /api/devices/register
-Content-Type: application/json
-
-{
-  "device_id": "tank1",
-  "device_secret": "8fa93d72c6c5a91d"
-}
+curl -X POST http://localhost:8000/devices \
+  -H "Content-Type: application/json" \
+  -d '{"device_id": "tank1"}'
+# Response includes auto-generated device_secret — provision this into the firmware
 ```
 
-**Get Device**
+**Get device status**
 ```bash
-GET /api/devices/{device_id}
+curl http://localhost:8000/devices/tank1
 ```
 
-**List All Devices**
+**Turn light on**
 ```bash
-GET /api/devices
+curl -X POST http://localhost:8000/devices/tank1/light \
+  -H "Content-Type: application/json" \
+  -d '{"state": "on"}'
 ```
 
-**Get Device Shadow**
+**Set light schedule (on at 06:00, off at 22:00, every day)**
 ```bash
-GET /api/devices/{device_id}/shadow
+curl -X POST http://localhost:8000/devices/tank1/schedule \
+  -H "Content-Type: application/json" \
+  -d '{"on_time": "06:00", "off_time": "22:00", "days": [0,1,2,3,4,5,6], "enabled": true}'
 ```
 
-**Update Device Shadow**
+**Update shadow desired state**
 ```bash
-PUT /api/devices/{device_id}/shadow
-Content-Type: application/json
-
-{
-  "desired": {"light": "on"}
-}
+curl -X PUT http://localhost:8000/devices/tank1/shadow \
+  -H "Content-Type: application/json" \
+  -d '{"desired": {"light": "on"}}'
 ```
 
-### Health Check
+## Running with Docker (Recommended)
 
 ```bash
-GET /health
+# Copy and edit environment config
+cp .env.example .env
+
+# Start all services
+docker compose up -d
+
+# Run database migrations
+docker exec -i tankctl-postgres psql -U tankctl -d tankctl < migrations/001_create_tables.sql
+docker exec -i tankctl-postgres psql -U tankctl -d tankctl < migrations/002_add_device_heartbeat_diagnostics.sql
 ```
 
-## Running the Backend
+Services started:
+- `tankctl-postgres` — PostgreSQL on port 5432
+- `tankctl-timescaledb` — TimescaleDB on port 5432 (internal)
+- `tankctl-mosquitto` — MQTT broker on port 1883
+- `tankctl-backend` — FastAPI + MQTT backend on port 8000
+- `tankctl-grafana` — Grafana dashboards on port 3000
+- `tankctl-whatsapp-bot` — WhatsApp notification bot on port 3001
 
-### Option 1: Run MQTT Backend (Message Broker)
+## Running Locally (without Docker)
 
 ```bash
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env: change all hosts to 'localhost'
 python -m src.main
-```
-
-This starts:
-- MQTT connection and subscriptions
-- Database initialization
-- Periodic scheduler jobs
-- Message handlers
-
-### Option 2: Run FastAPI Server
-
-```bash
-python -m src.server
-# or
-uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
-```
-
-This provides REST API endpoints for device management.
-
-### Option 3: Run Both (Recommended)
-
-```bash
-# Terminal 1: Backend
-python -m src.main
-
-# Terminal 2: API Server
-uvicorn src.server:app --host 0.0.0.0 --port 8000
 ```
 
 ## Setup Instructions
@@ -335,58 +379,35 @@ uvicorn src.server:app --host 0.0.0.0 --port 8000
 pip install -r requirements.txt
 ```
 
-### 2. Set Up Databases
-
-**PostgreSQL**
-```sql
-CREATE DATABASE tankctl;
-CREATE USER tankctl WITH PASSWORD 'password';
-GRANT ALL PRIVILEGES ON DATABASE tankctl TO tankctl;
-```
-
-**TimescaleDB**
-```sql
-CREATE DATABASE tankctl_telemetry;
-CREATE USER tankctl WITH PASSWORD 'password';
-GRANT ALL PRIVILEGES ON DATABASE tankctl_telemetry TO tankctl;
-
--- Enable TimescaleDB extension
-CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
-```
-
-### 3. Set Environment Variables
-
-Create `.env`:
-```bash
-MQTT_BROKER_HOST=localhost
-DB_HOST=localhost
-TIMESCALE_HOST=localhost
-# ... other settings
-```
-
-### 4. Initialize Application
+### 2. Configure Environment
 
 ```bash
-python -m src.main
+cp .env.example .env
+# Edit .env with your values
 ```
 
-The backend will:
-1. Create database tables
-2. Connect to MQTT broker
-3. Subscribe to device topics
-4. Start periodic scheduler jobs
+### 3. Start Services
+
+```bash
+docker compose up -d
+```
+
+### 4. Run Migrations
+
+```bash
+docker exec -i tankctl-postgres psql -U tankctl -d tankctl < migrations/001_create_tables.sql
+docker exec -i tankctl-postgres psql -U tankctl -d tankctl < migrations/002_add_device_heartbeat_diagnostics.sql
+```
 
 ## Testing the System
 
 ### 1. Register a Device
 
 ```bash
-curl -X POST http://localhost:8000/api/devices/register \
+curl -X POST http://localhost:8000/devices \
   -H "Content-Type: application/json" \
-  -d '{
-    "device_id": "tank1",
-    "device_secret": "device_secret_123"
-  }'
+  -d '{"device_id": "tank1"}'
+# Save the device_secret from the response — provision it into firmware
 ```
 
 ### 2. Simulate Device Heartbeat
@@ -394,7 +415,7 @@ curl -X POST http://localhost:8000/api/devices/register \
 ```bash
 mosquitto_pub -h localhost -u tankctl -P password \
   -t "tankctl/tank1/heartbeat" \
-  -m '{"status": "online", "uptime": 120}'
+  -m '{"status": "online", "uptime_ms": 12000, "rssi": -55, "wifi": "WL_CONNECTED"}'
 ```
 
 ### 3. Simulate Device Telemetry
@@ -408,12 +429,9 @@ mosquitto_pub -h localhost -u tankctl -P password \
 ### 4. Send Command to Device
 
 ```bash
-curl -X POST http://localhost:8000/api/devices/tank1/commands \
+curl -X POST http://localhost:8000/devices/tank1/light \
   -H "Content-Type: application/json" \
-  -d '{
-    "command": "set_light",
-    "value": "on"
-  }'
+  -d '{"state": "on"}'
 ```
 
 ### 5. Mock Device Response
@@ -426,58 +444,29 @@ mosquitto_pub -h localhost -u tankctl -P password \
 
 ## Key Features
 
-✓ Device registration and authentication
+✓ Device registration (auto-generated secrets)
 ✓ MQTT pub/sub messaging
-✓ Device shadow state management
-✓ Command queuing and delivery
-✓ Telemetry storage (TimescaleDB)
-✓ Device health monitoring
-✓ Periodic reconciliation
-✓ RESTful API for management
+✓ Device shadow state management (desired vs. reported)
+✓ Command queuing and delivery with version idempotency
+✓ Telemetry storage in TimescaleDB
+✓ Device health monitoring and offline detection
+✓ Periodic shadow reconciliation
+✓ Light scheduling (on/off time per day of week)
+✓ Temperature and metric alerting with suppression
+✓ WhatsApp notifications via sidecar bot
+✓ Heartbeat diagnostics (uptime, RSSI, WiFi status)
+✓ Grafana dashboards
+✓ RESTful API
 ✓ Structured logging
-✓ Configuration via environment
+✓ Configuration via environment variables
 
 ## Deployment
 
-Use Docker Compose to deploy all services:
-
-```yaml
-version: '3'
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: tankctl
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-
-  timescaledb:
-    image: timescale/timescaledb:latest-pg15
-    environment:
-      POSTGRES_DB: tankctl_telemetry
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5433:5432"
-
-  mosquitto:
-    image: eclipse-mosquitto:latest
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-
-  tankctl:
-    build: .
-    environment:
-      MQTT_BROKER_HOST: mosquitto
-      DB_HOST: postgres
-      TIMESCALE_HOST: timescaledb
-    depends_on:
-      - postgres
-      - timescaledb
-      - mosquitto
+```bash
+docker compose up -d
 ```
+
+All services are defined in [docker-compose.yml](docker-compose.yml) with `restart: unless-stopped` and health checks.
 
 ## Error Handling
 

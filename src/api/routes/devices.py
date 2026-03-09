@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from datetime import time as dt_time
 
 from src.api.schemas import (
+    DeviceDeleteResponse,
     DeviceResponse,
     DeviceShadowResponse,
     DeviceRegisterRequest,
@@ -166,6 +167,42 @@ def register_device(request: DeviceRegisterRequest, session: Session = Depends(g
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error("register_device_error", device_id=request.device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/{device_id}", response_model=DeviceDeleteResponse)
+def delete_device(device_id: str, session: Session = Depends(get_db)):
+    """
+    Delete a device and its corresponding data.
+
+    Removes the device record, shadow, commands, telemetry, events, and any
+    associated light schedule.
+
+    Args:
+        device_id: Device identifier
+
+    Returns:
+        Summary of deleted records
+    """
+    try:
+        logger.info("deleting_device", device_id=device_id)
+
+        from src.api.main import scheduler
+
+        scheduler_instance = scheduler.scheduler if scheduler else None
+        result = DeviceService(session).delete_device(
+            device_id=device_id,
+            scheduler=scheduler_instance,
+        )
+
+        logger.info("device_deleted_with_related_data", device_id=device_id)
+        return DeviceDeleteResponse(**result)
+
+    except ValueError as e:
+        logger.warning("delete_device_not_found", device_id=device_id)
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("delete_device_error", device_id=device_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
