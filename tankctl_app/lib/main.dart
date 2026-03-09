@@ -103,6 +103,9 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
     if (eventName == 'telemetry_received') {
       ref.invalidate(dashboardOverviewProvider);
       if (deviceId != null) {
+        // Stamp the last-seen time so TankCard can show "Xs ago"
+        ref.read(lastTelemetryTimeProvider(deviceId).notifier).state =
+            DateTime.now();
         ref.invalidate(temperatureHistoryProvider(deviceId));
         if (deviceId == ApiConstants.defaultDeviceId) {
           ref.invalidate(temperatureProvider);

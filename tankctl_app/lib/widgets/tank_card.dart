@@ -7,8 +7,41 @@ import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/widgets/status_indicator.dart';
 import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+String _emojiFor(String deviceId) {
+  const emojis = ['🐠', '🌿', '🪸', '🐡', '🦀', '🐙', '🦑', '🐬'];
+  return emojis[deviceId.hashCode.abs() % emojis.length];
+}
+
+String _displayName(String id) => id
+    .replaceAll(RegExp(r'[_\-]'), ' ')
+    .split(' ')
+    .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+    .join(' ');
+
+String _formatAge(DateTime? lastSeen) {
+  if (lastSeen == null) return '—';
+  final diff = DateTime.now().difference(lastSeen);
+  if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  return '${diff.inHours}h ago';
+}
+
+enum _TankStatus { healthy, ok, highTemp, lowTemp, offline, unknown }
+
+_TankStatus _evaluate(double? temp, bool isOnline) {
+  if (!isOnline) return _TankStatus.offline;
+  if (temp == null) return _TankStatus.unknown;
+  if (temp > 28.0) return _TankStatus.highTemp;
+  if (temp < 18.0) return _TankStatus.lowTemp;
+  if (temp > 26.5) return _TankStatus.ok;
+  return _TankStatus.healthy;
+}
+
+// ── TankCard ──────────────────────────────────────────────────────────────────
+
 /// Dashboard card showing summary information for a single tank device.
-/// Tapping the card navigates to the detail screen via [onTap].
 class TankCard extends ConsumerWidget {
   const TankCard({
     super.key,
@@ -26,137 +59,158 @@ class TankCard extends ConsumerWidget {
     final historyAsync = ref.watch(temperatureHistoryProvider(deviceId));
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
-    final textTheme = Theme.of(context).textTheme;
+    // Rebuild every second so "Xs ago" ticks forward.
+    ref.watch(secondTickProvider);
+    final lastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
 
+    final textTheme = Theme.of(context).textTheme;
     final history = historyAsync.valueOrNull ?? const [];
-    // Prefer the WebSocket-pushed live value; fall back to last history entry.
     final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
+
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
-    // Prefer family provider (optimistic toggle) over shadow reported state.
-    final lightFamilyAsync =
-        ref.watch(lightStateFamilyProvider(deviceId));
-    final lightOn = lightFamilyAsync.valueOrNull ??
-        (reported?['light'] == 'on');
+    final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));
+    final lightOn =
+        lightFamilyAsync.valueOrNull ?? (reported?['light'] == 'on');
+
+    final status = _evaluate(latestTemp, isOnline);
+    final tempHigh = latestTemp != null && latestTemp > 28.0;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Material(
         color: TankCtlColors.card,
-        shadowColor: Colors.black54,
         elevation: 4,
+        shadowColor: Colors.black45,
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header ──────────────────────────────────────────────
+                // ── Header: emoji + name + online dot ─────────────────
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      deviceId,
-                      style: textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                    Text(_emojiFor(deviceId),
+                        style: const TextStyle(fontSize: 22)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _displayName(deviceId),
+                        style: textTheme.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     StatusIndicator(isOnline: isOnline),
                   ],
                 ),
-                const SizedBox(height: 20),
 
-                // ── Temperature ──────────────────────────────────────────
-                Center(
-                  child: Column(
-                    children: [
-                      historyAsync.when(
-                        data: (_) => Text(
+                const SizedBox(height: 12),
+                const Divider(color: Colors.white10, height: 1),
+                const SizedBox(height: 14),
+
+                // ── Temp (left) + Light toggle (right) ────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Temperature
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Temp',
+                            style: textTheme.labelSmall
+                                ?.copyWith(color: Colors.white38)),
+                        const SizedBox(height: 2),
+                        Text(
                           latestTemp != null
                               ? '${latestTemp.toStringAsFixed(1)}°C'
                               : '—',
-                          style: const TextStyle(
-                            fontSize: 52,
+                          style: TextStyle(
+                            fontSize: 30,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: tempHigh
+                                ? TankCtlColors.temperature
+                                : Colors.white,
+                            letterSpacing: -1,
                             height: 1,
-                            letterSpacing: -2,
                           ),
                         ),
-                        loading: () => Text(
-                          '…',
-                          style: textTheme.displaySmall?.copyWith(
-                            color: Colors.white38,
-                          ),
-                        ),
-                        error: (e, _) => Text(
-                          '—',
-                          style: textTheme.displaySmall?.copyWith(
-                            color: Colors.white24,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Temperature',
-                        style: textTheme.labelSmall?.copyWith(
-                          color: Colors.white38,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Sparkline ────────────────────────────────────────────
-                TemperatureMiniChart(
-                  data: history,
-                  height: 56,
-                  color: isOnline
-                      ? TankCtlColors.primary
-                      : Colors.white24,
-                ),
-                const SizedBox(height: 16),
-
-                // ── Footer ───────────────────────────────────────────────
-                Row(
-                  children: [
-                    Icon(
-                      lightOn
-                          ? Icons.lightbulb_rounded
-                          : Icons.lightbulb_outline_rounded,
-                      size: 16,
-                      color: lightOn
-                          ? TankCtlColors.warning
-                          : Colors.white24,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      lightOn ? 'Light ON' : 'Light OFF',
-                      style: TextStyle(
-                        color: lightOn ? TankCtlColors.warning : Colors.white24,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      ],
                     ),
                     const Spacer(),
-                    // Light toggle — absorb tap so it doesn't open detail screen
-                    GestureDetector(
-                      onTap: () {},
-                      behavior: HitTestBehavior.opaque,
-                      child: Transform.scale(
-                        scale: 0.8,
-                        alignment: Alignment.centerRight,
-                        child: Switch(
-                          value: lightOn,
-                          onChanged: (v) => ref
-                              .read(lightStateFamilyProvider(deviceId).notifier)
-                              .toggle(v),
-                          activeThumbColor: TankCtlColors.warning,
+                    // Light
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Light',
+                            style: textTheme.labelSmall
+                                ?.copyWith(color: Colors.white38)),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              lightOn ? 'ON' : 'OFF',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: lightOn
+                                    ? TankCtlColors.warning
+                                    : Colors.white38,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            GestureDetector(
+                              onTap: () {},
+                              behavior: HitTestBehavior.opaque,
+                              child: Transform.scale(
+                                scale: 0.75,
+                                alignment: Alignment.centerRight,
+                                child: Switch(
+                                  value: lightOn,
+                                  onChanged: (v) => ref
+                                      .read(lightStateFamilyProvider(deviceId)
+                                          .notifier)
+                                      .toggle(v),
+                                  activeThumbColor: TankCtlColors.warning,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                // ── Sparkline ─────────────────────────────────────────
+                if (history.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  TemperatureMiniChart(
+                    data: history,
+                    height: 40,
+                    color: isOnline ? TankCtlColors.primary : Colors.white12,
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+
+                // ── Status chip + last update ─────────────────────────
+                Row(
+                  children: [
+                    _StatusChip(status: status),
+                    const Spacer(),
+                    const Icon(Icons.access_time_rounded,
+                        size: 12, color: Colors.white24),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatAge(lastSeen),
+                      style: textTheme.labelSmall
+                          ?.copyWith(color: Colors.white38),
                     ),
                   ],
                 ),
@@ -164,6 +218,46 @@ class TankCard extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Status chip ───────────────────────────────────────────────────────────────
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+  final _TankStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon, color) = switch (status) {
+      _TankStatus.healthy  => ('Healthy',     Icons.check_circle_rounded,  TankCtlColors.success),
+      _TankStatus.ok       => ('OK',           Icons.check_rounded,          TankCtlColors.primary),
+      _TankStatus.highTemp => ('HIGH TEMP ⚠', Icons.thermostat_rounded,    TankCtlColors.temperature),
+      _TankStatus.lowTemp  => ('LOW TEMP ⚠',  Icons.ac_unit_rounded,        const Color(0xFF93C5FD)),
+      _TankStatus.offline  => ('Offline',      Icons.cloud_off_rounded,      Colors.white24),
+      _TankStatus.unknown  => ('Unknown',      Icons.help_outline_rounded,   Colors.white24),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
       ),
     );
   }
