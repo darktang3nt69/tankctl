@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
+import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/widgets/status_indicator.dart';
 import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
@@ -23,13 +24,19 @@ class TankCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyAsync = ref.watch(temperatureHistoryProvider(deviceId));
+    final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     final textTheme = Theme.of(context).textTheme;
 
     final history = historyAsync.valueOrNull ?? const [];
-    final latestTemp = history.isNotEmpty ? history.last : null;
+    // Prefer the WebSocket-pushed live value; fall back to last history entry.
+    final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
-    final lightOn = reported?['light'] == 'on';
+    // Prefer family provider (optimistic toggle) over shadow reported state.
+    final lightFamilyAsync =
+        ref.watch(lightStateFamilyProvider(deviceId));
+    final lightOn = lightFamilyAsync.valueOrNull ??
+        (reported?['light'] == 'on');
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -135,10 +142,21 @@ class TankCard extends ConsumerWidget {
                       ),
                     ),
                     const Spacer(),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Colors.white24,
-                      size: 20,
+                    // Light toggle — absorb tap so it doesn't open detail screen
+                    GestureDetector(
+                      onTap: () {},
+                      behavior: HitTestBehavior.opaque,
+                      child: Transform.scale(
+                        scale: 0.8,
+                        alignment: Alignment.centerRight,
+                        child: Switch(
+                          value: lightOn,
+                          onChanged: (v) => ref
+                              .read(lightStateFamilyProvider(deviceId).notifier)
+                              .toggle(v),
+                          activeThumbColor: TankCtlColors.warning,
+                        ),
+                      ),
                     ),
                   ],
                 ),

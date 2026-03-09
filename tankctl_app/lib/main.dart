@@ -120,6 +120,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
       ref.invalidate(dashboardOverviewProvider);
       if (deviceId != null) {
         ref.invalidate(deviceShadowProvider(deviceId));
+        ref.invalidate(lightStateFamilyProvider(deviceId));
         if (deviceId == ApiConstants.defaultDeviceId) {
           ref.invalidate(lightStateProvider);
         }

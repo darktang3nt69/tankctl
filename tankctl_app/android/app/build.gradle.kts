@@ -37,6 +37,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    buildFeatures {
+        renderScript = false
+        aidl = false
+    }
 }
 
 flutter {
