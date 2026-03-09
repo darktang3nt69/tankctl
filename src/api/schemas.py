@@ -58,6 +58,18 @@ class DeviceResponse(BaseModel):
     wifi_status: Optional[str] = None
 
 
+class DeviceDeleteResponse(BaseModel):
+    """Response summarizing device deletion and related cleanup."""
+
+    device_id: str
+    device_deleted: bool
+    shadow_deleted: bool
+    schedule_deleted: bool
+    commands_deleted: int = Field(..., ge=0)
+    telemetry_deleted: int = Field(..., ge=0)
+    events_deleted: int = Field(..., ge=0)
+
+
 # ============================================================================
 # Command Schemas
 # ============================================================================

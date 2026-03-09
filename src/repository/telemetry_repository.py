@@ -171,6 +171,28 @@ class CommandRepository:
             logger.error("command_status_update_failed", command_id=command_id, error=str(e))
             raise
 
+    def delete_for_device(self, device_id: str) -> int:
+        """
+        Delete all commands for a device.
+
+        Args:
+            device_id: Device ID
+
+        Returns:
+            Number of deleted commands
+        """
+        try:
+            deleted = self.session.query(CommandModel).filter(
+                CommandModel.device_id == device_id
+            ).delete()
+            self.session.commit()
+            logger.info("commands_deleted", device_id=device_id, count=deleted)
+            return deleted
+        except Exception as e:
+            self.session.rollback()
+            logger.error("commands_delete_failed", device_id=device_id, error=str(e))
+            raise
+
     def _model_to_domain(self, db_command: CommandModel) -> Command:
         """Convert database model to domain model."""
         return Command(
@@ -523,4 +545,28 @@ class TelemetryRepository:
                     fallback_error=str(fallback_error)[:100],
                 )
                 raise
+
+    def delete_for_device(self, device_id: str) -> int:
+        """
+        Delete all telemetry rows for a device.
+
+        Args:
+            device_id: Device ID
+
+        Returns:
+            Number of deleted telemetry rows
+        """
+        try:
+            result = self.session.execute(
+                text("DELETE FROM telemetry WHERE device_id = :device_id"),
+                {"device_id": device_id},
+            )
+            self.session.commit()
+            deleted = result.rowcount or 0
+            logger.info("telemetry_deleted", device_id=device_id, count=deleted)
+            return deleted
+        except Exception as e:
+            self.session.rollback()
+            logger.error("telemetry_delete_failed", device_id=device_id, error=str(e))
+            raise
 

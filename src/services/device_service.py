@@ -16,6 +16,8 @@ from src.infrastructure.db.database import db
 from src.infrastructure.events.event_publisher import event_publisher
 from src.domain.event import device_registered_event, device_online_event, device_offline_event
 from src.repository.device_repository import DeviceRepository, DeviceShadowRepository
+from src.repository.light_schedule_repository import LightScheduleRepository
+from src.repository.telemetry_repository import CommandRepository, TelemetryRepository
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -214,6 +216,64 @@ class DeviceService:
             DeviceShadow or None if not found
         """
         return self.shadow_repo.get_by_device_id(device_id)
+
+    def delete_device(self, device_id: str, scheduler=None) -> dict[str, int | bool | str]:
+        """
+        Delete a device and all corresponding data.
+
+        Args:
+            device_id: Device ID
+            scheduler: Optional APScheduler instance for removing schedule jobs
+
+        Returns:
+            Summary of deleted records
+
+        Raises:
+            ValueError: If the device does not exist
+        """
+        if not self.device_repo.get_by_id(device_id):
+            logger.warning("delete_device_not_found", device_id=device_id)
+            raise ValueError(f"Device {device_id} not found")
+
+        schedule_deleted = False
+        if scheduler is not None:
+            from src.services.scheduling_service import SchedulingService
+
+            schedule_deleted = SchedulingService(self.session, scheduler).delete_schedule(device_id)
+        else:
+            schedule_deleted = LightScheduleRepository(self.session).delete(device_id)
+
+        commands_deleted = CommandRepository(self.session).delete_for_device(device_id)
+        events_deleted = self.device_repo.delete_events(device_id)
+        shadow_deleted = self.shadow_repo.delete(device_id)
+        device_deleted = self.device_repo.delete(device_id)
+
+        telemetry_session = db.get_timescale_session()
+        try:
+            telemetry_deleted = TelemetryRepository(telemetry_session).delete_for_device(device_id)
+        finally:
+            telemetry_session.close()
+
+        logger.info(
+            "device_and_related_data_deleted",
+            device_id=device_id,
+            device_deleted=device_deleted,
+            shadow_deleted=shadow_deleted,
+            schedule_deleted=schedule_deleted,
+            commands_deleted=commands_deleted,
+            telemetry_deleted=telemetry_deleted,
+            events_deleted=events_deleted,
+        )
+
+        return {
+            "device_id": device_id,
+            "device_deleted": device_deleted,
+            "shadow_deleted": shadow_deleted,
+            "schedule_deleted": schedule_deleted,
+            "commands_deleted": commands_deleted,
+            "telemetry_deleted": telemetry_deleted,
+            "events_deleted": events_deleted,
+        }
 
     def close(self) -> None:
         """Close the session."""
