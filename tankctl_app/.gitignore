@@ -73,3 +73,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android / Gradle / Kotlin transient state
+**/android/.gradle/
+**/android/.kotlin/
+**/android/captures/
+**/android/.cxx/
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
