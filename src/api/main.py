@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from src.config.settings import settings
 from src.infrastructure.db.database import db
 from src.infrastructure.mqtt.handlers import (
+    DeviceStatusHandler,
     HeartbeatHandler,
     ReportedStateHandler,
     TelemetryHandler,
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
         mqtt_client.register_handler("telemetry", TelemetryHandler())
         mqtt_client.register_handler("reported", ReportedStateHandler())
         mqtt_client.register_handler("heartbeat", HeartbeatHandler())
+        mqtt_client.register_handler("status", DeviceStatusHandler())
         mqtt_client.connect()
         logger.info("mqtt_ready")
         

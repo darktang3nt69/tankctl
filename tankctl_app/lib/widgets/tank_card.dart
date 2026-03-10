@@ -50,11 +50,6 @@ String _formatAge(DateTime? lastSeen) {
   return '${months[lastSeen.month - 1]} ${lastSeen.day}, $h:$m';
 }
 
-bool _isFreshReading(DateTime? lastSeen) {
-  if (lastSeen == null) return false;
-  return DateTime.now().difference(lastSeen) <= const Duration(minutes: 2);
-}
-
 enum _TankStatus { healthy, ok, highTemp, lowTemp, offline, unknown }
 
 _TankStatus _evaluate(double? temp, bool isOnline) {
@@ -84,12 +79,12 @@ class TankCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyAsync = ref.watch(temperatureHistoryProvider(deviceId));
+    // Watch the full AsyncValue so we can distinguish cold-start (AsyncLoading)
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
     final wsLastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
-    // Prefer device last_seen (always current) over telemetry timestamp.
     final deviceAsync = ref.watch(singleDeviceProvider(deviceId));
     final deviceLastSeen = _parseIso(
       deviceAsync.valueOrNull?['last_seen'] as String?,
@@ -98,10 +93,16 @@ class TankCard extends ConsumerWidget {
 
     final textTheme = Theme.of(context).textTheme;
     final history = historyAsync.valueOrNull ?? const [];
-    final latestHistoryTemp = history.isNotEmpty ? history.last : null;
-    final hasFreshTelemetry = _isFreshReading(lastSeen);
-    final latestTemp =
-        liveTemp ?? (hasFreshTelemetry ? latestHistoryTemp : null);
+
+    // wsLastSeen is set by main.dart on every telemetry_received WS event
+    // (including events where temperature normalised away to null).  It is a
+    // StateProvider so it survives WS reconnections, unlike the StreamProvider
+    // which resets to AsyncLoading on reconnect and would otherwise cause a
+    // brief fallback to the stale history value.
+    final hasReceivedLiveTelemetry = wsLastSeen != null;
+    final latestTemp = hasReceivedLiveTelemetry
+        ? liveTemp
+        : (history.isNotEmpty ? history.last : null);
 
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
     final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));

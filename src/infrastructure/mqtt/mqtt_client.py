@@ -90,6 +90,7 @@ class MQTTClient:
             MQTTTopics.SUBSCRIBE_TELEMETRY,
             MQTTTopics.SUBSCRIBE_REPORTED,
             MQTTTopics.SUBSCRIBE_HEARTBEAT,
+            MQTTTopics.SUBSCRIBE_STATUS,
         ]
 
         for topic in topics_to_subscribe:

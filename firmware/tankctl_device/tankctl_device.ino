@@ -106,6 +106,7 @@ char topicCommand[64];
 char topicReported[64];
 char topicTelemetry[64];
 char topicHeartbeat[64];
+char topicStatus[64];
 
 const char* wifiStatusToString(int status) {
   switch (status) {
@@ -415,6 +416,7 @@ void buildTopics() {
   snprintf(topicReported, sizeof(topicReported), "tankctl/%s/reported", tankId);
   snprintf(topicTelemetry, sizeof(topicTelemetry), "tankctl/%s/telemetry", tankId);
   snprintf(topicHeartbeat, sizeof(topicHeartbeat), "tankctl/%s/heartbeat", tankId);
+  snprintf(topicStatus,    sizeof(topicStatus),    "tankctl/%s/status",    tankId);
 }
 
 // ===== COMMAND HANDLER =====
@@ -568,26 +570,37 @@ void publishTelemetry() {
   tempRequestMs = now;
   tempConversionInProgress = true;
 
-  if (tempReading == DEVICE_DISCONNECTED_C || tempReading < -55.0 || tempReading > 125.0) {
-    Serial.print("Telemetry skipped: invalid temperature reading=");
-    Serial.println(tempReading);
-    return;
+  // Build JSON — send 0 when sensor is disconnected/invalid so the backend
+  // still receives a telemetry event and can signal "unavailable" to clients.
+  StaticJsonDocument<128> doc;
+
+  bool sensorValid = !(tempReading == DEVICE_DISCONNECTED_C ||
+                       tempReading < -55.0 || tempReading > 125.0);
+  if (sensorValid) {
+    temperature = tempReading;
+    Serial.print("Telemetry: temp=");
+    Serial.print(temperature);
+    Serial.println("°C");
+  } else {
+    temperature = 0;
+    Serial.println("Telemetry: sensor unavailable, sending temperature=0");
+
+    // Publish a warning so the backend and app know the sensor may be missing.
+    StaticJsonDocument<128> warnDoc;
+    warnDoc["event"]   = "warning";
+    warnDoc["code"]    = "sensor_unavailable";
+    warnDoc["message"] = "Temperature sensor not connected or reading invalid";
+    char warnBuf[128];
+    serializeJson(warnDoc, warnBuf);
+    mqttClient.publish(topicStatus, warnBuf);
   }
 
-  temperature = tempReading;
-  
-  // Build JSON
-  StaticJsonDocument<128> doc;
   doc["temperature"] = temperature;
-  
+
   char buffer[128];
   serializeJson(doc, buffer);
-  
+
   mqttClient.publish(topicTelemetry, buffer);
-  
-  Serial.print("Telemetry: temp=");
-  Serial.print(temperature);
-  Serial.println("°C");
 }
 
 void publishHeartbeat() {
