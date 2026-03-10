@@ -37,3 +37,9 @@ final lastTelemetryTimeProvider = StateProvider.family<DateTime?, String>(
 final secondTickProvider = StreamProvider<int>((ref) {
   return Stream.periodic(const Duration(seconds: 1), (i) => i);
 });
+
+/// Latest warning code received from the backend for a device.
+/// Set when a `device_warning` WS event arrives; cleared when a valid
+/// temperature reading arrives (sensor reconnected).
+final deviceWarningProvider =
+    StateProvider.family<String?, String>((ref, deviceId) => null);

@@ -122,6 +122,7 @@ class DeviceService:
         uptime_ms: int | None = None,
         rssi: int | None = None,
         wifi_status: str | None = None,
+        firmware_version: str | None = None,
     ) -> None:
         """
         Handle device heartbeat message.
@@ -148,6 +149,8 @@ class DeviceService:
             device.rssi = rssi
         if wifi_status is not None:
             device.wifi_status = wifi_status
+        if firmware_version is not None:
+            device.firmware_version = firmware_version
         self.device_repo.update(device)
 
         logger.debug("device_heartbeat_received", device_id=device_id)

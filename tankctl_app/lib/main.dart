@@ -14,6 +14,8 @@ import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/live_updates_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
+import 'package:tankctl_app/services/telemetry_service.dart'
+    show normalizeTemperatureReading;
 
 /// Global navigator key — allows notification tap handler to push routes
 /// without a BuildContext.
@@ -347,6 +349,20 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         ref.read(lastTelemetryTimeProvider(deviceId).notifier).state =
             DateTime.now();
         ref.invalidate(temperatureHistoryProvider(deviceId));
+        // Clear any sensor warning once a valid temperature arrives.
+        final metrics = event['metadata'] as Map<String, dynamic>?;
+        if (normalizeTemperatureReading(metrics?['temperature']) != null) {
+          ref.read(deviceWarningProvider(deviceId).notifier).state = null;
+        }
+      }
+      return;
+    }
+
+    if (eventName == 'device_warning') {
+      if (deviceId != null) {
+        final metadata = event['metadata'] as Map<String, dynamic>?;
+        final code = metadata?['code'] as String? ?? 'unknown';
+        ref.read(deviceWarningProvider(deviceId).notifier).state = code;
       }
       return;
     }

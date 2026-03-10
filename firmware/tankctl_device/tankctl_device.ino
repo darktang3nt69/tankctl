@@ -33,6 +33,7 @@
 #define EEPROM_INIT_FLAG 0xA5
 
 #define TANK_ID_MAX_LEN 32
+#define FIRMWARE_VERSION "1.0.0"
 
 // ===== LIBRARIES =====
 #include <WiFiS3.h>
@@ -613,6 +614,7 @@ void publishHeartbeat() {
   doc["uptime_ms"] = millis();
   doc["rssi"] = WiFi.RSSI();
   doc["wifi"] = wifiStatusToString(WiFi.status());
+  doc["firmware_version"] = FIRMWARE_VERSION;
   
   char buffer[128];
   serializeJson(doc, buffer);

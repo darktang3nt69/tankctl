@@ -81,6 +81,7 @@ class TankCard extends ConsumerWidget {
     final historyAsync = ref.watch(temperatureHistoryProvider(deviceId));
     // Watch the full AsyncValue so we can distinguish cold-start (AsyncLoading)
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
+    final deviceWarning = ref.watch(deviceWarningProvider(deviceId));
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
@@ -251,6 +252,10 @@ class TankCard extends ConsumerWidget {
                 Row(
                   children: [
                     _StatusChip(status: status),
+                    if (deviceWarning != null) ...[
+                      const SizedBox(width: 6),
+                      _WarningChip(code: deviceWarning),
+                    ],
                     const Spacer(),
                     const Icon(
                       Icons.access_time_rounded,
@@ -327,6 +332,46 @@ class _StatusChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Warning chip ──────────────────────────────────────────────────────────────
+
+class _WarningChip extends StatelessWidget {
+  const _WarningChip({required this.code});
+  final String code;
+
+  String get _label => switch (code) {
+        'sensor_unavailable' => 'No sensor',
+        _ => 'Warning',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFFFFA726); // amber
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.sensors_off_rounded, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            _label,
+            style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: color,

@@ -62,6 +62,7 @@ class HeartbeatHandler(MessageHandler):
                 uptime_ms=payload.get("uptime_ms"),
                 rssi=payload.get("rssi"),
                 wifi_status=payload.get("wifi"),
+                firmware_version=payload.get("firmware_version"),
             )
 
             logger.info("device_heartbeat_handled", device_id=device_id)
