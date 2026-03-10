@@ -68,6 +68,14 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         importance: Importance.high,
       );
 
+  static const AndroidNotificationChannel _lightStateChannel =
+      AndroidNotificationChannel(
+        'light_state_channel',
+        'Light State',
+        description: 'Light on/off changes for tank devices',
+        importance: Importance.defaultImportance,
+      );
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +105,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
     await androidImpl?.createNotificationChannel(_deviceStatusChannel);
+    await androidImpl?.createNotificationChannel(_lightStateChannel);
     await androidImpl?.requestNotificationsPermission();
     _notificationsReady = true;
 
@@ -161,16 +170,22 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
     _lastToastAtByEvent[eventKey] = now;
 
     final label = _formatDeviceLabel(deviceId);
-    final color = isOnline ? TankCtlColors.success : TankCtlColors.temperature;
-    final message = isOnline ? '$label is online' : '$label went offline';
+    final message = isOnline ? '● $label is online' : '○ $label went offline';
+
+    // Dark backgrounds from the app palette with high-contrast status text.
+    // Avoids the washed-out look of using mid-saturation colors as backgrounds.
+    final bgColor =
+        isOnline ? const Color(0xFF0E2823) : const Color(0xFF2D1020);
+    final textColor =
+        isOnline ? const Color(0xFF5DDEB5) : const Color(0xFFFF8FAD);
 
     await Fluttertoast.cancel();
     await Fluttertoast.showToast(
       msg: message,
       toastLength: Toast.LENGTH_SHORT,
       gravity: ToastGravity.BOTTOM,
-      backgroundColor: color,
-      textColor: Colors.white,
+      backgroundColor: bgColor,
+      textColor: textColor,
       fontSize: 14,
     );
   }
@@ -203,6 +218,67 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
 
     await _notificationsPlugin.show(
       deviceId.hashCode & 0x7fffffff,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
+      payload: deviceId,
+    );
+  }
+
+  Future<void> _showLightToast(String deviceId, bool lightOn) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+
+    final eventKey = '$deviceId:light:${lightOn ? 'on' : 'off'}';
+    final now = DateTime.now();
+    final lastShownAt = _lastToastAtByEvent[eventKey];
+    if (lastShownAt != null && now.difference(lastShownAt).inSeconds < 5) {
+      return;
+    }
+    _lastToastAtByEvent[eventKey] = now;
+
+    final label = _formatDeviceLabel(deviceId);
+    final message = lightOn ? '💡 $label light on' : '🔅 $label light off';
+    final bgColor = const Color(0xFF2A1F00);
+    final textColor = const Color(0xFFFFD060);
+
+    await Fluttertoast.cancel();
+    await Fluttertoast.showToast(
+      msg: message,
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: bgColor,
+      textColor: textColor,
+      fontSize: 14,
+    );
+  }
+
+  Future<void> _showLightNotification(String deviceId, bool lightOn) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    if (!_notificationsReady) {
+      return;
+    }
+
+    final label = _formatDeviceLabel(deviceId);
+    final title = lightOn ? 'Light Turned On' : 'Light Turned Off';
+    final body  = lightOn ? '$label light is now on' : '$label light is now off';
+
+    final androidDetails = AndroidNotificationDetails(
+      _lightStateChannel.id,
+      _lightStateChannel.name,
+      channelDescription: _lightStateChannel.description,
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+      category: AndroidNotificationCategory.status,
+      color: lightOn ? const Color(0xFFFFD060) : TankCtlColors.primary,
+      ticker: 'TankCtl light state',
+    );
+
+    await _notificationsPlugin.show(
+      ('${deviceId}_light').hashCode & 0x7fffffff,
       title,
       body,
       NotificationDetails(android: androidDetails),
@@ -285,6 +361,19 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
       if (deviceId != null) {
         ref.invalidate(deviceShadowProvider(deviceId));
         ref.invalidate(lightStateFamilyProvider(deviceId));
+
+        if (eventName == 'light_state_changed') {
+          final metadata = event['metadata'] as Map<String, dynamic>?;
+          final lightState = metadata?['light'] as String?;
+          if (lightState != null) {
+            final lightOn = lightState == 'on';
+            if (_isInForeground) {
+              unawaited(_showLightToast(deviceId, lightOn));
+            } else {
+              unawaited(_showLightNotification(deviceId, lightOn));
+            }
+          }
+        }
       }
     }
   }
