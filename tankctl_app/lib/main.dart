@@ -75,6 +75,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
     ref.invalidate(devicesListProvider);
     ref.invalidate(dashboardOverviewProvider);
     ref.invalidate(deviceProvider);
+    ref.invalidate(singleDeviceProvider);
     ref.invalidate(temperatureProvider);
     ref.invalidate(temperatureHistoryProvider);
     ref.invalidate(deviceShadowProvider);

@@ -9,6 +9,11 @@ import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+DateTime? _parseIso(String? raw) {
+  if (raw == null) return null;
+  return DateTime.tryParse(raw)?.toLocal();
+}
+
 String _emojiFor(String deviceId) {
   const emojis = ['🐠', '🌿', '🪸', '🐡', '🦀', '🐙', '🦑', '🐬'];
   return emojis[deviceId.hashCode.abs() % emojis.length];
@@ -21,11 +26,16 @@ String _displayName(String id) => id
     .join(' ');
 
 String _formatAge(DateTime? lastSeen) {
-  if (lastSeen == null) return '—';
+  if (lastSeen == null) return 'No data';
   final diff = DateTime.now().difference(lastSeen);
   if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  return '${diff.inHours}h ago';
+  // For stale data, show actual date + time instead of "84h ago"
+  final h = lastSeen.hour.toString().padLeft(2, '0');
+  final m = lastSeen.minute.toString().padLeft(2, '0');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun',
+                   'Jul','Aug','Sep','Oct','Nov','Dec'];
+  return '${months[lastSeen.month - 1]} ${lastSeen.day}, $h:$m';
 }
 
 enum _TankStatus { healthy, ok, highTemp, lowTemp, offline, unknown }
@@ -61,7 +71,11 @@ class TankCard extends ConsumerWidget {
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
-    final lastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
+    final wsLastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
+    // Prefer device last_seen (always current) over telemetry timestamp.
+    final deviceAsync = ref.watch(singleDeviceProvider(deviceId));
+    final deviceLastSeen = _parseIso(deviceAsync.valueOrNull?['last_seen'] as String?);
+    final lastSeen = wsLastSeen ?? deviceLastSeen;
 
     final textTheme = Theme.of(context).textTheme;
     final history = historyAsync.valueOrNull ?? const [];

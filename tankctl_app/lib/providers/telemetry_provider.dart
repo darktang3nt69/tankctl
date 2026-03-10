@@ -38,9 +38,17 @@ final liveTelemetryProvider =
 });
 
 /// Wall-clock time of the last telemetry received for a device.
-/// Updated by the WebSocket event handler in main.dart.
+/// Seeded from the API on first load; updated live by the WebSocket handler.
 final lastTelemetryTimeProvider =
     StateProvider.family<DateTime?, String>((ref, deviceId) => null);
+
+/// Fetches the timestamp of the most recent telemetry row from the API.
+/// Used to seed [lastTelemetryTimeProvider] before any live WS event fires.
+final latestTelemetryTimeApiProvider =
+    FutureProvider.family<DateTime?, String>(
+  (ref, deviceId) =>
+      ref.watch(telemetryServiceProvider).getLatestReadingTime(deviceId),
+);
 
 /// Ticks every second — watched by TankCard to keep "Xs ago" labels current.
 final secondTickProvider = StreamProvider<int>((ref) {
