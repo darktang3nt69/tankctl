@@ -1,15 +1,23 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/features/dashboard/dashboard_screen.dart';
+import 'package:tankctl_app/features/tank_detail/tank_detail_screen.dart';
 import 'package:tankctl_app/providers/app_settings_provider.dart';
 import 'package:tankctl_app/providers/dashboard_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/live_updates_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
+
+/// Global navigator key — allows notification tap handler to push routes
+/// without a BuildContext.
+final _navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   runApp(
@@ -40,20 +48,81 @@ class _LiveUpdatesBootstrap extends ConsumerStatefulWidget {
       _LiveUpdatesBootstrapState();
 }
 
-class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
+class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
+    with WidgetsBindingObserver {
   late final ProviderSubscription<AsyncValue<Map<String, dynamic>>>
       _subscription;
   late final ProviderSubscription<AsyncValue<int>> _settingsSubscription;
   Timer? _refreshTimer;
+  final Map<String, DateTime> _lastToastAtByEvent = {};
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  bool _notificationsReady = false;
+  bool _isInForeground = true;
+
+  static const AndroidNotificationChannel _deviceStatusChannel =
+      AndroidNotificationChannel(
+        'device_status_channel',
+        'Device Status',
+        description: 'Online/offline status updates for tank devices',
+        importance: Importance.high,
+      );
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _subscription = ref.listenManual(webSocketEventsProvider, _handleLiveEvent);
     _settingsSubscription = ref.listenManual(
       liveRefreshIntervalProvider,
       _handleRefreshSetting,
       fireImmediately: true,
+    );
+    unawaited(_initNotifications());
+  }
+
+  Future<void> _initNotifications() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidInit);
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+    );
+
+    final androidImpl = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidImpl?.createNotificationChannel(_deviceStatusChannel);
+    await androidImpl?.requestNotificationsPermission();
+    _notificationsReady = true;
+
+    // Handle tap when app was fully terminated and launched by a notification.
+    final launchDetails =
+        await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (launchDetails != null &&
+        launchDetails.didNotificationLaunchApp &&
+        launchDetails.notificationResponse?.payload != null) {
+      _navigateToDevice(launchDetails.notificationResponse!.payload!);
+    }
+  }
+
+  void _onNotificationTapped(NotificationResponse response) {
+    final deviceId = response.payload;
+    if (deviceId == null || deviceId.isEmpty) {
+      return;
+    }
+    _navigateToDevice(deviceId);
+  }
+
+  void _navigateToDevice(String deviceId) {
+    _navigatorKey.currentState?.push(
+      MaterialPageRoute<void>(
+        builder: (_) => TankDetailScreen(deviceId: deviceId),
+      ),
     );
   }
 
@@ -78,6 +147,87 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
     ref.invalidate(deviceShadowProvider);
   }
 
+  Future<void> _showDeviceStatusToast(String deviceId, bool isOnline) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+
+    final eventKey = '$deviceId:${isOnline ? 'online' : 'offline'}';
+    final now = DateTime.now();
+    final lastShownAt = _lastToastAtByEvent[eventKey];
+    if (lastShownAt != null && now.difference(lastShownAt).inSeconds < 5) {
+      return;
+    }
+    _lastToastAtByEvent[eventKey] = now;
+
+    final label = _formatDeviceLabel(deviceId);
+    final color = isOnline ? TankCtlColors.success : TankCtlColors.temperature;
+    final message = isOnline ? '$label is online' : '$label went offline';
+
+    await Fluttertoast.cancel();
+    await Fluttertoast.showToast(
+      msg: message,
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: color,
+      textColor: Colors.white,
+      fontSize: 14,
+    );
+  }
+
+  Future<void> _showDeviceStatusNotification(
+    String deviceId,
+    bool isOnline,
+  ) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    if (!_notificationsReady) {
+      return;
+    }
+
+    final label = _formatDeviceLabel(deviceId);
+    final title = isOnline ? 'Device Online' : 'Device Offline';
+    final body = isOnline ? '$label is online' : '$label went offline';
+
+    final androidDetails = AndroidNotificationDetails(
+      _deviceStatusChannel.id,
+      _deviceStatusChannel.name,
+      channelDescription: _deviceStatusChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.status,
+      color: isOnline ? TankCtlColors.success : TankCtlColors.temperature,
+      ticker: 'TankCtl device status',
+    );
+
+    await _notificationsPlugin.show(
+      deviceId.hashCode & 0x7fffffff,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
+      payload: deviceId,
+    );
+  }
+
+  String _formatDeviceLabel(String deviceId) {
+    final normalized = deviceId.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (normalized.isEmpty) {
+      return deviceId;
+    }
+
+    return normalized
+        .split(RegExp(r'\s+'))
+        .map((word) {
+          if (word.isEmpty) {
+            return word;
+          }
+          final lower = word.toLowerCase();
+          return '${lower[0].toUpperCase()}${lower.substring(1)}';
+        })
+        .join(' ');
+  }
+
   void _handleLiveEvent(
     AsyncValue<Map<String, dynamic>>? previous,
     AsyncValue<Map<String, dynamic>> next,
@@ -90,9 +240,26 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
     final eventName = event['event'] as String?;
     final deviceId = event['device_id'] as String?;
 
-    if (eventName == 'device_registered' ||
-        eventName == 'device_online' ||
-        eventName == 'device_offline') {
+    if (eventName == 'device_registered') {
+      _syncLiveState();
+      return;
+    }
+
+    if (eventName == 'device_online' || eventName == 'device_offline') {
+      if (deviceId != null) {
+        if (_isInForeground) {
+          unawaited(
+            _showDeviceStatusToast(deviceId, eventName == 'device_online'),
+          );
+        } else {
+          unawaited(
+            _showDeviceStatusNotification(
+              deviceId,
+              eventName == 'device_online',
+            ),
+          );
+        }
+      }
       _syncLiveState();
       return;
     }
@@ -124,10 +291,16 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     _settingsSubscription.close();
     _subscription.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isInForeground = state == AppLifecycleState.resumed;
   }
 
   @override
@@ -149,6 +322,7 @@ class _TankCtlMaterialApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      navigatorKey: _navigatorKey,
       home: const DashboardScreen(),
     );
   }
