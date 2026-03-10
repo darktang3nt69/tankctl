@@ -25,6 +25,21 @@ class TelemetryService:
         self.session = session or db.get_timescale_session()
         self.repo = TelemetryRepository(self.session)
 
+    @staticmethod
+    def _normalize_metric(metric_name: str, value: object) -> Optional[float]:
+        """Normalize telemetry metrics before persistence and event publication."""
+        if value is None:
+            return None
+
+        normalized = float(value)
+
+        # In this deployment, a reported temperature of 0 indicates an
+        # unavailable sensor reading and should not be surfaced as real data.
+        if metric_name == "temperature" and normalized == 0.0:
+            return None
+
+        return normalized
+
     def store_telemetry(
         self,
         device_id: str,
@@ -60,22 +75,18 @@ class TelemetryService:
             pressure = payload.get("pressure")
             metadata = payload.get("metadata")
             
-            # Validate that at least one metric is present
-            if not any([temperature, humidity, pressure]):
+            temperature = self._normalize_metric("temperature", temperature)
+            humidity = self._normalize_metric("humidity", humidity)
+            pressure = self._normalize_metric("pressure", pressure)
+
+            # Validate that at least one usable metric is present.
+            if temperature is None and humidity is None and pressure is None:
                 logger.warning(
                     "telemetry_no_metrics",
                     device_id=device_id,
                     payload=payload,
                 )
                 return
-            
-            # Convert to float if present
-            if temperature is not None:
-                temperature = float(temperature)
-            if humidity is not None:
-                humidity = float(humidity)
-            if pressure is not None:
-                pressure = float(pressure)
             
             # Store in TimescaleDB
             self.repo.insert(

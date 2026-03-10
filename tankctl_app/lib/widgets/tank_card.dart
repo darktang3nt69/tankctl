@@ -33,9 +33,26 @@ String _formatAge(DateTime? lastSeen) {
   // For stale data, show actual date + time instead of "84h ago"
   final h = lastSeen.hour.toString().padLeft(2, '0');
   final m = lastSeen.minute.toString().padLeft(2, '0');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                   'Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return '${months[lastSeen.month - 1]} ${lastSeen.day}, $h:$m';
+}
+
+bool _isFreshReading(DateTime? lastSeen) {
+  if (lastSeen == null) return false;
+  return DateTime.now().difference(lastSeen) <= const Duration(minutes: 2);
 }
 
 enum _TankStatus { healthy, ok, highTemp, lowTemp, offline, unknown }
@@ -74,12 +91,17 @@ class TankCard extends ConsumerWidget {
     final wsLastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
     // Prefer device last_seen (always current) over telemetry timestamp.
     final deviceAsync = ref.watch(singleDeviceProvider(deviceId));
-    final deviceLastSeen = _parseIso(deviceAsync.valueOrNull?['last_seen'] as String?);
+    final deviceLastSeen = _parseIso(
+      deviceAsync.valueOrNull?['last_seen'] as String?,
+    );
     final lastSeen = wsLastSeen ?? deviceLastSeen;
 
     final textTheme = Theme.of(context).textTheme;
     final history = historyAsync.valueOrNull ?? const [];
-    final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
+    final latestHistoryTemp = history.isNotEmpty ? history.last : null;
+    final hasFreshTelemetry = _isFreshReading(lastSeen);
+    final latestTemp =
+        liveTemp ?? (hasFreshTelemetry ? latestHistoryTemp : null);
 
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
     final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));
@@ -105,8 +127,10 @@ class TankCard extends ConsumerWidget {
                 // ── Header: emoji + name + online dot ─────────────────
                 Row(
                   children: [
-                    Text(_emojiFor(deviceId),
-                        style: const TextStyle(fontSize: 22)),
+                    Text(
+                      _emojiFor(deviceId),
+                      style: const TextStyle(fontSize: 22),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -135,9 +159,12 @@ class TankCard extends ConsumerWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Temp',
-                            style: textTheme.labelSmall
-                                ?.copyWith(color: Colors.white38)),
+                        Text(
+                          'Temp',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: Colors.white38,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           latestTemp != null
@@ -160,9 +187,12 @@ class TankCard extends ConsumerWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('Light',
-                            style: textTheme.labelSmall
-                                ?.copyWith(color: Colors.white38)),
+                        Text(
+                          'Light',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: Colors.white38,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -187,8 +217,11 @@ class TankCard extends ConsumerWidget {
                                 child: Switch(
                                   value: lightOn,
                                   onChanged: (v) => ref
-                                      .read(lightStateFamilyProvider(deviceId)
-                                          .notifier)
+                                      .read(
+                                        lightStateFamilyProvider(
+                                          deviceId,
+                                        ).notifier,
+                                      )
                                       .toggle(v),
                                   activeThumbColor: TankCtlColors.warning,
                                 ),
@@ -202,7 +235,7 @@ class TankCard extends ConsumerWidget {
                 ),
 
                 // ── Sparkline ─────────────────────────────────────────
-                if (history.isNotEmpty) ...[
+                if (history.length >= 2) ...[
                   const SizedBox(height: 12),
                   TemperatureMiniChart(
                     data: history,
@@ -218,13 +251,17 @@ class TankCard extends ConsumerWidget {
                   children: [
                     _StatusChip(status: status),
                     const Spacer(),
-                    const Icon(Icons.access_time_rounded,
-                        size: 12, color: Colors.white24),
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 12,
+                      color: Colors.white24,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       _formatAge(lastSeen),
-                      style: textTheme.labelSmall
-                          ?.copyWith(color: Colors.white38),
+                      style: textTheme.labelSmall?.copyWith(
+                        color: Colors.white38,
+                      ),
                     ),
                   ],
                 ),
@@ -246,12 +283,32 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, icon, color) = switch (status) {
-      _TankStatus.healthy  => ('Healthy',     Icons.check_circle_rounded,  TankCtlColors.success),
-      _TankStatus.ok       => ('OK',           Icons.check_rounded,          TankCtlColors.primary),
-      _TankStatus.highTemp => ('HIGH TEMP ⚠', Icons.thermostat_rounded,    TankCtlColors.temperature),
-      _TankStatus.lowTemp  => ('LOW TEMP ⚠',  Icons.ac_unit_rounded,        const Color(0xFF93C5FD)),
-      _TankStatus.offline  => ('Offline',      Icons.cloud_off_rounded,      Colors.white24),
-      _TankStatus.unknown  => ('Unknown',      Icons.help_outline_rounded,   Colors.white24),
+      _TankStatus.healthy => (
+        'Healthy',
+        Icons.check_circle_rounded,
+        TankCtlColors.success,
+      ),
+      _TankStatus.ok => ('OK', Icons.check_rounded, TankCtlColors.primary),
+      _TankStatus.highTemp => (
+        'HIGH TEMP ⚠',
+        Icons.thermostat_rounded,
+        TankCtlColors.temperature,
+      ),
+      _TankStatus.lowTemp => (
+        'LOW TEMP ⚠',
+        Icons.ac_unit_rounded,
+        const Color(0xFF93C5FD),
+      ),
+      _TankStatus.offline => (
+        'Offline',
+        Icons.cloud_off_rounded,
+        Colors.white24,
+      ),
+      _TankStatus.unknown => (
+        'Unknown',
+        Icons.help_outline_rounded,
+        Colors.white24,
+      ),
     };
 
     return Container(
@@ -269,7 +326,10 @@ class _StatusChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: color),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
         ],
       ),

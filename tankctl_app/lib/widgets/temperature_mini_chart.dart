@@ -17,13 +17,14 @@ class TemperatureMiniChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (data.length < 2) return SizedBox(height: height);
+    final points = data.where((value) => value != 0).toList(growable: false);
+    if (points.length < 2) return SizedBox(height: height);
     final lineColor = color ?? Theme.of(context).colorScheme.primary;
     return SizedBox(
       height: height,
       child: CustomPaint(
         size: Size.infinite,
-        painter: _SparklinePainter(data: data, color: lineColor),
+        painter: _SparklinePainter(data: points, color: lineColor),
       ),
     );
   }
@@ -57,7 +58,14 @@ class _SparklinePainter extends CustomPainter {
     void addCurve(Path p, List<Offset> pts) {
       for (int i = 0; i < pts.length - 1; i++) {
         final midX = (pts[i].dx + pts[i + 1].dx) / 2;
-        p.cubicTo(midX, pts[i].dy, midX, pts[i + 1].dy, pts[i + 1].dx, pts[i + 1].dy);
+        p.cubicTo(
+          midX,
+          pts[i].dy,
+          midX,
+          pts[i + 1].dy,
+          pts[i + 1].dx,
+          pts[i + 1].dy,
+        );
       }
     }
 
