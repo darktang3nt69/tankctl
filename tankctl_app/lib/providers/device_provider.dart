@@ -1,11 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tankctl_app/core/api/api_constants.dart';
 import 'package:tankctl_app/services/device_service.dart';
-
-/// Fetches live device info from GET /devices/{id}.
-final deviceProvider = FutureProvider<Map<String, dynamic>>((ref) {
-  return ref.watch(deviceServiceProvider).getDevice(ApiConstants.defaultDeviceId);
-});
 
 /// Fetches a single device by ID.
 final singleDeviceProvider =

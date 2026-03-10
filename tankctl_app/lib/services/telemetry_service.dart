@@ -17,22 +17,6 @@ class TelemetryService {
     return (readings.first['value'] as num?)?.toDouble();
   }
 
-  /// Returns the recorded_at timestamp of the most recent telemetry entry.
-  Future<DateTime?> getLatestReadingTime(String deviceId) async {
-    final response = await _dio.get(
-      '/devices/$deviceId/telemetry/temperature',
-      queryParameters: {'limit': 1},
-    );
-    final data = response.data as Map<String, dynamic>;
-    final readings = data['data'] as List?;
-    if (readings == null || readings.isEmpty) return null;
-    final raw = readings.first['time'] as String?;
-    if (raw == null) return null;
-    // Ensure the string is treated as UTC before converting to local.
-    final utcString = raw.endsWith('Z') || raw.contains('+') ? raw : '${raw}Z';
-    return DateTime.tryParse(utcString)?.toLocal();
-  }
-
   /// Returns temperature readings oldest-first for sparkline charts.
   Future<List<double>> getTemperatureHistory(
     String deviceId, {

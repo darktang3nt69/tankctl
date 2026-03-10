@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tankctl_app/core/api/api_constants.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/features/dashboard/dashboard_screen.dart';
 import 'package:tankctl_app/providers/app_settings_provider.dart';
@@ -74,12 +73,9 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
   void _syncLiveState() {
     ref.invalidate(devicesListProvider);
     ref.invalidate(dashboardOverviewProvider);
-    ref.invalidate(deviceProvider);
     ref.invalidate(singleDeviceProvider);
-    ref.invalidate(temperatureProvider);
     ref.invalidate(temperatureHistoryProvider);
     ref.invalidate(deviceShadowProvider);
-    ref.invalidate(lightStateProvider);
   }
 
   void _handleLiveEvent(
@@ -108,9 +104,6 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
         ref.read(lastTelemetryTimeProvider(deviceId).notifier).state =
             DateTime.now();
         ref.invalidate(temperatureHistoryProvider(deviceId));
-        if (deviceId == ApiConstants.defaultDeviceId) {
-          ref.invalidate(temperatureProvider);
-        }
       }
       return;
     }
@@ -125,9 +118,6 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap> {
       if (deviceId != null) {
         ref.invalidate(deviceShadowProvider(deviceId));
         ref.invalidate(lightStateFamilyProvider(deviceId));
-        if (deviceId == ApiConstants.defaultDeviceId) {
-          ref.invalidate(lightStateProvider);
-        }
       }
     }
   }
