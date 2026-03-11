@@ -78,6 +78,14 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         importance: Importance.defaultImportance,
       );
 
+  static const AndroidNotificationChannel _sensorWarningChannel =
+      AndroidNotificationChannel(
+        'sensor_warning_channel',
+        'Sensor Warnings',
+        description: 'Alerts when a device sensor may be disconnected',
+        importance: Importance.high,
+      );
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +116,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
             AndroidFlutterLocalNotificationsPlugin>();
     await androidImpl?.createNotificationChannel(_deviceStatusChannel);
     await androidImpl?.createNotificationChannel(_lightStateChannel);
+    await androidImpl?.createNotificationChannel(_sensorWarningChannel);
     await androidImpl?.requestNotificationsPermission();
     _notificationsReady = true;
 
@@ -288,6 +297,49 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
     );
   }
 
+  Future<void> _showSensorWarningNotification(
+    String deviceId,
+    String code,
+  ) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    if (!_notificationsReady) {
+      return;
+    }
+
+    final eventKey = '$deviceId:sensor_warning:$code';
+    final now = DateTime.now();
+    final lastShownAt = _lastToastAtByEvent[eventKey];
+    if (lastShownAt != null && now.difference(lastShownAt).inMinutes < 5) {
+      return;
+    }
+    _lastToastAtByEvent[eventKey] = now;
+
+    final label = _formatDeviceLabel(deviceId);
+    const title = 'No Temp Sensor';
+    final body = '$label: Temperature sensor may not be connected';
+
+    final androidDetails = AndroidNotificationDetails(
+      _sensorWarningChannel.id,
+      _sensorWarningChannel.name,
+      channelDescription: _sensorWarningChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.status,
+      color: const Color(0xFFFFA726),
+      ticker: 'TankCtl sensor warning',
+    );
+
+    await _notificationsPlugin.show(
+      ('${deviceId}_sensor').hashCode & 0x7fffffff,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
+      payload: deviceId,
+    );
+  }
+
   String _formatDeviceLabel(String deviceId) {
     final normalized = deviceId.replaceAll(RegExp(r'[_-]+'), ' ').trim();
     if (normalized.isEmpty) {
@@ -363,6 +415,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         final metadata = event['metadata'] as Map<String, dynamic>?;
         final code = metadata?['code'] as String? ?? 'unknown';
         ref.read(deviceWarningProvider(deviceId).notifier).state = code;
+        unawaited(_showSensorWarningNotification(deviceId, code));
       }
       return;
     }

@@ -86,10 +86,12 @@ class TankCard extends ConsumerWidget {
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
     final wsLastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
-    final deviceAsync = ref.watch(singleDeviceProvider(deviceId));
-    final deviceLastSeen = _parseIso(
-      deviceAsync.valueOrNull?['last_seen'] as String?,
+    final devicesAsync = ref.watch(devicesListProvider);
+    final deviceData = devicesAsync.valueOrNull?.firstWhere(
+      (d) => d['device_id'] == deviceId,
+      orElse: () => const <String, dynamic>{},
     );
+    final deviceLastSeen = _parseIso(deviceData?['last_seen'] as String?);
     final lastSeen = wsLastSeen ?? deviceLastSeen;
 
     final textTheme = Theme.of(context).textTheme;
@@ -171,7 +173,7 @@ class TankCard extends ConsumerWidget {
                         Text(
                           latestTemp != null
                               ? '${latestTemp.toStringAsFixed(1)}°C'
-                              : '—',
+                              : '--',
                           style: TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.bold,
@@ -350,7 +352,7 @@ class _WarningChip extends StatelessWidget {
   final String code;
 
   String get _label => switch (code) {
-        'sensor_unavailable' => 'No sensor',
+        'sensor_unavailable' => 'No Temp Sensor',
         _ => 'Warning',
       };
 
