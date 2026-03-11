@@ -43,10 +43,16 @@ class MQTTTopics:
         """Get heartbeat topic for a device."""
         return f"tankctl/{device_id}/heartbeat"
 
+    @staticmethod
+    def status_topic(device_id: str) -> str:
+        """Get status/warning topic for a device."""
+        return f"tankctl/{device_id}/status"
+
     # Wildcard subscriptions for backend
     SUBSCRIBE_TELEMETRY = "tankctl/+/telemetry"
-    SUBSCRIBE_REPORTED = "tankctl/+/reported"
+    SUBSCRIBE_REPORTED  = "tankctl/+/reported"
     SUBSCRIBE_HEARTBEAT = "tankctl/+/heartbeat"
+    SUBSCRIBE_STATUS    = "tankctl/+/status"
 
     @staticmethod
     def extract_device_id(topic: str) -> str | None:

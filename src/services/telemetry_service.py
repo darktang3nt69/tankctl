@@ -25,6 +25,21 @@ class TelemetryService:
         self.session = session or db.get_timescale_session()
         self.repo = TelemetryRepository(self.session)
 
+    @staticmethod
+    def _normalize_metric(metric_name: str, value: object) -> Optional[float]:
+        """Normalize telemetry metrics before persistence and event publication."""
+        if value is None:
+            return None
+
+        normalized = float(value)
+
+        # In this deployment, a reported temperature of 0 indicates an
+        # unavailable sensor reading and should not be surfaced as real data.
+        if metric_name == "temperature" and normalized == 0.0:
+            return None
+
+        return normalized
+
     def store_telemetry(
         self,
         device_id: str,
@@ -55,37 +70,57 @@ class TelemetryService:
 
         try:
             # Extract temperature, humidity, pressure
-            temperature = payload.get("temperature")
-            humidity = payload.get("humidity")
-            pressure = payload.get("pressure")
+            raw_temperature = payload.get("temperature")
+            raw_humidity = payload.get("humidity")
+            raw_pressure = payload.get("pressure")
             metadata = payload.get("metadata")
-            
-            # Validate that at least one metric is present
-            if not any([temperature, humidity, pressure]):
+
+            # Reject payloads that contain no recognized metric keys at all.
+            if raw_temperature is None and raw_humidity is None and raw_pressure is None:
                 logger.warning(
                     "telemetry_no_metrics",
                     device_id=device_id,
                     payload=payload,
                 )
                 return
-            
-            # Convert to float if present
-            if temperature is not None:
-                temperature = float(temperature)
-            if humidity is not None:
-                humidity = float(humidity)
-            if pressure is not None:
-                pressure = float(pressure)
-            
-            # Store in TimescaleDB
-            self.repo.insert(
-                device_id=device_id,
-                temperature=temperature,
-                humidity=humidity,
-                pressure=pressure,
-                metadata=metadata,
+
+            # Normalize: converts invalid sensor readings (e.g. temperature=0)
+            # to None so they are never stored as real data.
+            temperature = self._normalize_metric("temperature", raw_temperature)
+            humidity = self._normalize_metric("humidity", raw_humidity)
+            pressure = self._normalize_metric("pressure", raw_pressure)
+
+            has_valid_data = not (
+                temperature is None and humidity is None and pressure is None
             )
 
+            if has_valid_data:
+                # Store valid metrics in TimescaleDB.
+                self.repo.insert(
+                    device_id=device_id,
+                    temperature=temperature,
+                    humidity=humidity,
+                    pressure=pressure,
+                    metadata=metadata,
+                )
+                logger.info(
+                    "telemetry_stored",
+                    device_id=device_id,
+                    temperature=temperature,
+                    humidity=humidity,
+                    pressure=pressure,
+                )
+            else:
+                # All recognized metrics normalized away (e.g. temp sensor
+                # returning 0).  Still publish the event so connected clients
+                # learn that the device is alive but the sensor is unavailable.
+                logger.info(
+                    "telemetry_sensor_unavailable",
+                    device_id=device_id,
+                )
+
+            # Always publish so the app can update freshness tracking and
+            # distinguish "no data yet" from "sensor currently unavailable".
             event_publisher.publish(
                 telemetry_received_event(
                     device_id=device_id,
@@ -95,14 +130,6 @@ class TelemetryService:
                         "pressure": pressure,
                     },
                 )
-            )
-            
-            logger.info(
-                "telemetry_stored",
-                device_id=device_id,
-                temperature=temperature,
-                humidity=humidity,
-                pressure=pressure,
             )
 
         except ValueError as e:

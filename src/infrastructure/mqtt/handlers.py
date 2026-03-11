@@ -13,7 +13,31 @@ from src.services.shadow_service import ShadowService
 from src.services.telemetry_service import TelemetryService
 from src.utils.logger import get_logger
 
+from src.infrastructure.events.event_publisher import event_publisher
+from src.domain.event import Event
+
 logger = get_logger(__name__)
+
+
+class DeviceStatusHandler(MessageHandler):
+    """Handle device status/warning messages (e.g. sensor unavailable)."""
+
+    def handle(self, device_id: str, payload: dict) -> None:
+        code = payload.get("code", "unknown")
+        message = payload.get("message", "")
+        logger.warning(
+            "device_warning",
+            device_id=device_id,
+            code=code,
+            message=message,
+        )
+        event_publisher.publish(
+            Event(
+                event="device_warning",
+                device_id=device_id,
+                metadata={"code": code, "message": message},
+            )
+        )
 
 
 class HeartbeatHandler(MessageHandler):
@@ -38,6 +62,7 @@ class HeartbeatHandler(MessageHandler):
                 uptime_ms=payload.get("uptime_ms"),
                 rssi=payload.get("rssi"),
                 wifi_status=payload.get("wifi"),
+                firmware_version=payload.get("firmware_version"),
             )
 
             logger.info("device_heartbeat_handled", device_id=device_id)

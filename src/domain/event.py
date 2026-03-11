@@ -38,6 +38,9 @@ EventType = Literal[
     # MQTT
     "mqtt_connected",
     "mqtt_disconnected",
+
+    # Device warnings
+    "device_warning",
 ]
 
 
