@@ -4,9 +4,8 @@ import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
-import 'package:tankctl_app/widgets/status_indicator.dart';
-import 'package:tankctl_app/widgets/tank_card_chips.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
+import 'package:tankctl_app/widgets/tank_card_sections.dart';
 import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
 
 // ── TankCard ──────────────────────────────────────────────────────────────────
@@ -42,7 +41,6 @@ class TankCard extends ConsumerWidget {
     final deviceLastSeen = parseIsoToLocal(deviceData?['last_seen'] as String?);
     final lastSeen = wsLastSeen ?? deviceLastSeen;
 
-    final textTheme = Theme.of(context).textTheme;
     final history = historyAsync.valueOrNull ?? const [];
 
     // wsLastSeen is set by main.dart on every telemetry_received WS event
@@ -76,114 +74,22 @@ class TankCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header: emoji + name + online dot ─────────────────
-                Row(
-                  children: [
-                    Text(
-                      emojiForDevice(deviceId),
-                      style: const TextStyle(fontSize: 22),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        displayNameFromDeviceId(deviceId),
-                        style: textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    StatusIndicator(isOnline: isOnline),
-                  ],
+                TankCardHeader(
+                  deviceId: deviceId,
+                  isOnline: isOnline,
                 ),
 
                 const SizedBox(height: 12),
                 const Divider(color: Colors.white10, height: 1),
                 const SizedBox(height: 14),
 
-                // ── Temp (left) + Light toggle (right) ────────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    // Temperature
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Temp',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: Colors.white38,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          latestTemp != null
-                              ? '${latestTemp.toStringAsFixed(1)}°C'
-                              : '--',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: tempHigh
-                                ? TankCtlColors.temperature
-                                : Colors.white,
-                            letterSpacing: -1,
-                            height: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    // Light
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Light',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: Colors.white38,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              lightOn ? 'ON' : 'OFF',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: lightOn
-                                    ? TankCtlColors.warning
-                                    : Colors.white38,
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            GestureDetector(
-                              onTap: () {},
-                              behavior: HitTestBehavior.opaque,
-                              child: Transform.scale(
-                                scale: 0.75,
-                                alignment: Alignment.centerRight,
-                                child: Switch(
-                                  value: lightOn,
-                                  onChanged: (v) => ref
-                                      .read(
-                                        lightStateFamilyProvider(
-                                          deviceId,
-                                        ).notifier,
-                                      )
-                                      .toggle(v),
-                                  activeThumbColor: TankCtlColors.warning,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                TankCardMetricsRow(
+                  latestTemp: latestTemp,
+                  tempHigh: tempHigh,
+                  lightOn: lightOn,
+                  onToggleLight: (v) => ref
+                      .read(lightStateFamilyProvider(deviceId).notifier)
+                      .toggle(v),
                 ),
 
                 // ── Sparkline ─────────────────────────────────────────
@@ -198,28 +104,10 @@ class TankCard extends ConsumerWidget {
 
                 const SizedBox(height: 12),
 
-                // ── Status chip + last update ─────────────────────────
-                Row(
-                  children: [
-                    TankStatusChip(status: status),
-                    if (deviceWarning != null) ...[
-                      const SizedBox(width: 6),
-                      TankWarningChip(code: deviceWarning),
-                    ],
-                    const Spacer(),
-                    const Icon(
-                      Icons.access_time_rounded,
-                      size: 12,
-                      color: Colors.white24,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      formatAgeFromLastSeen(lastSeen),
-                      style: textTheme.labelSmall?.copyWith(
-                        color: Colors.white38,
-                      ),
-                    ),
-                  ],
+                TankCardFooter(
+                  status: status,
+                  warningCode: deviceWarning,
+                  lastSeen: lastSeen,
                 ),
               ],
             ),

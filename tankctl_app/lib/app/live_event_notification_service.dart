@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:tankctl_app/app/live_event_labels.dart';
+import 'package:tankctl_app/app/live_event_notification_channels.dart';
 import 'package:tankctl_app/app/navigation.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/features/tank_detail/tank_detail_screen.dart';
@@ -10,30 +11,6 @@ class LiveEventNotificationService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
   bool _notificationsReady = false;
-
-  static const AndroidNotificationChannel _deviceStatusChannel =
-      AndroidNotificationChannel(
-        'device_status_channel',
-        'Device Status',
-        description: 'Online/offline status updates for tank devices',
-        importance: Importance.high,
-      );
-
-  static const AndroidNotificationChannel _lightStateChannel =
-      AndroidNotificationChannel(
-        'light_state_channel',
-        'Light State',
-        description: 'Light on/off changes for tank devices',
-        importance: Importance.defaultImportance,
-      );
-
-  static const AndroidNotificationChannel _sensorWarningChannel =
-      AndroidNotificationChannel(
-        'sensor_warning_channel',
-        'Sensor Warnings',
-        description: 'Alerts when a device sensor may be disconnected',
-        importance: Importance.high,
-      );
 
   Future<void> initialize() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
@@ -50,9 +27,9 @@ class LiveEventNotificationService {
     final androidImpl = _notificationsPlugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-    await androidImpl?.createNotificationChannel(_deviceStatusChannel);
-    await androidImpl?.createNotificationChannel(_lightStateChannel);
-    await androidImpl?.createNotificationChannel(_sensorWarningChannel);
+    await androidImpl?.createNotificationChannel(deviceStatusChannel);
+    await androidImpl?.createNotificationChannel(lightStateChannel);
+    await androidImpl?.createNotificationChannel(sensorWarningChannel);
     await androidImpl?.requestNotificationsPermission();
     _notificationsReady = true;
 
@@ -81,9 +58,9 @@ class LiveEventNotificationService {
     final body = isOnline ? '$label is online' : '$label went offline';
 
     final androidDetails = AndroidNotificationDetails(
-      _deviceStatusChannel.id,
-      _deviceStatusChannel.name,
-      channelDescription: _deviceStatusChannel.description,
+      deviceStatusChannel.id,
+      deviceStatusChannel.name,
+      channelDescription: deviceStatusChannel.description,
       importance: Importance.high,
       priority: Priority.high,
       category: AndroidNotificationCategory.status,
@@ -113,9 +90,9 @@ class LiveEventNotificationService {
     final body = lightOn ? '$label light is now on' : '$label light is now off';
 
     final androidDetails = AndroidNotificationDetails(
-      _lightStateChannel.id,
-      _lightStateChannel.name,
-      channelDescription: _lightStateChannel.description,
+      lightStateChannel.id,
+      lightStateChannel.name,
+      channelDescription: lightStateChannel.description,
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
       category: AndroidNotificationCategory.status,
@@ -145,9 +122,9 @@ class LiveEventNotificationService {
     final body = '$label: Temperature sensor may not be connected';
 
     final androidDetails = AndroidNotificationDetails(
-      _sensorWarningChannel.id,
-      _sensorWarningChannel.name,
-      channelDescription: _sensorWarningChannel.description,
+      sensorWarningChannel.id,
+      sensorWarningChannel.name,
+      channelDescription: sensorWarningChannel.description,
       importance: Importance.high,
       priority: Priority.high,
       category: AndroidNotificationCategory.status,
@@ -177,9 +154,9 @@ class LiveEventNotificationService {
     final body = '$label: Temperature sensor is back online';
 
     final androidDetails = AndroidNotificationDetails(
-      _sensorWarningChannel.id,
-      _sensorWarningChannel.name,
-      channelDescription: _sensorWarningChannel.description,
+      sensorWarningChannel.id,
+      sensorWarningChannel.name,
+      channelDescription: sensorWarningChannel.description,
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
       category: AndroidNotificationCategory.status,

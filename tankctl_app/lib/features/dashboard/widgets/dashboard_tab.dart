@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/api/api_constants.dart';
-import 'package:tankctl_app/features/dashboard/widgets/needs_attention_strip.dart';
+import 'package:tankctl_app/features/dashboard/widgets/dashboard_attention_builder.dart';
+import 'package:tankctl_app/features/dashboard/widgets/dashboard_list_controls.dart';
 import 'package:tankctl_app/features/dashboard/widgets/dashboard_sorting.dart';
+import 'package:tankctl_app/features/dashboard/widgets/needs_attention_strip.dart';
 import 'package:tankctl_app/features/tank_detail/tank_detail_screen.dart';
 import 'package:tankctl_app/providers/app_settings_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
@@ -22,9 +24,6 @@ class DashboardTab extends ConsumerStatefulWidget {
 class _DashboardTabState extends ConsumerState<DashboardTab> {
   bool _showOnlineOnly = false;
   DashboardSortMode _sortMode = DashboardSortMode.alphabetical;
-
-  static const _highTempThreshold = 28.0;
-  static const _lowTempThreshold = 18.0;
 
   SortMeta _buildSortMeta(Map<String, dynamic> device) {
     final deviceId = device['device_id'] as String;
@@ -58,78 +57,6 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
     );
   }
 
-  List<AttentionIssue> _buildAttentionIssues(List<Map<String, dynamic>> devices) {
-    final issues = <AttentionIssue>[];
-
-    for (final device in devices) {
-      final deviceId = device['device_id'] as String;
-      final isOnline = device['status'] == 'online';
-      final label = deviceLabel(deviceId);
-
-      if (!isOnline) {
-        issues.add(
-          AttentionIssue(
-            deviceId: deviceId,
-            deviceLabel: label,
-            type: AttentionIssueType.offline,
-          ),
-        );
-        continue;
-      }
-
-      final warningCode = ref.watch(deviceWarningProvider(deviceId));
-      if (warningCode == 'sensor_unavailable') {
-        issues.add(
-          AttentionIssue(
-            deviceId: deviceId,
-            deviceLabel: label,
-            type: AttentionIssueType.noTempSensor,
-          ),
-        );
-        continue;
-      }
-
-      final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
-      final history =
-          ref.watch(temperatureHistoryProvider(deviceId)).valueOrNull ??
-          const <double>[];
-      final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
-
-      if (latestTemp != null && latestTemp > _highTempThreshold) {
-        issues.add(
-          AttentionIssue(
-            deviceId: deviceId,
-            deviceLabel: label,
-            type: AttentionIssueType.highTemp,
-            temperature: latestTemp,
-          ),
-        );
-        continue;
-      }
-
-      if (latestTemp != null && latestTemp < _lowTempThreshold) {
-        issues.add(
-          AttentionIssue(
-            deviceId: deviceId,
-            deviceLabel: label,
-            type: AttentionIssueType.lowTemp,
-            temperature: latestTemp,
-          ),
-        );
-      }
-    }
-
-    issues.sort((a, b) {
-      final bySeverity = issuePriority(a.type).compareTo(issuePriority(b.type));
-      if (bySeverity != 0) {
-        return bySeverity;
-      }
-      return a.deviceLabel.compareTo(b.deviceLabel);
-    });
-
-    return issues;
-  }
-
   @override
   Widget build(BuildContext context) {
     final devicesAsync = ref.watch(devicesListProvider);
@@ -147,56 +74,16 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
         children: [
           const TankOverviewCard(),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Text(
-                'MY TANKS',
-                style: textTheme.labelSmall?.copyWith(
-                  color: Colors.white38,
-                  letterSpacing: 1.4,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              FilterChip(
-                label: const Text('Online only'),
-                selected: _showOnlineOnly,
-                onSelected: (v) => setState(() => _showOnlineOnly = v),
-                visualDensity: VisualDensity.compact,
-              ),
-              const SizedBox(width: 8),
-              PopupMenuButton<DashboardSortMode>(
-                tooltip: 'Sort tanks',
-                onSelected: (mode) => setState(() => _sortMode = mode),
-                itemBuilder: (context) => DashboardSortMode.values
-                    .map(
-                      (mode) => PopupMenuItem<DashboardSortMode>(
-                        value: mode,
-                        child: Row(
-                          children: [
-                            if (mode == _sortMode)
-                              const Icon(Icons.check_rounded, size: 16)
-                            else
-                              const SizedBox(width: 16),
-                            const SizedBox(width: 8),
-                            Text(sortLabel(mode)),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
-                child: Chip(
-                  visualDensity: VisualDensity.compact,
-                  avatar: const Icon(Icons.sort_rounded, size: 16),
-                  label: Text(sortLabel(_sortMode)),
-                ),
-              ),
-            ],
+          DashboardListControls(
+            showOnlineOnly: _showOnlineOnly,
+            onToggleOnlineOnly: (v) => setState(() => _showOnlineOnly = v),
+            sortMode: _sortMode,
+            onSortModeChanged: (mode) => setState(() => _sortMode = mode),
           ),
           const SizedBox(height: 12),
           devicesAsync.when(
             data: (devices) {
-              final attentionIssues = _buildAttentionIssues(devices);
+              final attentionIssues = buildAttentionIssues(ref, devices);
               final filtered = _showOnlineOnly
                   ? devices.where((d) => d['status'] == 'online').toList()
                   : devices;
