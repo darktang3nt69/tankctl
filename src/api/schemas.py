@@ -56,6 +56,32 @@ class DeviceResponse(BaseModel):
     uptime_ms: Optional[int] = None
     rssi: Optional[int] = None
     wifi_status: Optional[str] = None
+    temp_threshold_low: Optional[float] = None
+    temp_threshold_high: Optional[float] = None
+
+
+class DevicePatchRequest(BaseModel):
+    """Partial update request for mutable device settings."""
+
+    temp_threshold_low: Optional[float] = None
+    temp_threshold_high: Optional[float] = None
+
+    @model_validator(mode='after')
+    def validate_threshold_range(self):
+        if (
+            self.temp_threshold_low is not None
+            and self.temp_threshold_high is not None
+            and self.temp_threshold_low >= self.temp_threshold_high
+        ):
+            raise ValueError("temp_threshold_low must be less than temp_threshold_high")
+        return self
+
+
+class WarningAckResponse(BaseModel):
+    """Represents an acknowledged warning key."""
+
+    device_id: str
+    warning_code: str
 
 
 class DeviceDeleteResponse(BaseModel):

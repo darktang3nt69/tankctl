@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
+import 'package:tankctl_app/features/dashboard/providers/attention_dismissals_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
+import 'package:tankctl_app/services/device_service.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 import 'package:tankctl_app/widgets/tank_card_sections.dart';
 import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
@@ -22,6 +24,37 @@ class TankCard extends ConsumerWidget {
   final String deviceId;
   final bool isOnline;
   final VoidCallback onTap;
+
+  Future<void> _confirmAndReboot(BuildContext context, WidgetRef ref) async {
+    final shouldReboot = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reboot device?'),
+        content: Text('Reboot $deviceId now?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reboot'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldReboot == true) {
+      await ref.read(deviceServiceProvider).rebootDevice(deviceId);
+    }
+  }
+
+  Future<void> _refreshTank(WidgetRef ref) async {
+    await ref.read(deviceServiceProvider).requestStatus(deviceId);
+    ref.invalidate(temperatureHistoryProvider(deviceId));
+    ref.invalidate(deviceShadowProvider(deviceId));
+    ref.invalidate(devicesListProvider);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -59,7 +92,12 @@ class TankCard extends ConsumerWidget {
         lightFamilyAsync.valueOrNull ?? (reported?['light'] == 'on');
 
     final status = evaluateTankStatus(latestTemp, isOnline);
-    final tempHigh = latestTemp != null && latestTemp > 28.0;
+    final thresholdHigh = (deviceData?['temp_threshold_high'] as num?)?.toDouble();
+    final thresholdLow = (deviceData?['temp_threshold_low'] as num?)?.toDouble();
+    final effectiveHigh = thresholdHigh ?? 28.0;
+    final tempHigh = latestTemp != null && latestTemp > effectiveHigh;
+    final rssi = (deviceData?['rssi'] as num?)?.toInt();
+    final firmwareVersion = deviceData?['firmware_version'] as String?;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -77,6 +115,9 @@ class TankCard extends ConsumerWidget {
                 TankCardHeader(
                   deviceId: deviceId,
                   isOnline: isOnline,
+                  rssi: rssi,
+                  onRefresh: () => _refreshTank(ref),
+                  onReboot: () => _confirmAndReboot(context, ref),
                 ),
 
                 const SizedBox(height: 12),
@@ -99,6 +140,8 @@ class TankCard extends ConsumerWidget {
                     data: history,
                     height: 40,
                     color: isOnline ? TankCtlColors.primary : Colors.white12,
+                    thresholdHigh: thresholdHigh,
+                    thresholdLow: thresholdLow,
                   ),
                 ],
 
@@ -108,6 +151,16 @@ class TankCard extends ConsumerWidget {
                   status: status,
                   warningCode: deviceWarning,
                   lastSeen: lastSeen,
+                  firmwareVersion: firmwareVersion,
+                  onAcknowledgeWarning: deviceWarning == null
+                      ? null
+                      : () async {
+                          await ref.read(deviceServiceProvider).acknowledgeWarning(
+                                deviceId,
+                                deviceWarning,
+                              );
+                          ref.invalidate(attentionDismissalsProvider);
+                        },
                 ),
               ],
             ),

@@ -7,7 +7,7 @@ These models map to PostgreSQL and TimescaleDB tables.
 from datetime import datetime
 import json
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Time, Boolean
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Time, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -27,6 +27,8 @@ class DeviceModel(Base):
     uptime_ms = Column(Integer, nullable=True)
     rssi = Column(Integer, nullable=True)
     wifi_status = Column(String(50), nullable=True)
+    temp_threshold_low = Column(Float, nullable=True)
+    temp_threshold_high = Column(Float, nullable=True)
 
     def __repr__(self):
         return f"<DeviceModel(device_id={self.device_id}, status={self.status})>"
@@ -131,3 +133,24 @@ class LightScheduleModel(Base):
 
     def __repr__(self):
         return f"<LightScheduleModel(device_id={self.device_id}, on={self.on_time}, off={self.off_time}, enabled={self.enabled})>"
+
+
+class WarningAcknowledgementModel(Base):
+    """Stores acknowledged warning codes per device."""
+
+    __tablename__ = "warning_acknowledgements"
+    __table_args__ = (
+        UniqueConstraint("device_id", "warning_code", name="uq_warning_ack_device_code"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_id = Column(String(100), nullable=False, index=True)
+    warning_code = Column(String(100), nullable=False, index=True)
+    acknowledged_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return (
+            "<WarningAcknowledgementModel("
+            f"device_id={self.device_id}, warning_code={self.warning_code}"
+            ")>"
+        )

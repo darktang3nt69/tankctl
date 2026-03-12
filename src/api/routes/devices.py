@@ -10,12 +10,13 @@ GET /devices/{device_id}/schedule - Get light schedule
 DELETE /devices/{device_id}/schedule - Delete light schedule
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from datetime import time as dt_time
 
 from src.api.schemas import (
     DeviceDeleteResponse,
+    DevicePatchRequest,
     DeviceResponse,
     DeviceShadowResponse,
     DeviceRegisterRequest,
@@ -23,6 +24,7 @@ from src.api.schemas import (
     DeviceShadowUpdateRequest,
     ScheduleRequest,
     ScheduleResponse,
+    WarningAckResponse,
 )
 from src.infrastructure.db.database import db
 from src.services.device_service import DeviceService
@@ -77,6 +79,8 @@ def list_devices(session: Session = Depends(get_db)):
                 uptime_ms=d.uptime_ms,
                 rssi=d.rssi,
                 wifi_status=d.wifi_status,
+                temp_threshold_low=d.temp_threshold_low,
+                temp_threshold_high=d.temp_threshold_high,
             )
             for d in devices
         ]
@@ -123,12 +127,108 @@ def get_device(device_id: str, session: Session = Depends(get_db)):
             uptime_ms=device.uptime_ms,
             rssi=device.rssi,
             wifi_status=device.wifi_status,
+            temp_threshold_low=device.temp_threshold_low,
+            temp_threshold_high=device.temp_threshold_high,
         )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error("get_device_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.patch("/{device_id}", response_model=DeviceResponse)
+def patch_device(
+    device_id: str,
+    request: DevicePatchRequest,
+    session: Session = Depends(get_db),
+):
+    """Patch mutable device settings such as threshold values."""
+    try:
+        logger.info("patching_device", device_id=device_id)
+        device_service = DeviceService(session)
+
+        existing = device_service.get_device(device_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+
+        low = (
+            request.temp_threshold_low
+            if request.temp_threshold_low is not None
+            else existing.temp_threshold_low
+        )
+        high = (
+            request.temp_threshold_high
+            if request.temp_threshold_high is not None
+            else existing.temp_threshold_high
+        )
+
+        updated = device_service.update_thresholds(
+            device_id=device_id,
+            temp_threshold_low=low,
+            temp_threshold_high=high,
+        )
+
+        return DeviceResponse(
+            device_id=updated.device_id,
+            status=updated.status,
+            firmware_version=updated.firmware_version,
+            created_at=isoformat_in_app_timezone(updated.created_at),
+            last_seen=isoformat_in_app_timezone(updated.last_seen),
+            uptime_ms=updated.uptime_ms,
+            rssi=updated.rssi,
+            wifi_status=updated.wifi_status,
+            temp_threshold_low=updated.temp_threshold_low,
+            temp_threshold_high=updated.temp_threshold_high,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("patch_device_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/warnings/acks", response_model=list[WarningAckResponse])
+def get_acknowledged_warnings(session: Session = Depends(get_db)):
+    """Return all acknowledged warning keys across devices."""
+    try:
+        rows = DeviceService(session).get_acknowledged_warnings()
+        return [
+            WarningAckResponse(device_id=device_id, warning_code=warning_code)
+            for device_id, warning_code in rows
+        ]
+    except Exception as e:
+        logger.error("list_warning_acks_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post(
+    "/{device_id}/warnings/{warning_code}/ack",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def acknowledge_warning(
+    device_id: str,
+    warning_code: str,
+    session: Session = Depends(get_db),
+):
+    """Persist acknowledgement for a warning code on a device."""
+    try:
+        DeviceService(session).acknowledge_warning(
+            device_id=device_id,
+            warning_code=warning_code,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "acknowledge_warning_error",
+            device_id=device_id,
+            warning_code=warning_code,
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

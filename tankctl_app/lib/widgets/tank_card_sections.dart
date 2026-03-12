@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
-import 'package:tankctl_app/widgets/status_indicator.dart';
 import 'package:tankctl_app/widgets/tank_card_chips.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 
@@ -9,10 +8,16 @@ class TankCardHeader extends StatelessWidget {
     super.key,
     required this.deviceId,
     required this.isOnline,
+    required this.rssi,
+    required this.onRefresh,
+    required this.onReboot,
   });
 
   final String deviceId;
   final bool isOnline;
+  final int? rssi;
+  final VoidCallback onRefresh;
+  final VoidCallback onReboot;
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +40,59 @@ class TankCardHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        StatusIndicator(isOnline: isOnline),
+        _RssiStatusIcon(isOnline: isOnline, rssi: rssi),
+        IconButton(
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          color: Colors.white70,
+          tooltip: 'Refresh this tank',
+          splashRadius: 18,
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_horiz_rounded, color: Colors.white70, size: 20),
+          splashRadius: 18,
+          onSelected: (value) {
+            if (value == 'reboot') {
+              onReboot();
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem<String>(
+              value: 'reboot',
+              child: Text('Reboot device'),
+            ),
+          ],
+        ),
       ],
     );
+  }
+}
+
+class _RssiStatusIcon extends StatelessWidget {
+  const _RssiStatusIcon({required this.isOnline, required this.rssi});
+
+  final bool isOnline;
+  final int? rssi;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isOnline) {
+      return const Icon(
+        Icons.cloud_off_rounded,
+        size: 18,
+        color: Colors.white38,
+      );
+    }
+
+    final quality = rssiToQuality(rssi);
+    final (icon, color) = switch (quality) {
+      RssiQuality.strong => (Icons.wifi_rounded, TankCtlColors.success),
+      RssiQuality.medium => (Icons.wifi_2_bar_rounded, const Color(0xFFFFC58A)),
+      RssiQuality.weak => (Icons.wifi_1_bar_rounded, const Color(0xFFFFA76B)),
+      RssiQuality.unavailable => (Icons.wifi_off_rounded, Colors.white38),
+    };
+
+    return Icon(icon, size: 18, color: color);
   }
 }
 
@@ -135,11 +190,15 @@ class TankCardFooter extends StatelessWidget {
     required this.status,
     required this.warningCode,
     required this.lastSeen,
+    required this.onAcknowledgeWarning,
+    this.firmwareVersion,
   });
 
   final TankStatus status;
   final String? warningCode;
   final DateTime? lastSeen;
+  final VoidCallback? onAcknowledgeWarning;
+  final String? firmwareVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +208,14 @@ class TankCardFooter extends StatelessWidget {
         TankStatusChip(status: status),
         if (warningCode != null) ...[
           const SizedBox(width: 6),
-          TankWarningChip(code: warningCode!),
+          TankWarningChip(
+            code: warningCode!,
+            onAcknowledge: onAcknowledgeWarning,
+          ),
+        ],
+        if (firmwareVersion != null && firmwareVersion!.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          FirmwareVersionChip(version: firmwareVersion!),
         ],
         const Spacer(),
         const Icon(

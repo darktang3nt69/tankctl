@@ -65,9 +65,14 @@ class TankStatusChip extends StatelessWidget {
 }
 
 class TankWarningChip extends StatelessWidget {
-  const TankWarningChip({super.key, required this.code});
+  const TankWarningChip({
+    super.key,
+    required this.code,
+    this.onAcknowledge,
+  });
 
   final String code;
+  final VoidCallback? onAcknowledge;
 
   String get _label => switch (code) {
         'sensor_unavailable' => 'No Temp Sensor',
@@ -97,7 +102,52 @@ class TankWarningChip extends StatelessWidget {
               color: color,
             ),
           ),
+          if (onAcknowledge != null) ...[
+            const SizedBox(width: 4),
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: onAcknowledge,
+              child: const Padding(
+                padding: EdgeInsets.all(1),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 12,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class FirmwareVersionChip extends StatelessWidget {
+  const FirmwareVersionChip({
+    super.key,
+    required this.version,
+  });
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Text(
+        version.startsWith('v') ? version : 'v$version',
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Colors.white70,
+          fontFamily: 'monospace',
+        ),
       ),
     );
   }

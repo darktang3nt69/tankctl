@@ -1,42 +1,96 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
+import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/services/telemetry_service.dart';
 
 class DashboardOverview {
   const DashboardOverview({
     required this.totalCount,
     required this.onlineCount,
-    this.avgTemp,
+    required this.offlineCount,
+    this.avgTempOnlineOnly,
+    this.hottestDeviceId,
+    this.hottestTemp,
+    this.coldestDeviceId,
+    this.coldestTemp,
   });
 
   final int totalCount;
   final int onlineCount;
-  final double? avgTemp;
+  final int offlineCount;
+  final double? avgTempOnlineOnly;
+  final String? hottestDeviceId;
+  final double? hottestTemp;
+  final String? coldestDeviceId;
+  final double? coldestTemp;
 }
 
 final dashboardOverviewProvider = FutureProvider<DashboardOverview>((ref) async {
   final devices = await ref.watch(devicesListProvider.future);
-  final onlineCount = devices.where((d) => d['status'] == 'online').length;
+  final onlineDevices =
+      devices.where((d) => d['status'] == 'online').toList(growable: false);
+  final onlineCount = onlineDevices.length;
+  final offlineCount = devices.length - onlineCount;
 
   final service = ref.watch(telemetryServiceProvider);
   final temps = await Future.wait(
-    devices.map((d) async {
+    onlineDevices.map((d) async {
       try {
-        return await service.getLatestTemperature(d['device_id'] as String);
+        final deviceId = d['device_id'] as String;
+        final temp = await service.getLatestTemperature(deviceId);
+        return (deviceId: deviceId, temp: temp);
       } catch (_) {
-        return null;
+        return (deviceId: d['device_id'] as String, temp: null);
       }
     }),
   );
 
-  final validTemps = temps.whereType<double>().toList();
+  final validTemps = temps.where((entry) => entry.temp != null).toList(growable: false);
   final avgTemp = validTemps.isEmpty
       ? null
-      : validTemps.reduce((a, b) => a + b) / validTemps.length;
+      : validTemps.map((e) => e.temp!).reduce((a, b) => a + b) /
+          validTemps.length;
+
+  String? hottestDeviceId;
+  double? hottestTemp;
+  String? coldestDeviceId;
+  double? coldestTemp;
+  for (final entry in validTemps) {
+    final t = entry.temp!;
+    if (hottestTemp == null || t > hottestTemp) {
+      hottestTemp = t;
+      hottestDeviceId = entry.deviceId;
+    }
+    if (coldestTemp == null || t < coldestTemp) {
+      coldestTemp = t;
+      coldestDeviceId = entry.deviceId;
+    }
+  }
 
   return DashboardOverview(
     totalCount: devices.length,
     onlineCount: onlineCount,
-    avgTemp: avgTemp,
+    offlineCount: offlineCount,
+    avgTempOnlineOnly: avgTemp,
+    hottestDeviceId: hottestDeviceId,
+    hottestTemp: hottestTemp,
+    coldestDeviceId: coldestDeviceId,
+    coldestTemp: coldestTemp,
   );
+});
+
+final dashboardWarningCountProvider = Provider<int>((ref) {
+  final devices = ref.watch(devicesListProvider).valueOrNull;
+  if (devices == null) {
+    return 0;
+  }
+
+  var count = 0;
+  for (final device in devices) {
+    final deviceId = device['device_id'] as String;
+    if (ref.watch(deviceWarningProvider(deviceId)) != null) {
+      count += 1;
+    }
+  }
+  return count;
 });

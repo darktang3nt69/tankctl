@@ -41,6 +41,12 @@ class Device:
     wifi_status: str | None = None
     """WiFi connection status string from device"""
 
+    temp_threshold_low: float | None = None
+    """Configured low temperature threshold (deg C)"""
+
+    temp_threshold_high: float | None = None
+    """Configured high temperature threshold (deg C)"""
+
     def is_online(self, timeout_seconds: int = 60) -> bool:
         """
         Check if device is currently online.

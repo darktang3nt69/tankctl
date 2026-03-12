@@ -15,7 +15,11 @@ from src.domain.device_shadow import DeviceShadow
 from src.infrastructure.db.database import db
 from src.infrastructure.events.event_publisher import event_publisher
 from src.domain.event import device_registered_event, device_online_event, device_offline_event
-from src.repository.device_repository import DeviceRepository, DeviceShadowRepository
+from src.repository.device_repository import (
+    DeviceRepository,
+    DeviceShadowRepository,
+    WarningAcknowledgementRepository,
+)
 from src.repository.light_schedule_repository import LightScheduleRepository
 from src.repository.telemetry_repository import CommandRepository, TelemetryRepository
 from src.utils.logger import get_logger
@@ -44,6 +48,7 @@ class DeviceService:
         self.session = session or db.get_session()
         self.device_repo = DeviceRepository(self.session)
         self.shadow_repo = DeviceShadowRepository(self.session)
+        self.warning_ack_repo = WarningAcknowledgementRepository(self.session)
 
     def register_device(
         self,
@@ -281,3 +286,33 @@ class DeviceService:
     def close(self) -> None:
         """Close the session."""
         self.session.close()
+
+    def update_thresholds(
+        self,
+        device_id: str,
+        temp_threshold_low: float | None,
+        temp_threshold_high: float | None,
+    ) -> Device:
+        """Update per-device chart/alert thresholds."""
+        if (
+            temp_threshold_low is not None
+            and temp_threshold_high is not None
+            and temp_threshold_low >= temp_threshold_high
+        ):
+            raise ValueError("temp_threshold_low must be less than temp_threshold_high")
+
+        return self.device_repo.update_thresholds(
+            device_id=device_id,
+            temp_threshold_low=temp_threshold_low,
+            temp_threshold_high=temp_threshold_high,
+        )
+
+    def acknowledge_warning(self, device_id: str, warning_code: str) -> None:
+        """Persist warning acknowledgement for a specific device/code pair."""
+        if not self.device_repo.get_by_id(device_id):
+            raise ValueError(f"Device {device_id} not found")
+        self.warning_ack_repo.acknowledge(device_id=device_id, warning_code=warning_code)
+
+    def get_acknowledged_warnings(self) -> list[tuple[str, str]]:
+        """List all acknowledged warning keys."""
+        return self.warning_ack_repo.get_all()

@@ -64,7 +64,7 @@ class TankOverviewCard extends ConsumerWidget {
               ],
             ),
             const Spacer(),
-            if (overview.avgTemp != null)
+            if (overview.avgTempOnlineOnly != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -74,7 +74,7 @@ class TankOverviewCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${overview.avgTemp!.toStringAsFixed(1)}°C',
+                    '${overview.avgTempOnlineOnly!.toStringAsFixed(1)}°C',
                     style: textTheme.headlineSmall?.copyWith(
                       color: TankCtlColors.primary,
                       fontWeight: FontWeight.bold,
