@@ -5,61 +5,9 @@ import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/widgets/status_indicator.dart';
+import 'package:tankctl_app/widgets/tank_card_chips.dart';
+import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-DateTime? _parseIso(String? raw) {
-  if (raw == null) return null;
-  return DateTime.tryParse(raw)?.toLocal();
-}
-
-String _emojiFor(String deviceId) {
-  const emojis = ['🐠', '🌿', '🪸', '🐡', '🦀', '🐙', '🦑', '🐬'];
-  return emojis[deviceId.hashCode.abs() % emojis.length];
-}
-
-String _displayName(String id) => id
-    .replaceAll(RegExp(r'[_\-]'), ' ')
-    .split(' ')
-    .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
-    .join(' ');
-
-String _formatAge(DateTime? lastSeen) {
-  if (lastSeen == null) return 'No data';
-  final diff = DateTime.now().difference(lastSeen);
-  if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  // For stale data, show actual date + time instead of "84h ago"
-  final h = lastSeen.hour.toString().padLeft(2, '0');
-  final m = lastSeen.minute.toString().padLeft(2, '0');
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${months[lastSeen.month - 1]} ${lastSeen.day}, $h:$m';
-}
-
-enum _TankStatus { healthy, ok, highTemp, lowTemp, offline, unknown }
-
-_TankStatus _evaluate(double? temp, bool isOnline) {
-  if (!isOnline) return _TankStatus.offline;
-  if (temp == null) return _TankStatus.unknown;
-  if (temp > 28.0) return _TankStatus.highTemp;
-  if (temp < 18.0) return _TankStatus.lowTemp;
-  if (temp > 26.5) return _TankStatus.ok;
-  return _TankStatus.healthy;
-}
 
 // ── TankCard ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +39,7 @@ class TankCard extends ConsumerWidget {
       (d) => d['device_id'] == deviceId,
       orElse: () => const <String, dynamic>{},
     );
-    final deviceLastSeen = _parseIso(deviceData?['last_seen'] as String?);
+    final deviceLastSeen = parseIsoToLocal(deviceData?['last_seen'] as String?);
     final lastSeen = wsLastSeen ?? deviceLastSeen;
 
     final textTheme = Theme.of(context).textTheme;
@@ -112,7 +60,7 @@ class TankCard extends ConsumerWidget {
     final lightOn =
         lightFamilyAsync.valueOrNull ?? (reported?['light'] == 'on');
 
-    final status = _evaluate(latestTemp, isOnline);
+    final status = evaluateTankStatus(latestTemp, isOnline);
     final tempHigh = latestTemp != null && latestTemp > 28.0;
 
     return ClipRRect(
@@ -132,13 +80,13 @@ class TankCard extends ConsumerWidget {
                 Row(
                   children: [
                     Text(
-                      _emojiFor(deviceId),
+                      emojiForDevice(deviceId),
                       style: const TextStyle(fontSize: 22),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _displayName(deviceId),
+                        displayNameFromDeviceId(deviceId),
                         style: textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -253,10 +201,10 @@ class TankCard extends ConsumerWidget {
                 // ── Status chip + last update ─────────────────────────
                 Row(
                   children: [
-                    _StatusChip(status: status),
+                    TankStatusChip(status: status),
                     if (deviceWarning != null) ...[
                       const SizedBox(width: 6),
-                      _WarningChip(code: deviceWarning),
+                      TankWarningChip(code: deviceWarning),
                     ],
                     const Spacer(),
                     const Icon(
@@ -266,7 +214,7 @@ class TankCard extends ConsumerWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      _formatAge(lastSeen),
+                      formatAgeFromLastSeen(lastSeen),
                       style: textTheme.labelSmall?.copyWith(
                         color: Colors.white38,
                       ),
@@ -277,109 +225,6 @@ class TankCard extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Status chip ───────────────────────────────────────────────────────────────
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final _TankStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, icon, color) = switch (status) {
-      _TankStatus.healthy => (
-        'Healthy',
-        Icons.check_circle_rounded,
-        TankCtlColors.success,
-      ),
-      _TankStatus.ok => ('OK', Icons.check_rounded, TankCtlColors.primary),
-      _TankStatus.highTemp => (
-        'HIGH TEMP ⚠',
-        Icons.thermostat_rounded,
-        TankCtlColors.temperature,
-      ),
-      _TankStatus.lowTemp => (
-        'LOW TEMP ⚠',
-        Icons.ac_unit_rounded,
-        const Color(0xFF93C5FD),
-      ),
-      _TankStatus.offline => (
-        'Offline',
-        Icons.cloud_off_rounded,
-        Colors.white24,
-      ),
-      _TankStatus.unknown => (
-        'Unknown',
-        Icons.help_outline_rounded,
-        Colors.white24,
-      ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Warning chip ──────────────────────────────────────────────────────────────
-
-class _WarningChip extends StatelessWidget {
-  const _WarningChip({required this.code});
-  final String code;
-
-  String get _label => switch (code) {
-        'sensor_unavailable' => 'No Temp Sensor',
-        _ => 'Warning',
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    const color = Color(0xFFFFA726); // amber
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.sensors_off_rounded, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(
-            _label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
       ),
     );
   }

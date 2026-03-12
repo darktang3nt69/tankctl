@@ -40,7 +40,6 @@ WORKDIR /app
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
@@ -52,9 +51,8 @@ COPY --from=builder /build/wheels /wheels
 # Install wheels (no cache needed, wheels are pre-built)
 RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*
 
-# Copy application code
-# Copy while maintaining ownership
-COPY --chown=tankctl:tankctl . .
+# Copy only runtime application code to keep image minimal
+COPY --chown=tankctl:tankctl src ./src
 
 # Remove wheels after installation to reduce image size
 RUN rm -rf /wheels
@@ -65,9 +63,9 @@ USER tankctl
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check without curl to avoid extra package size
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
 
 # Run application
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
