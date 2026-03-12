@@ -3,6 +3,7 @@ import 'package:tankctl_app/features/dashboard/widgets/settings/backend_settings
 import 'package:tankctl_app/features/dashboard/widgets/settings/live_updates_settings_card.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/notifications_settings_card.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/settings_section_header.dart';
+import 'package:tankctl_app/features/dashboard/widgets/settings/update_settings_card.dart';
 
 class SettingsTab extends StatelessWidget {
   const SettingsTab({super.key});
@@ -34,6 +35,15 @@ class SettingsTab extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         const LiveUpdatesSettingsCard(),
+        const SizedBox(height: 24),
+        const SettingsSectionHeader(
+          title: 'App Update',
+          subtitle:
+              'Check for new versions from GitHub. Updates are downloaded and installed directly in the app.',
+        ),
+        const SizedBox(height: 20),
+        const UpdateSettingsCard(),
+        const SizedBox(height: 24),
       ],
     );
   }

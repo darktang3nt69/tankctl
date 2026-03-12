@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/app/live_event_notifier.dart';
 import 'package:tankctl_app/providers/app_settings_provider.dart';
+import 'package:tankctl_app/providers/app_update_provider.dart';
 import 'package:tankctl_app/providers/dashboard_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
@@ -31,6 +32,9 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
   final Map<String, bool> _sensorUnavailableActiveByDevice = {};
   final LiveEventNotifier _notifier = LiveEventNotifier();
   bool _isInForeground = true;
+  DateTime? _lastUpdateCheck;
+
+  static const _updateCheckThreshold = Duration(hours: 12);
 
   @override
   void initState() {
@@ -43,6 +47,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
       fireImmediately: true,
     );
     unawaited(_notifier.initialize());
+    unawaited(_triggerUpdateCheck());
   }
 
   void _handleRefreshSetting(AsyncValue<int>? previous, AsyncValue<int> next) {
@@ -176,6 +181,11 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     }
   }
 
+  Future<void> _triggerUpdateCheck() async {
+    _lastUpdateCheck = DateTime.now();
+    await ref.read(appUpdateProvider.notifier).checkForUpdate();
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -188,6 +198,13 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _isInForeground = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.resumed) {
+      final last = _lastUpdateCheck;
+      if (last == null ||
+          DateTime.now().difference(last) > _updateCheckThreshold) {
+        unawaited(_triggerUpdateCheck());
+      }
+    }
   }
 
   @override
