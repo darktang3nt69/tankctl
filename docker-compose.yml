@@ -67,21 +67,6 @@ services:
       mosquitto:
         condition: service_healthy
 
-  # whatsapp-bot:
-  #   <<: *common
-  #   build:
-  #     context: ./whatsapp-bot
-  #     dockerfile: Dockerfile
-  #   container_name: tankctl-whatsapp-bot
-  #   volumes:
-  #     - whatsapp_session:/app/session
-  #   environment:
-  #     WHATSAPP_BOT_PORT: 3001
-  #     WHATSAPP_SESSION_PATH: /app/session
-  #     WHATSAPP_ALLOWED_NUMBERS: ""
-  #     CHROME_EXECUTABLE_PATH: /usr/bin/chromium
-  #     NODE_ENV: production
-
   grafana:
     <<: *common
     image: grafana/grafana:latest
