@@ -8,16 +8,18 @@ class AttentionIssue {
     required this.deviceId,
     required this.deviceLabel,
     required this.type,
+    required this.warningCode,
     this.temperature,
   });
 
   final String deviceId;
   final String deviceLabel;
   final AttentionIssueType type;
+  final String warningCode;
   final double? temperature;
 
-  String get issueKey => '${deviceId}_${type.name}';
-  String get issueTypeName => type.name;
+  String get issueKey => '${deviceId}_$warningCode';
+  String get issueTypeName => warningCode;
 }
 
 class NoAttentionBanner extends StatelessWidget {

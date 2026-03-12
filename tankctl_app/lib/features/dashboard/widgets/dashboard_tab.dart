@@ -111,8 +111,7 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
                               .read(attentionDismissalsProvider.notifier)
                               .dismissIssue(
                                 deviceId: issue.deviceId,
-                                issueKey: issue.issueKey,
-                                issueType: issue.issueTypeName,
+                                warningCode: issue.issueTypeName,
                               );
                         } on DioException catch (e) {
                           if (!context.mounted) {

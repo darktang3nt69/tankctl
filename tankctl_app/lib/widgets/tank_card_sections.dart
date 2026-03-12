@@ -9,6 +9,7 @@ class TankCardHeader extends StatelessWidget {
     required this.deviceId,
     required this.isOnline,
     required this.rssi,
+    this.firmwareVersion,
     required this.onRefresh,
     required this.onReboot,
   });
@@ -16,6 +17,7 @@ class TankCardHeader extends StatelessWidget {
   final String deviceId;
   final bool isOnline;
   final int? rssi;
+  final String? firmwareVersion;
   final VoidCallback onRefresh;
   final VoidCallback onReboot;
 
@@ -30,13 +32,36 @@ class TankCardHeader extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            displayNameFromDeviceId(deviceId),
-            style: textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-            overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  displayNameFromDeviceId(deviceId),
+                  style: textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (firmwareVersion != null && firmwareVersion!.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Transform.translate(
+                  offset: const Offset(0, -5),
+                  child: Text(
+                    firmwareVersion!.startsWith('v')
+                        ? firmwareVersion!
+                        : 'v$firmwareVersion',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: Colors.white54,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(width: 8),
@@ -191,14 +216,12 @@ class TankCardFooter extends StatelessWidget {
     required this.warningCode,
     required this.lastSeen,
     required this.onAcknowledgeWarning,
-    this.firmwareVersion,
   });
 
   final TankStatus status;
   final String? warningCode;
   final DateTime? lastSeen;
   final VoidCallback? onAcknowledgeWarning;
-  final String? firmwareVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -212,10 +235,6 @@ class TankCardFooter extends StatelessWidget {
             code: warningCode!,
             onAcknowledge: onAcknowledgeWarning,
           ),
-        ],
-        if (firmwareVersion != null && firmwareVersion!.isNotEmpty) ...[
-          const SizedBox(width: 6),
-          FirmwareVersionChip(version: firmwareVersion!),
         ],
         const Spacer(),
         const Icon(

@@ -62,6 +62,8 @@ class TankCard extends ConsumerWidget {
     // Watch the full AsyncValue so we can distinguish cold-start (AsyncLoading)
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final deviceWarning = ref.watch(deviceWarningProvider(deviceId));
+    final acknowledgedWarnings =
+      ref.watch(attentionDismissalsProvider).valueOrNull ?? const <String>{};
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
@@ -76,15 +78,9 @@ class TankCard extends ConsumerWidget {
 
     final history = historyAsync.valueOrNull ?? const [];
 
-    // wsLastSeen is set by main.dart on every telemetry_received WS event
-    // (including events where temperature normalised away to null).  It is a
-    // StateProvider so it survives WS reconnections, unlike the StreamProvider
-    // which resets to AsyncLoading on reconnect and would otherwise cause a
-    // brief fallback to the stale history value.
-    final hasReceivedLiveTelemetry = wsLastSeen != null;
-    final latestTemp = hasReceivedLiveTelemetry
-        ? liveTemp
-        : (history.isNotEmpty ? history.last : null);
+    // Prefer live readings, but fall back to recent history when live payloads
+    // omit temperature so cards do not oscillate to Unknown.
+    final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
 
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
     final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));
@@ -98,6 +94,11 @@ class TankCard extends ConsumerWidget {
     final tempHigh = latestTemp != null && latestTemp > effectiveHigh;
     final rssi = (deviceData?['rssi'] as num?)?.toInt();
     final firmwareVersion = deviceData?['firmware_version'] as String?;
+    final warningKey = deviceWarning == null ? null : '${deviceId}_$deviceWarning';
+    final effectiveWarning =
+      (warningKey != null && acknowledgedWarnings.contains(warningKey))
+        ? null
+        : deviceWarning;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -116,6 +117,7 @@ class TankCard extends ConsumerWidget {
                   deviceId: deviceId,
                   isOnline: isOnline,
                   rssi: rssi,
+                  firmwareVersion: firmwareVersion,
                   onRefresh: () => _refreshTank(ref),
                   onReboot: () => _confirmAndReboot(context, ref),
                 ),
@@ -149,17 +151,17 @@ class TankCard extends ConsumerWidget {
 
                 TankCardFooter(
                   status: status,
-                  warningCode: deviceWarning,
+                  warningCode: effectiveWarning,
                   lastSeen: lastSeen,
-                  firmwareVersion: firmwareVersion,
-                  onAcknowledgeWarning: deviceWarning == null
+                  onAcknowledgeWarning: effectiveWarning == null
                       ? null
                       : () async {
                           await ref.read(deviceServiceProvider).acknowledgeWarning(
                                 deviceId,
-                                deviceWarning,
+                                effectiveWarning,
                               );
                           ref.invalidate(attentionDismissalsProvider);
+                          ref.invalidate(deviceWarningProvider(deviceId));
                         },
                 ),
               ],

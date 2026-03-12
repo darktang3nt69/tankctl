@@ -13,11 +13,10 @@ class AttentionDismissalsNotifier extends AsyncNotifier<Set<String>> {
 
   Future<void> dismissIssue({
     required String deviceId,
-    required String issueKey,
-    required String issueType,
+    required String warningCode,
   }) async {
     // Backend remains the source of truth; no local optimistic merge.
-    await ref.read(deviceServiceProvider).acknowledgeWarning(deviceId, issueType);
+    await ref.read(deviceServiceProvider).acknowledgeWarning(deviceId, warningCode);
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(_fetchDismissedIssueKeys);
   }

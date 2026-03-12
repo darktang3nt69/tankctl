@@ -29,6 +29,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.offline,
+          warningCode: 'offline',
         ),
       );
       continue;
@@ -41,6 +42,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.noTempSensor,
+          warningCode: warningCode!,
         ),
       );
       continue;
@@ -58,6 +60,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.highTemp,
+          warningCode: 'high_temp',
           temperature: latestTemp,
         ),
       );
@@ -70,6 +73,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.lowTemp,
+          warningCode: 'low_temp',
           temperature: latestTemp,
         ),
       );
