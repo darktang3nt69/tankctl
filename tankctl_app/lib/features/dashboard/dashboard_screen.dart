@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tankctl_app/core/api/api_constants.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/features/tank_detail/tank_detail_screen.dart';
 import 'package:tankctl_app/providers/app_settings_provider.dart';
@@ -35,7 +36,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('TankCtl', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('TankCTL', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(
               'My Tanks',
               style: Theme.of(context)
@@ -95,6 +96,11 @@ class _DashboardTabState extends ConsumerState<_DashboardTab> {
   @override
   Widget build(BuildContext context) {
     final devicesAsync = ref.watch(devicesListProvider);
+    final backendBaseUrl =
+        ref.watch(serverBaseUrlProvider).valueOrNull ?? ApiConstants.baseUrl;
+    final backendLabel = Uri.tryParse(backendBaseUrl)?.host.isNotEmpty == true
+        ? '${Uri.parse(backendBaseUrl).host}${Uri.parse(backendBaseUrl).hasPort ? ':${Uri.parse(backendBaseUrl).port}' : ''}'
+        : backendBaseUrl;
     final textTheme = Theme.of(context).textTheme;
 
     return RefreshIndicator(
@@ -173,7 +179,7 @@ class _DashboardTabState extends ConsumerState<_DashboardTab> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '192.168.1.100:8000',
+                    backendLabel,
                     style: textTheme.labelSmall?.copyWith(color: Colors.white24),
                   ),
                 ],
@@ -192,11 +198,200 @@ class _SettingsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final refreshIntervalAsync = ref.watch(liveRefreshIntervalProvider);
+    final serverUrlAsync = ref.watch(serverBaseUrlProvider);
+    final sensorWarningsEnabledAsync = ref.watch(
+      sensorWarningNotificationsEnabledProvider,
+    );
     final textTheme = Theme.of(context).textTheme;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Text(
+          'Backend',
+          style: textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Set the server URL used by both REST and live WebSocket connections.',
+          style: textTheme.bodyMedium?.copyWith(color: Colors.white60),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: TankCtlColors.card,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: serverUrlAsync.when(
+            data: (serverUrl) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.dns_rounded),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Server URL',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SelectableText(
+                  serverUrl,
+                  style: textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () async {
+                        final controller = TextEditingController(text: serverUrl);
+                        final submitted = await showDialog<String>(
+                          context: context,
+                          builder: (dialogContext) => AlertDialog(
+                            title: const Text('Backend Server URL'),
+                            content: TextField(
+                              controller: controller,
+                              keyboardType: TextInputType.url,
+                              decoration: const InputDecoration(
+                                hintText: 'http://192.168.1.100:8000',
+                              ),
+                              autofocus: true,
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(dialogContext).pop(),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.of(dialogContext).pop(
+                                  controller.text,
+                                ),
+                                child: const Text('Save'),
+                              ),
+                            ],
+                          ),
+                        );
+                        controller.dispose();
+
+                        if (submitted == null) {
+                          return;
+                        }
+
+                        try {
+                          await ref
+                              .read(serverBaseUrlProvider.notifier)
+                              .setServerBaseUrl(submitted);
+                          ref.invalidate(devicesListProvider);
+                          ref.invalidate(singleDeviceProvider);
+                          ref.invalidate(deviceShadowProvider);
+                          ref.invalidate(dashboardOverviewProvider);
+                          ref.invalidate(temperatureHistoryProvider);
+
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Server URL updated'),
+                            ),
+                          );
+                        } on FormatException catch (e) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.message)),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.edit_rounded),
+                      label: const Text('Change URL'),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton(
+                      onPressed: () async {
+                        await ref
+                            .read(serverBaseUrlProvider.notifier)
+                            .setServerBaseUrl(ApiConstants.baseUrl);
+                        ref.invalidate(devicesListProvider);
+                        ref.invalidate(singleDeviceProvider);
+                        ref.invalidate(deviceShadowProvider);
+                        ref.invalidate(dashboardOverviewProvider);
+                        ref.invalidate(temperatureHistoryProvider);
+
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Reset to default URL')),
+                        );
+                      },
+                      child: const Text('Use Default'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            loading: () => const SizedBox(
+              height: 80,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(
+              'Could not load server URL: $error',
+              style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Notifications',
+          style: textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Control which alerts can interrupt you.',
+          style: textTheme.bodyMedium?.copyWith(color: Colors.white60),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: TankCtlColors.card,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: sensorWarningsEnabledAsync.when(
+            data: (enabled) => SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Sensor warning notifications'),
+              subtitle: Text(
+                enabled ? 'Enabled' : 'Muted',
+                style: textTheme.bodySmall?.copyWith(color: Colors.white60),
+              ),
+              value: enabled,
+              onChanged: (value) => ref
+                  .read(sensorWarningNotificationsEnabledProvider.notifier)
+                  .setEnabled(value),
+            ),
+            loading: () => const SizedBox(
+              height: 56,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(
+              'Could not load notification settings: $error',
+              style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
         Text(
           'Live Updates',
           style: textTheme.headlineSmall?.copyWith(

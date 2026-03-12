@@ -4,9 +4,12 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/api/api_constants.dart';
+import 'package:tankctl_app/providers/app_settings_provider.dart';
 
 class WebSocketService {
-  WebSocketService();
+  WebSocketService({required String baseUrl}) : _baseUrl = baseUrl;
+
+  final String _baseUrl;
 
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
 
@@ -68,7 +71,7 @@ class WebSocketService {
   }
 
   Uri _buildUri() {
-    final baseUri = Uri.parse(ApiConstants.baseUrl);
+    final baseUri = Uri.parse(_baseUrl);
     final scheme = baseUri.scheme == 'https' ? 'wss' : 'ws';
     return baseUri.replace(
       scheme: scheme,
@@ -88,7 +91,9 @@ class WebSocketService {
 }
 
 final webSocketServiceProvider = Provider<WebSocketService>((ref) {
-  final service = WebSocketService();
+  final configuredBaseUrl =
+      ref.watch(serverBaseUrlProvider).valueOrNull ?? ApiConstants.baseUrl;
+  final service = WebSocketService(baseUrl: configuredBaseUrl);
   ref.onDispose(() {
     unawaited(service.dispose());
   });

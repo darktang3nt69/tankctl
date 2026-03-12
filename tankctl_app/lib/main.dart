@@ -57,6 +57,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
   late final ProviderSubscription<AsyncValue<int>> _settingsSubscription;
   Timer? _refreshTimer;
   final Map<String, DateTime> _lastToastAtByEvent = {};
+  final Map<String, bool> _sensorUnavailableActiveByDevice = {};
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
   bool _notificationsReady = false;
@@ -308,14 +309,6 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
       return;
     }
 
-    final eventKey = '$deviceId:sensor_warning:$code';
-    final now = DateTime.now();
-    final lastShownAt = _lastToastAtByEvent[eventKey];
-    if (lastShownAt != null && now.difference(lastShownAt).inMinutes < 5) {
-      return;
-    }
-    _lastToastAtByEvent[eventKey] = now;
-
     final label = _formatDeviceLabel(deviceId);
     const title = 'No Temp Sensor';
     final body = '$label: Temperature sensor may not be connected';
@@ -333,6 +326,38 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
 
     await _notificationsPlugin.show(
       ('${deviceId}_sensor').hashCode & 0x7fffffff,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
+      payload: deviceId,
+    );
+  }
+
+  Future<void> _showSensorRecoveredNotification(String deviceId) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    if (!_notificationsReady) {
+      return;
+    }
+
+    final label = _formatDeviceLabel(deviceId);
+    const title = 'Temp Sensor Online';
+    final body = '$label: Temperature sensor is back online';
+
+    final androidDetails = AndroidNotificationDetails(
+      _sensorWarningChannel.id,
+      _sensorWarningChannel.name,
+      channelDescription: _sensorWarningChannel.description,
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+      category: AndroidNotificationCategory.status,
+      color: const Color(0xFF5BBFA0),
+      ticker: 'TankCtl sensor recovered',
+    );
+
+    await _notificationsPlugin.show(
+      ('${deviceId}_sensor_recovered').hashCode & 0x7fffffff,
       title,
       body,
       NotificationDetails(android: androidDetails),
@@ -405,6 +430,18 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         final metrics = event['metadata'] as Map<String, dynamic>?;
         if (normalizeTemperatureReading(metrics?['temperature']) != null) {
           ref.read(deviceWarningProvider(deviceId).notifier).state = null;
+          final hadSensorOutage =
+              _sensorUnavailableActiveByDevice[deviceId] ?? false;
+          if (hadSensorOutage) {
+            _sensorUnavailableActiveByDevice[deviceId] = false;
+            final sensorWarningsEnabled = ref
+                    .read(sensorWarningNotificationsEnabledProvider)
+                    .valueOrNull ??
+                true;
+            if (sensorWarningsEnabled) {
+              unawaited(_showSensorRecoveredNotification(deviceId));
+            }
+          }
         }
       }
       return;
@@ -415,7 +452,21 @@ class _LiveUpdatesBootstrapState extends ConsumerState<_LiveUpdatesBootstrap>
         final metadata = event['metadata'] as Map<String, dynamic>?;
         final code = metadata?['code'] as String? ?? 'unknown';
         ref.read(deviceWarningProvider(deviceId).notifier).state = code;
-        unawaited(_showSensorWarningNotification(deviceId, code));
+        if (code == 'sensor_unavailable') {
+          final alreadyActive =
+              _sensorUnavailableActiveByDevice[deviceId] ?? false;
+          _sensorUnavailableActiveByDevice[deviceId] = true;
+
+          if (!alreadyActive) {
+            final sensorWarningsEnabled = ref
+                    .read(sensorWarningNotificationsEnabledProvider)
+                    .valueOrNull ??
+                true;
+            if (sensorWarningsEnabled) {
+              unawaited(_showSensorWarningNotification(deviceId, code));
+            }
+          }
+        }
       }
       return;
     }
@@ -475,7 +526,7 @@ class _TankCtlMaterialApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TankCtl',
+      title: 'TankCTL',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
       theme: AppTheme.light(),
