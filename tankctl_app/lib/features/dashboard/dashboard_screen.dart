@@ -36,7 +36,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('TankCtl', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('TankCTL', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(
               'My Tanks',
               style: Theme.of(context)
@@ -199,6 +199,9 @@ class _SettingsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final refreshIntervalAsync = ref.watch(liveRefreshIntervalProvider);
     final serverUrlAsync = ref.watch(serverBaseUrlProvider);
+    final sensorWarningsEnabledAsync = ref.watch(
+      sensorWarningNotificationsEnabledProvider,
+    );
     final textTheme = Theme.of(context).textTheme;
 
     return ListView(
@@ -342,6 +345,48 @@ class _SettingsTab extends ConsumerWidget {
             ),
             error: (error, _) => Text(
               'Could not load server URL: $error',
+              style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Notifications',
+          style: textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Control which alerts can interrupt you.',
+          style: textTheme.bodyMedium?.copyWith(color: Colors.white60),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: TankCtlColors.card,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: sensorWarningsEnabledAsync.when(
+            data: (enabled) => SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Sensor warning notifications'),
+              subtitle: Text(
+                enabled ? 'Enabled' : 'Muted',
+                style: textTheme.bodySmall?.copyWith(color: Colors.white60),
+              ),
+              value: enabled,
+              onChanged: (value) => ref
+                  .read(sensorWarningNotificationsEnabledProvider.notifier)
+                  .setEnabled(value),
+            ),
+            loading: () => const SizedBox(
+              height: 56,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(
+              'Could not load notification settings: $error',
               style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
             ),
           ),

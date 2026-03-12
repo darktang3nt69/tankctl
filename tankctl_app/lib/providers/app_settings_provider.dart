@@ -5,6 +5,7 @@ import 'package:tankctl_app/core/api/api_constants.dart';
 const _liveRefreshIntervalKey = 'live_refresh_interval_seconds';
 const _defaultLiveRefreshIntervalSeconds = 3;
 const _serverBaseUrlKey = 'server_base_url';
+const _sensorWarningsEnabledKey = 'sensor_warning_notifications_enabled';
 
 String _normalizeServerUrl(String raw) {
   final trimmed = raw.trim();
@@ -62,4 +63,23 @@ class ServerBaseUrlNotifier extends AsyncNotifier<String> {
 final serverBaseUrlProvider =
     AsyncNotifierProvider<ServerBaseUrlNotifier, String>(
       ServerBaseUrlNotifier.new,
+    );
+
+class SensorWarningNotificationsNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_sensorWarningsEnabledKey) ?? true;
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_sensorWarningsEnabledKey, enabled);
+    state = AsyncValue.data(enabled);
+  }
+}
+
+final sensorWarningNotificationsEnabledProvider =
+    AsyncNotifierProvider<SensorWarningNotificationsNotifier, bool>(
+      SensorWarningNotificationsNotifier.new,
     );
