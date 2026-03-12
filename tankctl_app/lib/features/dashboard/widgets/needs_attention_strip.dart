@@ -15,17 +15,70 @@ class AttentionIssue {
   final String deviceLabel;
   final AttentionIssueType type;
   final double? temperature;
+
+  String get issueKey => '${deviceId}_${type.name}';
+  String get issueTypeName => type.name;
 }
 
-class NeedsAttentionStrip extends StatelessWidget {
+class NoAttentionBanner extends StatelessWidget {
+  const NoAttentionBanner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      decoration: BoxDecoration(
+        color: TankCtlColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF5BBFA0).withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            color: Color(0xFF5BBFA0),
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'All tanks are stable. No attention needed.',
+            style: textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF8BE0C2),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class NeedsAttentionStrip extends StatefulWidget {
   const NeedsAttentionStrip({
     super.key,
     required this.issues,
     required this.onTapIssue,
+    required this.onDismissIssue,
   });
 
   final List<AttentionIssue> issues;
   final ValueChanged<String> onTapIssue;
+  final ValueChanged<AttentionIssue> onDismissIssue;
+
+  @override
+  State<NeedsAttentionStrip> createState() => _NeedsAttentionStripState();
+}
+
+class _NeedsAttentionStripState extends State<NeedsAttentionStrip> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   (String, IconData, Color) _meta(AttentionIssue issue) => switch (issue.type) {
         AttentionIssueType.offline => (
@@ -74,25 +127,71 @@ class NeedsAttentionStrip extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: issues.map((issue) {
+          Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: widget.issues.map((issue) {
               final (label, icon, color) = _meta(issue);
-              return ActionChip(
-                onPressed: () => onTapIssue(issue.deviceId),
-                avatar: Icon(icon, size: 16, color: color),
-                side: BorderSide(color: color.withValues(alpha: 0.45)),
-                backgroundColor: color.withValues(alpha: 0.12),
-                label: Text(
-                  label,
-                  style: textTheme.labelMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            }).toList(),
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => widget.onTapIssue(issue.deviceId),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: color.withValues(alpha: 0.45)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon, size: 16, color: color),
+                            const SizedBox(width: 6),
+                            Text(
+                              label,
+                              style: textTheme.labelMedium?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => widget.onDismissIssue(issue),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 14,
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Swipe horizontally for more issues',
+            style: textTheme.labelSmall?.copyWith(
+              color: Colors.white38,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

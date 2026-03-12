@@ -41,6 +41,9 @@ EventType = Literal[
 
     # Device warnings
     "device_warning",
+
+    # UI state
+    "attention_dismissed",
 ]
 
 

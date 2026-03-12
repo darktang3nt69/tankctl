@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:tankctl_app/core/api/api_constants.dart';
+import 'package:tankctl_app/features/dashboard/providers/attention_dismissals_provider.dart';
 import 'package:tankctl_app/features/dashboard/widgets/dashboard_attention_builder.dart';
 import 'package:tankctl_app/features/dashboard/widgets/dashboard_list_controls.dart';
 import 'package:tankctl_app/features/dashboard/widgets/dashboard_sorting.dart';
@@ -60,6 +62,7 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
   @override
   Widget build(BuildContext context) {
     final devicesAsync = ref.watch(devicesListProvider);
+    final dismissedKeysAsync = ref.watch(attentionDismissalsProvider);
     final backendBaseUrl =
         ref.watch(serverBaseUrlProvider).valueOrNull ?? ApiConstants.baseUrl;
     final backendLabel = Uri.tryParse(backendBaseUrl)?.host.isNotEmpty == true
@@ -84,21 +87,57 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
           devicesAsync.when(
             data: (devices) {
               final attentionIssues = buildAttentionIssues(ref, devices);
+              final dismissedKeys = dismissedKeysAsync.valueOrNull ?? const <String>{};
+              final visibleAttentionIssues = attentionIssues
+                  .where((issue) => !dismissedKeys.contains(issue.issueKey))
+                  .toList();
               final filtered = _showOnlineOnly
                   ? devices.where((d) => d['status'] == 'online').toList()
                   : devices;
               final sorted = _sortDevices(filtered);
               return Column(
                 children: [
-                  if (attentionIssues.isNotEmpty) ...[
+                  if (visibleAttentionIssues.isNotEmpty) ...[
                     NeedsAttentionStrip(
-                      issues: attentionIssues,
+                      issues: visibleAttentionIssues,
                       onTapIssue: (deviceId) => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => TankDetailScreen(deviceId: deviceId),
                         ),
                       ),
+                      onDismissIssue: (issue) async {
+                        try {
+                          await ref
+                              .read(attentionDismissalsProvider.notifier)
+                              .dismissIssue(
+                                deviceId: issue.deviceId,
+                                issueKey: issue.issueKey,
+                                issueType: issue.issueTypeName,
+                              );
+                        } on DioException catch (e) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          final msg = e.response?.data is Map &&
+                                  (e.response?.data as Map)['detail'] is String
+                              ? (e.response?.data as Map)['detail'] as String
+                              : 'Could not dismiss issue';
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(msg)),
+                          );
+                        } catch (_) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Could not dismiss issue')),
+                          );
+                        }
+                      },
                     ),
+                    const SizedBox(height: 12),
+                  ] else ...[
+                    const NoAttentionBanner(),
                     const SizedBox(height: 12),
                   ],
                   for (final device in sorted) ...[

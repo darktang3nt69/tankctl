@@ -18,6 +18,10 @@ class DashboardListControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final accentColor = Theme.of(context).colorScheme.primary;
+    final onlineColor = showOnlineOnly ? accentColor : null;
+    final hasCustomSort = sortMode != DashboardSortMode.alphabetical;
+    final sortColor = hasCustomSort ? accentColor : null;
 
     return Row(
       children: [
@@ -31,10 +35,26 @@ class DashboardListControls extends StatelessWidget {
         ),
         const Spacer(),
         FilterChip(
-          label: const Text('Online only'),
+          avatar: Icon(
+            showOnlineOnly ? Icons.check_rounded : Icons.filter_alt_outlined,
+            size: 16,
+            color: onlineColor,
+          ),
+          label: Text(
+            'Online only',
+            style: textTheme.labelLarge?.copyWith(
+              color: onlineColor,
+              fontWeight: showOnlineOnly ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
           selected: showOnlineOnly,
           onSelected: onToggleOnlineOnly,
           visualDensity: VisualDensity.compact,
+          selectedColor: accentColor.withValues(alpha: 0.15),
+          side: showOnlineOnly
+              ? BorderSide(color: accentColor.withValues(alpha: 0.5))
+              : null,
+          showCheckmark: false,
         ),
         const SizedBox(width: 8),
         PopupMenuButton<DashboardSortMode>(
@@ -46,12 +66,24 @@ class DashboardListControls extends StatelessWidget {
                   value: mode,
                   child: Row(
                     children: [
-                      if (mode == sortMode)
-                        const Icon(Icons.check_rounded, size: 16)
-                      else
-                        const SizedBox(width: 16),
+                      Icon(
+                        mode == sortMode ? Icons.check_rounded : Icons.circle_outlined,
+                        size: 16,
+                        color: mode == sortMode
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white38,
+                      ),
                       const SizedBox(width: 8),
-                      Text(sortLabel(mode)),
+                      Text(
+                        sortLabel(mode),
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: mode == sortMode
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          fontWeight:
+                              mode == sortMode ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -59,8 +91,23 @@ class DashboardListControls extends StatelessWidget {
               .toList(),
           child: Chip(
             visualDensity: VisualDensity.compact,
-            avatar: const Icon(Icons.sort_rounded, size: 16),
-            label: Text(sortLabel(sortMode)),
+            backgroundColor:
+                hasCustomSort ? sortColor?.withValues(alpha: 0.15) : null,
+            side: hasCustomSort
+                ? BorderSide(color: sortColor?.withValues(alpha: 0.5) ?? Colors.transparent)
+                : null,
+            avatar: Icon(
+              Icons.sort_rounded,
+              size: 16,
+              color: sortColor,
+            ),
+            label: Text(
+              sortLabel(sortMode),
+              style: textTheme.labelLarge?.copyWith(
+                color: sortColor,
+                fontWeight: hasCustomSort ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
           ),
         ),
       ],
