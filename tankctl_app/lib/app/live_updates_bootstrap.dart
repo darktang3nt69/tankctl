@@ -26,15 +26,28 @@ class LiveUpdatesBootstrap extends ConsumerStatefulWidget {
 class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     with WidgetsBindingObserver {
   late final ProviderSubscription<AsyncValue<Map<String, dynamic>>>
-      _subscription;
+  _subscription;
   late final ProviderSubscription<AsyncValue<int>> _settingsSubscription;
   Timer? _refreshTimer;
+  Timer? _updateCheckTimer;
   final Map<String, bool> _sensorUnavailableActiveByDevice = {};
   final LiveEventNotifier _notifier = LiveEventNotifier();
   bool _isInForeground = true;
   DateTime? _lastUpdateCheck;
 
   static const _updateCheckThreshold = Duration(hours: 12);
+
+  void _handleUpdateCheckFrequency(
+    AsyncValue<int>? previous,
+    AsyncValue<int> next,
+  ) {
+    final hours = next.valueOrNull ?? 24;
+    _updateCheckTimer?.cancel();
+    _updateCheckTimer = Timer.periodic(
+      Duration(hours: hours),
+      (_) => _triggerUpdateCheck(),
+    );
+  }
 
   @override
   void initState() {
@@ -48,6 +61,13 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     );
     unawaited(_notifier.initialize());
     unawaited(_triggerUpdateCheck());
+
+    // Listen for update check frequency changes and schedule timer
+    ref.listenManual(
+      updateCheckFrequencyProvider,
+      _handleUpdateCheckFrequency,
+      fireImmediately: true,
+    );
   }
 
   void _handleRefreshSetting(AsyncValue<int>? previous, AsyncValue<int> next) {
@@ -115,7 +135,8 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
               _sensorUnavailableActiveByDevice[deviceId] ?? false;
           if (hadSensorOutage) {
             _sensorUnavailableActiveByDevice[deviceId] = false;
-            final sensorWarningsEnabled = ref
+            final sensorWarningsEnabled =
+                ref
                     .read(sensorWarningNotificationsEnabledProvider)
                     .valueOrNull ??
                 true;
@@ -139,7 +160,8 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
           _sensorUnavailableActiveByDevice[deviceId] = true;
 
           if (!alreadyActive) {
-            final sensorWarningsEnabled = ref
+            final sensorWarningsEnabled =
+                ref
                     .read(sensorWarningNotificationsEnabledProvider)
                     .valueOrNull ??
                 true;
@@ -183,13 +205,36 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
 
   Future<void> _triggerUpdateCheck() async {
     _lastUpdateCheck = DateTime.now();
-    await ref.read(appUpdateProvider.notifier).checkForUpdate();
+    final notifier = ref.read(appUpdateProvider.notifier);
+    await notifier.checkForUpdate();
+    final update = ref.read(appUpdateProvider);
+    if (update.status == UpdateStatus.updateAvailable) {
+      await notifier.downloadUpdate();
+    }
+    if (update.status == UpdateStatus.readyToInstall &&
+        update.downloadedApkPath != null) {
+      // Show install prompt
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('App update downloaded. Tap to install.'),
+            action: SnackBarAction(
+              label: 'Install',
+              onPressed: () async {
+                await notifier.installUpdate();
+              },
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _updateCheckTimer?.cancel();
     _settingsSubscription.close();
     _subscription.close();
     super.dispose();

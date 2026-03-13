@@ -1,6 +1,27 @@
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tankctl_app/core/api/api_constants.dart';
+
+const _updateCheckFrequencyKey = 'update_check_frequency_hours';
+const _defaultUpdateCheckFrequencyHours = 24;
+
+class UpdateCheckFrequencyNotifier extends AsyncNotifier<int> {
+  @override
+  Future<int> build() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_updateCheckFrequencyKey) ?? _defaultUpdateCheckFrequencyHours;
+  }
+
+  Future<void> setFrequency(int hours) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_updateCheckFrequencyKey, hours);
+    state = AsyncValue.data(hours);
+  }
+}
+
+final updateCheckFrequencyProvider =
+    AsyncNotifierProvider<UpdateCheckFrequencyNotifier, int>(UpdateCheckFrequencyNotifier.new);
 
 const _liveRefreshIntervalKey = 'live_refresh_interval_seconds';
 const _defaultLiveRefreshIntervalSeconds = 3;

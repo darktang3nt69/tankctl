@@ -35,7 +35,9 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
     final history =
         ref.watch(temperatureHistoryProvider(deviceId)).valueOrNull ??
         const <double>[];
-    final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
+    final latestTemp = warningCode == 'sensor_unavailable'
+        ? null
+        : (liveTemp ?? (history.isNotEmpty ? history.last : null));
     final wsLastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
     final apiLastSeen = parseIsoToLocal(device['last_seen'] as String?);
 
@@ -87,7 +89,8 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
           devicesAsync.when(
             data: (devices) {
               final attentionIssues = buildAttentionIssues(ref, devices);
-              final dismissedKeys = dismissedKeysAsync.valueOrNull ?? const <String>{};
+              final dismissedKeys =
+                  dismissedKeysAsync.valueOrNull ?? const <String>{};
               final visibleAttentionIssues = attentionIssues
                   .where((issue) => !dismissedKeys.contains(issue.issueKey))
                   .toList();
@@ -117,19 +120,22 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
                           if (!context.mounted) {
                             return;
                           }
-                          final msg = e.response?.data is Map &&
+                          final msg =
+                              e.response?.data is Map &&
                                   (e.response?.data as Map)['detail'] is String
                               ? (e.response?.data as Map)['detail'] as String
                               : 'Could not dismiss issue';
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(msg)),
-                          );
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(msg)));
                         } catch (_) {
                           if (!context.mounted) {
                             return;
                           }
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Could not dismiss issue')),
+                            const SnackBar(
+                              content: Text('Could not dismiss issue'),
+                            ),
                           );
                         }
                       },
@@ -172,12 +178,16 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
                   const SizedBox(height: 16),
                   Text(
                     'Could not reach backend',
-                    style: textTheme.bodyMedium?.copyWith(color: Colors.white38),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: Colors.white38,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     backendLabel,
-                    style: textTheme.labelSmall?.copyWith(color: Colors.white24),
+                    style: textTheme.labelSmall?.copyWith(
+                      color: Colors.white24,
+                    ),
                   ),
                 ],
               ),

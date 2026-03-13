@@ -61,7 +61,7 @@ class AppUpdateService {
 
   /// Fetches the latest non-draft, non-prerelease GitHub release.
   Future<GithubReleaseInfo> fetchLatestRelease() async {
-    final response = await Dio().get<Map<String, dynamic>>(
+    final response = await _dio.get<Map<String, dynamic>>(
       '$_githubApiBase/repos/$_repo/releases/latest',
       options: Options(
         headers: {'Accept': 'application/vnd.github+json'},
@@ -73,13 +73,16 @@ class AppUpdateService {
     if (data == null) throw Exception('Empty response from GitHub API');
 
     final assets = (data['assets'] as List<dynamic>? ?? []);
-    final apkAsset = assets.firstWhere(
-      (a) => (a as Map)['name'] == _preferredAssetName,
-      orElse: () => assets.firstWhere(
-        (a) => ((a as Map)['name'] as String).endsWith('.apk'),
-        orElse: () => throw Exception('No APK asset found in latest release'),
-      ),
-    ) as Map<String, dynamic>;
+    final apkAsset =
+        assets.firstWhere(
+              (a) => (a as Map)['name'] == _preferredAssetName,
+              orElse: () => assets.firstWhere(
+                (a) => ((a as Map)['name'] as String).endsWith('.apk'),
+                orElse: () =>
+                    throw Exception('No APK asset found in latest release'),
+              ),
+            )
+            as Map<String, dynamic>;
 
     return GithubReleaseInfo(
       tagName: data['tag_name'] as String,
@@ -131,12 +134,16 @@ class AppUpdateService {
     void Function(double progress)? onProgress,
     CancelToken? cancelToken,
   }) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final filePath = '${dir.path}/update_${tagName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.apk';
+    final dir = Platform.isAndroid
+        ? (await getExternalStorageDirectory() ??
+              await getApplicationDocumentsDirectory())
+        : await getApplicationDocumentsDirectory();
+    final filePath =
+        '${dir.path}/update_${tagName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.apk';
     final file = File(filePath);
     if (await file.exists()) await file.delete();
 
-    await Dio().download(
+    await _dio.download(
       url,
       filePath,
       cancelToken: cancelToken,

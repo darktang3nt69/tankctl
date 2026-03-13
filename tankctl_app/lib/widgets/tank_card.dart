@@ -63,7 +63,7 @@ class TankCard extends ConsumerWidget {
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final deviceWarning = ref.watch(deviceWarningProvider(deviceId));
     final acknowledgedWarnings =
-      ref.watch(attentionDismissalsProvider).valueOrNull ?? const <String>{};
+        ref.watch(attentionDismissalsProvider).valueOrNull ?? const <String>{};
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
@@ -78,9 +78,11 @@ class TankCard extends ConsumerWidget {
 
     final history = historyAsync.valueOrNull ?? const [];
 
-    // Prefer live readings, but fall back to recent history when live payloads
-    // omit temperature so cards do not oscillate to Unknown.
-    final latestTemp = liveTemp ?? (history.isNotEmpty ? history.last : null);
+    // When the device reports a missing sensor, do not surface stale
+    // historical values as "current" temperature.
+    final latestTemp = deviceWarning == 'sensor_unavailable'
+        ? null
+        : (liveTemp ?? (history.isNotEmpty ? history.last : null));
 
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
     final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));
@@ -88,15 +90,19 @@ class TankCard extends ConsumerWidget {
         lightFamilyAsync.valueOrNull ?? (reported?['light'] == 'on');
 
     final status = evaluateTankStatus(latestTemp, isOnline);
-    final thresholdHigh = (deviceData?['temp_threshold_high'] as num?)?.toDouble();
-    final thresholdLow = (deviceData?['temp_threshold_low'] as num?)?.toDouble();
+    final thresholdHigh = (deviceData?['temp_threshold_high'] as num?)
+        ?.toDouble();
+    final thresholdLow = (deviceData?['temp_threshold_low'] as num?)
+        ?.toDouble();
     final effectiveHigh = thresholdHigh ?? 28.0;
     final tempHigh = latestTemp != null && latestTemp > effectiveHigh;
     final rssi = (deviceData?['rssi'] as num?)?.toInt();
     final firmwareVersion = deviceData?['firmware_version'] as String?;
-    final warningKey = deviceWarning == null ? null : '${deviceId}_$deviceWarning';
+    final warningKey = deviceWarning == null
+        ? null
+        : '${deviceId}_$deviceWarning';
     final effectiveWarning =
-      (warningKey != null && acknowledgedWarnings.contains(warningKey))
+        (warningKey != null && acknowledgedWarnings.contains(warningKey))
         ? null
         : deviceWarning;
 
@@ -156,10 +162,9 @@ class TankCard extends ConsumerWidget {
                   onAcknowledgeWarning: effectiveWarning == null
                       ? null
                       : () async {
-                          await ref.read(deviceServiceProvider).acknowledgeWarning(
-                                deviceId,
-                                effectiveWarning,
-                              );
+                          await ref
+                              .read(deviceServiceProvider)
+                              .acknowledgeWarning(deviceId, effectiveWarning);
                           ref.invalidate(attentionDismissalsProvider);
                           ref.invalidate(deviceWarningProvider(deviceId));
                         },
