@@ -15,6 +15,7 @@ from src.infrastructure.db.models import (
     CommandModel,
     EventRecord,
     LightScheduleModel,
+    WaterScheduleModel,
     WarningAcknowledgementModel,
     DevicePushTokenModel,
 )
@@ -67,6 +68,7 @@ class Database:
                     CommandModel.__table__,
                     EventRecord.__table__,
                     LightScheduleModel.__table__,
+                    WaterScheduleModel.__table__,
                     WarningAcknowledgementModel.__table__,
                     DevicePushTokenModel.__table__,
                 ],

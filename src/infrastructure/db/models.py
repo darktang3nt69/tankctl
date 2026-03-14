@@ -131,13 +131,13 @@ class LightScheduleModel(Base):
     id = Column(Integer, primary_key=True)
     device_id = Column(String(50), nullable=False, unique=True)
     enabled = Column(Boolean, default=True, nullable=False)
-        start_time = Column(Time, nullable=False)
-        end_time = Column(Time, nullable=False)
+    on_time = Column(Time, nullable=False)
+    off_time = Column(Time, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f"<LightScheduleModel(device_id={self.device_id}, start={self.start_time}, end={self.end_time}, enabled={self.enabled})>"
+        return f"<LightScheduleModel(device_id={self.device_id}, on={self.on_time}, off={self.off_time}, enabled={self.enabled})>"
 
 
 class WaterScheduleModel(Base):

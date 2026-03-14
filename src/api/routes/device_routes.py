@@ -245,8 +245,8 @@ def create_or_update_light_schedule(
             id=schedule.id,
             device_id=schedule.device_id,
             enabled=schedule.enabled,
-            start_time=str(schedule.start_time),
-            end_time=str(schedule.end_time),
+            start_time=str(schedule.on_time),
+            end_time=str(schedule.off_time),
             created_at=schedule.created_at.isoformat() if schedule.created_at else None,
             updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
         )
@@ -274,8 +274,8 @@ def get_light_schedule(
             id=schedule.id,
             device_id=schedule.device_id,
             enabled=schedule.enabled,
-            start_time=str(schedule.start_time),
-            end_time=str(schedule.end_time),
+            start_time=str(schedule.on_time),
+            end_time=str(schedule.off_time),
             created_at=schedule.created_at.isoformat() if schedule.created_at else None,
             updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
         )

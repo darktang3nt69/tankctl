@@ -371,8 +371,8 @@ class DeviceService:
                 "id": light_schedule.id,
                 "device_id": light_schedule.device_id,
                 "enabled": light_schedule.enabled,
-                "start_time": str(light_schedule.start_time),
-                "end_time": str(light_schedule.end_time),
+                "start_time": str(light_schedule.on_time),
+                "end_time": str(light_schedule.off_time),
                 "created_at": light_schedule.created_at.isoformat() if light_schedule.created_at else None,
                 "updated_at": light_schedule.updated_at.isoformat() if light_schedule.updated_at else None,
             } if light_schedule else None,
@@ -403,16 +403,16 @@ class DeviceService:
             return None
 
         # Parse times
-        start_time = time.fromisoformat(schedule_data["start_time"])
-        end_time = time.fromisoformat(schedule_data["end_time"])
+        on_time = time.fromisoformat(schedule_data["start_time"])
+        off_time = time.fromisoformat(schedule_data["end_time"])
 
         # Check if schedule exists
         existing = self.session.query(LightScheduleModel).filter_by(device_id=device_id).first()
         
         if existing:
             existing.enabled = schedule_data.get("enabled", True)
-            existing.start_time = start_time
-            existing.end_time = end_time
+            existing.on_time = on_time
+            existing.off_time = off_time
             existing.updated_at = datetime.utcnow()
             self.session.commit()
             return existing
@@ -420,8 +420,8 @@ class DeviceService:
             new_schedule = LightScheduleModel(
                 device_id=device_id,
                 enabled=schedule_data.get("enabled", True),
-                start_time=start_time,
-                end_time=end_time,
+                on_time=on_time,
+                off_time=off_time,
             )
             self.session.add(new_schedule)
             self.session.commit()

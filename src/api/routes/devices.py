@@ -3,11 +3,16 @@ Device Routes - Device management endpoints.
 
 GET /devices - List all devices
 GET /devices/{device_id} - Get device status
+GET /devices/{device_id}/detail - Get full device detail with schedules
 GET /devices/{device_id}/shadow - Get device shadow state
 POST /devices - Register new device
+PATCH /devices/{device_id} - Update device metadata
 POST /devices/{device_id}/schedule - Create or update light schedule
 GET /devices/{device_id}/schedule - Get light schedule
 DELETE /devices/{device_id}/schedule - Delete light schedule
+GET /devices/{device_id}/water-schedules - List water change schedules
+POST /devices/{device_id}/water-schedules - Add water change schedule
+DELETE /devices/{device_id}/water-schedules/{schedule_id} - Delete water change schedule
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -22,8 +27,12 @@ from src.api.schemas import (
     DeviceRegisterRequest,
     DeviceRegisterResponse,
     DeviceShadowUpdateRequest,
+    DeviceDetailResponse,
+    DeviceMetadataUpdateRequest,
     ScheduleRequest,
     ScheduleResponse,
+    WaterScheduleRequest,
+    WaterScheduleResponse,
     WarningAckResponse,
 )
 from src.infrastructure.db.database import db
@@ -517,4 +526,85 @@ def delete_schedule(
         raise
     except Exception as e:
         logger.error("delete_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{device_id}/detail", response_model=DeviceDetailResponse)
+def get_device_detail(device_id: str, session: Session = Depends(get_db)):
+    """Get full device detail including metadata, schedules, and health metrics."""
+    try:
+        device_service = DeviceService(session)
+        detail = device_service.get_device_detail(device_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        return detail
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_device_detail_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/{device_id}/metadata", response_model=DeviceResponse)
+def update_device_metadata(
+    device_id: str,
+    request: DeviceMetadataUpdateRequest,
+    session: Session = Depends(get_db),
+):
+    """Update device metadata: name, location, icon, description, thresholds."""
+    try:
+        device_service = DeviceService(session)
+        device = device_service.update_device_metadata(device_id, request.model_dump(exclude_none=True))
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        return device
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_device_metadata_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{device_id}/water-schedules", response_model=list[WaterScheduleResponse])
+def get_water_schedules(device_id: str, session: Session = Depends(get_db)):
+    """List all water change schedules for a device."""
+    try:
+        device_service = DeviceService(session)
+        return device_service.get_water_schedules(device_id)
+    except Exception as e:
+        logger.error("get_water_schedules_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{device_id}/water-schedules", response_model=WaterScheduleResponse, status_code=201)
+def create_water_schedule(
+    device_id: str,
+    request: WaterScheduleRequest,
+    session: Session = Depends(get_db),
+):
+    """Add a water change schedule for a device."""
+    try:
+        device_service = DeviceService(session)
+        return device_service.create_water_schedule(device_id, request.model_dump())
+    except Exception as e:
+        logger.error("create_water_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/{device_id}/water-schedules/{schedule_id}", status_code=204)
+def delete_water_schedule(
+    device_id: str,
+    schedule_id: int,
+    session: Session = Depends(get_db),
+):
+    """Delete a water change schedule."""
+    try:
+        device_service = DeviceService(session)
+        deleted = device_service.delete_water_schedule(device_id, schedule_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Water schedule {schedule_id} not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_water_schedule_error", device_id=device_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
