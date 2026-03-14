@@ -157,14 +157,15 @@ def create_app() -> FastAPI:
     )
     
     # Include route modules
-    from src.api.routes import devices, commands, telemetry, health, events, live
-    
+    from src.api.routes import devices, commands, telemetry, health, events, live, push_token
+
     app.include_router(health.router)
     app.include_router(devices.router)
     app.include_router(commands.router)
     app.include_router(telemetry.router)
     app.include_router(events.router)
     app.include_router(live.router)
+    app.include_router(push_token.router)
     
     return app
 

@@ -30,3 +30,16 @@ requests==2.31.0
 # Logging & Monitoring
 python-json-logger==2.0.7
 
+# Google/Firebase dependencies for FCM push
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-api-core==2.17.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.126.0
+
+# For service account credentials
+firebase-admin==6.4.0
+
+# Other dependencies
+python-dateutil==2.8.2
+

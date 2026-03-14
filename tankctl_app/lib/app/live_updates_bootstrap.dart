@@ -59,7 +59,6 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
       _handleRefreshSetting,
       fireImmediately: true,
     );
-    unawaited(_notifier.initialize());
     unawaited(_triggerUpdateCheck());
 
     // Listen for update check frequency changes and schedule timer
@@ -109,14 +108,8 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     }
 
     if (eventName == 'device_online' || eventName == 'device_offline') {
-      if (deviceId != null) {
-        unawaited(
-          _notifier.showDeviceStatus(
-            deviceId,
-            eventName == 'device_online',
-            isInForeground: _isInForeground,
-          ),
-        );
+      if (deviceId != null && _isInForeground) {
+        unawaited(_notifier.showDeviceStatusToast(deviceId, eventName == 'device_online'));
       }
       _syncLiveState();
       return;
@@ -125,25 +118,12 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     if (eventName == 'telemetry_received') {
       ref.invalidate(dashboardOverviewProvider);
       if (deviceId != null) {
-        ref.read(lastTelemetryTimeProvider(deviceId).notifier).state =
-            DateTime.now();
+        ref.read(lastTelemetryTimeProvider(deviceId).notifier).state = DateTime.now();
         ref.invalidate(temperatureHistoryProvider(deviceId));
         final metrics = event['metadata'] as Map<String, dynamic>?;
         if (normalizeTemperatureReading(metrics?['temperature']) != null) {
           ref.read(deviceWarningProvider(deviceId).notifier).state = null;
-          final hadSensorOutage =
-              _sensorUnavailableActiveByDevice[deviceId] ?? false;
-          if (hadSensorOutage) {
-            _sensorUnavailableActiveByDevice[deviceId] = false;
-            final sensorWarningsEnabled =
-                ref
-                    .read(sensorWarningNotificationsEnabledProvider)
-                    .valueOrNull ??
-                true;
-            if (sensorWarningsEnabled) {
-              unawaited(_notifier.showSensorRecovered(deviceId));
-            }
-          }
+          _sensorUnavailableActiveByDevice[deviceId] = false;
         }
       }
       return;
@@ -155,20 +135,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
         final code = metadata?['code'] as String? ?? 'unknown';
         ref.read(deviceWarningProvider(deviceId).notifier).state = code;
         if (code == 'sensor_unavailable') {
-          final alreadyActive =
-              _sensorUnavailableActiveByDevice[deviceId] ?? false;
           _sensorUnavailableActiveByDevice[deviceId] = true;
-
-          if (!alreadyActive) {
-            final sensorWarningsEnabled =
-                ref
-                    .read(sensorWarningNotificationsEnabledProvider)
-                    .valueOrNull ??
-                true;
-            if (sensorWarningsEnabled) {
-              unawaited(_notifier.showSensorWarning(deviceId));
-            }
-          }
         }
       }
       return;
@@ -185,18 +152,12 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
         ref.invalidate(deviceShadowProvider(deviceId));
         ref.invalidate(lightStateFamilyProvider(deviceId));
 
-        if (eventName == 'light_state_changed') {
+        if (eventName == 'light_state_changed' && _isInForeground) {
           final metadata = event['metadata'] as Map<String, dynamic>?;
           final lightState = metadata?['light'] as String?;
           if (lightState != null) {
             final lightOn = lightState == 'on';
-            unawaited(
-              _notifier.showLightState(
-                deviceId,
-                lightOn,
-                isInForeground: _isInForeground,
-              ),
-            );
+            unawaited(_notifier.showLightToast(deviceId, lightOn));
           }
         }
       }

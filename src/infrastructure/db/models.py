@@ -154,3 +154,19 @@ class WarningAcknowledgementModel(Base):
             f"device_id={self.device_id}, warning_code={self.warning_code}"
             ")>"
         )
+
+
+class DevicePushTokenModel(Base):
+    """Device push token table model for FCM, etc."""
+    __tablename__ = "device_push_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_id = Column(String, nullable=False, index=True)
+    token = Column(String, nullable=False, unique=True)
+    platform = Column(String, nullable=False)  # e.g., 'android', 'ios'
+    last_seen = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return (
+            f"<DevicePushToken(device_id={self.device_id}, platform={self.platform}, last_seen={self.last_seen})>"
+        )
