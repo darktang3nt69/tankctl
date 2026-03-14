@@ -98,30 +98,8 @@ services:
     container_name: tankctl-backend
     volumes:
       - ./google-services.json:/app/firebase-service-account.json:ro
-    environment:
-      API_HOST: 0.0.0.0
-      API_PORT: 8000
-      API_DEBUG: "false"
-      MQTT_BROKER_HOST: mosquitto
-      MQTT_BROKER_PORT: 1883
-      MQTT_USERNAME: tankctl
-      MQTT_PASSWORD: password
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: tankctl
-      POSTGRES_USER: tankctl
-      POSTGRES_PASSWORD: password
-      TIMESCALE_HOST: timescaledb
-      TIMESCALE_PORT: 5432
-      TIMESCALE_DB: tankctl_telemetry
-      TIMESCALE_USER: tankctl
-      TIMESCALE_PASSWORD: password
-      ALERTS_ENABLED: "true"
-      ALERT_MIN_INTERVAL_SECONDS: 5
-      ALERT_TEMPERATURE_HIGH_C: 30
-      ALERT_TEMPERATURE_LOW_C: 20
-      FCM_SERVICE_ACCOUNT_JSON: "/app/firebase-service-account.json"
-      FCM_PROJECT_ID: ""
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     depends_on:
