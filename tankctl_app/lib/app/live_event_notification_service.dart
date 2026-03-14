@@ -80,7 +80,7 @@ class LiveEventNotificationService {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return;
     }
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('ic_notification');
     const initSettings = InitializationSettings(android: androidInit);
     await _notificationsPlugin.initialize(
       initSettings,

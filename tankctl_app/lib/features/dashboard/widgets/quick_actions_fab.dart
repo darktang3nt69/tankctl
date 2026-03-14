@@ -282,7 +282,7 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
                       tooltip: 'Quick Actions',
                       child: _busy
                           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Icon(_expanded ? AppIcons.close : fabIcon),
+                          : Icon(_expanded ? AppIcons.close : fabIcon, size: 20),
                     ),
                   ),
                 ),

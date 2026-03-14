@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 
-/// Small colored dot with label showing device online/offline state.
+/// Small status indicator with icon/label showing device online/offline state.
 class StatusIndicator extends StatelessWidget {
   const StatusIndicator({super.key, required this.isOnline});
 
@@ -13,20 +14,10 @@ class StatusIndicator extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.6),
-                blurRadius: 5,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
+        Icon(
+          isOnline ? AppIcons.wifiStrong : AppIcons.wifiOff,
+          size: 16,
+          color: color,
         ),
         const SizedBox(width: 6),
         Text(

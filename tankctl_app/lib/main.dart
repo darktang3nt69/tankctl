@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tankctl_app/app/live_updates_bootstrap.dart';
 import 'package:tankctl_app/app/tankctl_material_app.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -10,11 +11,60 @@ import 'firebase_options.dart';
 import 'core/api/api_constants.dart';
 import 'app/live_event_notification_service.dart';
 
+const _selectedDeviceIdKey = 'selected_device_id_for_fcm';
+
 /// Top-level background message handler for FCM
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   // You can show a local notification here if needed
   // debugPrint('Handling a background message: ${message.messageId}', wrapWidth: 1024);
+}
+
+/// Fetch the first available device from the backend API
+Future<String> _getFirstDeviceId() async {
+  try {
+    final dio = Dio();
+    final response = await dio.get(
+      '${ApiConstants.baseUrl}/devices',
+      options: Options(
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ),
+    );
+
+    final data = response.data as Map<String, dynamic>?;
+    final devices = data?['devices'] as List?;
+
+    if (devices != null && devices.isNotEmpty) {
+      final firstDevice = devices[0] as Map<String, dynamic>;
+      return firstDevice['device_id'] as String? ??
+          ApiConstants.defaultDeviceId;
+    }
+  } catch (e) {
+    // debugPrint('Failed to fetch first device: $e', wrapWidth: 1024);
+    // Fall through to use stored or default device ID
+  }
+  return ApiConstants.defaultDeviceId;
+}
+
+/// Get the device ID to use for FCM registration
+Future<String> _getDeviceIdForFcm() async {
+  try {
+    // Try to get from stored preference first
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_selectedDeviceIdKey);
+    if (stored != null && stored.isNotEmpty) {
+      return stored;
+    }
+
+    // Otherwise fetch the first device and cache it
+    final deviceId = await _getFirstDeviceId();
+    await prefs.setString(_selectedDeviceIdKey, deviceId);
+    return deviceId;
+  } catch (e) {
+    // debugPrint('Error getting device ID for FCM: $e', wrapWidth: 1024);
+    return ApiConstants.defaultDeviceId;
+  }
 }
 
 Future<void> main() async {
@@ -33,6 +83,9 @@ Future<void> main() async {
   final notificationService = LiveEventNotificationService();
   await notificationService.initialize();
 
+  // Get the device ID to use for this app
+  final deviceIdForFcm = await _getDeviceIdForFcm();
+
   // Helper to register FCM token with backend
   Future<void> registerFcmToken(String? token) async {
     // debugPrint('FCM Token: ${token ?? "(null)"}', wrapWidth: 1024);
@@ -42,7 +95,7 @@ Future<void> main() async {
         await Dio().post(
           backendUrl,
           data: {
-            'device_id': ApiConstants.defaultDeviceId,
+            'device_id': deviceIdForFcm,
             'token': token,
             'platform': 'android',
           },
