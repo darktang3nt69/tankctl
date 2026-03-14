@@ -209,26 +209,32 @@ class TankCardMetricsRow extends StatelessWidget {
   }
 }
 
-class TankCardFooter extends StatelessWidget {
-  const TankCardFooter({
-    super.key,
-    required this.status,
-    required this.warningCode,
-    required this.lastSeen,
-    required this.onAcknowledgeWarning,
-  });
 
+class TankCardFooter extends StatelessWidget {
   final TankStatus status;
   final String? warningCode;
   final DateTime? lastSeen;
   final VoidCallback? onAcknowledgeWarning;
+  final String? deviceWarning;
+
+  const TankCardFooter({
+    Key? key,
+    required this.status,
+    required this.warningCode,
+    required this.lastSeen,
+    required this.onAcknowledgeWarning,
+    this.deviceWarning,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Row(
       children: [
-        TankStatusChip(status: status),
+        TankStatusChip(
+          status: status,
+          deviceWarning: deviceWarning,
+        ),
         if (warningCode != null) ...[
           const SizedBox(width: 6),
           TankWarningChip(

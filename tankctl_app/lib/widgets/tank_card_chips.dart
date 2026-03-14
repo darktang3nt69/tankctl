@@ -2,64 +2,69 @@ import 'package:flutter/material.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 
-class TankStatusChip extends StatelessWidget {
-  const TankStatusChip({super.key, required this.status});
 
+class TankStatusChip extends StatelessWidget {
   final TankStatus status;
+  final String? deviceWarning;
+
+  const TankStatusChip({Key? key, required this.status, this.deviceWarning}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final (label, icon, color) = switch (status) {
-      TankStatus.healthy => (
-        'Healthy',
-        Icons.check_circle_rounded,
-        TankCtlColors.success,
-      ),
-      TankStatus.ok => ('OK', Icons.check_rounded, TankCtlColors.primary),
-      TankStatus.highTemp => (
-        'HIGH TEMP ⚠',
-        Icons.thermostat_rounded,
-        TankCtlColors.temperature,
-      ),
-      TankStatus.lowTemp => (
-        'LOW TEMP ⚠',
-        Icons.ac_unit_rounded,
-        const Color(0xFF93C5FD),
-      ),
-      TankStatus.offline => (
-        'Offline',
-        Icons.cloud_off_rounded,
-        Colors.white24,
-      ),
-      TankStatus.unknown => (
-        'Unknown',
-        Icons.help_outline_rounded,
-        Colors.white24,
-      ),
-    };
+    String label;
+    IconData icon;
+    Color color;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
+    switch (status) {
+      case TankStatus.healthy:
+        label = 'Healthy';
+        icon = Icons.check_circle_rounded;
+        color = TankCtlColors.success;
+        break;
+      case TankStatus.ok:
+        label = 'OK';
+        icon = Icons.check_rounded;
+        color = TankCtlColors.primary;
+        break;
+      case TankStatus.highTemp:
+        label = 'HIGH TEMP ⚠';
+        icon = Icons.thermostat_rounded;
+        color = TankCtlColors.temperature;
+        break;
+      case TankStatus.lowTemp:
+        label = 'LOW TEMP ⚠';
+        icon = Icons.ac_unit_rounded;
+        color = const Color(0xFF93C5FD);
+        break;
+      case TankStatus.offline:
+        label = 'Offline';
+        icon = Icons.cloud_off_rounded;
+        color = Colors.white24;
+        break;
+      case TankStatus.unknown:
+        if (deviceWarning == 'sensor_unavailable') {
+          label = 'No Temp Sensor';
+          icon = Icons.sensors_off_rounded;
+          color = Colors.white24;
+        } else {
+          label = 'No Data';
+          icon = Icons.help_outline_rounded;
+          color = Colors.white24;
+        }
+        break;
+    }
+
+    return Chip(
+      label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: color)),
         ],
       ),
+      backgroundColor: Colors.transparent,
+      shape: StadiumBorder(side: BorderSide(color: color.withOpacity(0.3))),
     );
   }
 }

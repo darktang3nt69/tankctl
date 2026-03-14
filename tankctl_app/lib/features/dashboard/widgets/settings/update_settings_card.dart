@@ -195,9 +195,6 @@ class UpdateSettingsCard extends ConsumerWidget {
           ],
 
           const SizedBox(height: 16),
-
-          // ── Action buttons ──────────────────────────────────────────────
-          _ActionButtons(update: update),
         ],
       ),
     );
