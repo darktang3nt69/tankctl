@@ -13,7 +13,7 @@ class DeviceDetailService {
   /// Get complete device detail with all settings
   Future<DeviceDetail> getDeviceDetail(String deviceId) async {
     try {
-      final response = await dio.get('/api/devices/$deviceId/detail');
+      final response = await dio.get('/devices/$deviceId/detail');
 
       if (response.statusCode == 200) {
         return DeviceDetail.fromJson(response.data);
@@ -43,7 +43,7 @@ class DeviceDetailService {
       if (tempThresholdLow != null) data['temp_threshold_low'] = tempThresholdLow;
       if (tempThresholdHigh != null) data['temp_threshold_high'] = tempThresholdHigh;
 
-      await dio.put('/api/devices/$deviceId', data: data);
+      await dio.put('/devices/$deviceId', data: data);
     } on DioException catch (e) {
       throw Exception('Failed to update device: ${e.message}');
     }
@@ -58,7 +58,7 @@ class DeviceDetailService {
   }) async {
     try {
       final response = await dio.post(
-        '/api/devices/$deviceId/schedule/light',
+        '/devices/$deviceId/schedule',
         data: {
           'start_time': startTime,
           'end_time': endTime,
@@ -75,7 +75,7 @@ class DeviceDetailService {
   /// Get light schedule
   Future<LightSchedule?> getLightSchedule(String deviceId) async {
     try {
-      final response = await dio.get('/api/devices/$deviceId/schedule/light');
+      final response = await dio.get('/devices/$deviceId/schedule');
 
       return LightSchedule.fromJson(response.data);
     } on DioException catch (e) {
@@ -105,7 +105,7 @@ class DeviceDetailService {
       if (notes != null) data['notes'] = notes;
 
       final response = await dio.post(
-        '/api/devices/$deviceId/schedule/water',
+        '/devices/$deviceId/water-schedules',
         data: data,
       );
 
@@ -118,7 +118,7 @@ class DeviceDetailService {
   /// Get all water schedules for device
   Future<List<WaterSchedule>> getWaterSchedules(String deviceId) async {
     try {
-      final response = await dio.get('/api/devices/$deviceId/schedule/water');
+      final response = await dio.get('/devices/$deviceId/water-schedules');
 
       final List<dynamic> data = response.data;
       return data.map((json) => WaterSchedule.fromJson(json as Map<String, dynamic>)).toList();
@@ -131,7 +131,7 @@ class DeviceDetailService {
   Future<void> deleteWaterSchedule(String deviceId, int scheduleId) async {
     try {
       await dio.delete(
-        '/api/devices/$deviceId/schedule/water/$scheduleId',
+        '/devices/$deviceId/water-schedules/$scheduleId',
       );
     } on DioException catch (e) {
       throw Exception('Failed to delete water schedule: ${e.message}');
