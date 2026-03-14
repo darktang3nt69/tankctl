@@ -10,59 +10,117 @@ class LiveUpdatesSettingsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
     final refreshIntervalAsync = ref.watch(liveRefreshIntervalProvider);
+    final fabAutoCollapseAsync = ref.watch(fabAutoCollapseSecondsProvider);
 
     return SettingsCardShell(
-      child: refreshIntervalAsync.when(
-        data: (seconds) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        children: [
+          refreshIntervalAsync.when(
+            data: (seconds) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.bolt_rounded),
-                const SizedBox(width: 10),
-                Text(
-                  'Live refresh interval',
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.bolt_rounded),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Live refresh interval',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$seconds s',
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
+                const SizedBox(height: 16),
+                Slider(
+                  value: seconds.toDouble(),
+                  min: 1,
+                  max: 10,
+                  divisions: 9,
+                  label: '$seconds s',
+                  onChanged: (value) {
+                    ref
+                        .read(liveRefreshIntervalProvider.notifier)
+                        .setLiveRefreshInterval(value.round());
+                  },
+                ),
+                const SizedBox(height: 8),
                 Text(
-                  '$seconds s',
-                  style: textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  'Recommended: 3-5 seconds. Lower values feel more instant but send more HTTP refresh traffic.',
+                  style: textTheme.bodySmall?.copyWith(color: Colors.white54),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Slider(
-              value: seconds.toDouble(),
-              min: 1,
-              max: 10,
-              divisions: 9,
-              label: '$seconds s',
-              onChanged: (value) {
-                ref
-                    .read(liveRefreshIntervalProvider.notifier)
-                    .setLiveRefreshInterval(value.round());
-              },
+            loading: () => const SizedBox(
+              height: 80,
+              child: Center(child: CircularProgressIndicator()),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Recommended: 3-5 seconds. Lower values feel more instant but send more HTTP refresh traffic.',
-              style: textTheme.bodySmall?.copyWith(color: Colors.white54),
+            error: (error, _) => Text(
+              'Could not load settings: $error',
+              style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
             ),
-          ],
-        ),
-        loading: () => const SizedBox(
-          height: 80,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-        error: (error, _) => Text(
-          'Could not load settings: $error',
-          style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
-        ),
+          ),
+          const SizedBox(height: 24),
+          fabAutoCollapseAsync.when(
+            data: (seconds) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.touch_app_rounded),
+                    const SizedBox(width: 10),
+                    Text(
+                      'FAB auto-collapse timer',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$seconds s',
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Slider(
+                  value: seconds.toDouble(),
+                  min: 5,
+                  max: 30,
+                  divisions: 25,
+                  label: '$seconds s',
+                  onChanged: (value) {
+                    ref
+                        .read(fabAutoCollapseSecondsProvider.notifier)
+                        .setAutoCollapseSeconds(value.round());
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Floating Action Button collapses after this many seconds of inactivity.',
+                  style: textTheme.bodySmall?.copyWith(color: Colors.white54),
+                ),
+              ],
+            ),
+            loading: () => const SizedBox(
+              height: 80,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(
+              'Could not load FAB settings: $error',
+              style: textTheme.bodyMedium?.copyWith(color: Colors.redAccent),
+            ),
+          ),
+        ],
       ),
     );
   }

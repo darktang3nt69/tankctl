@@ -39,7 +39,7 @@ class PushNotificationService:
             )
             raise
 
-    def send_fcm_notification(self, token: str, title: str, body: str, data: dict = None) -> bool:
+    def send_fcm_notification(self, token: str, title: str, body: str, data: dict = None, notification_type: str = "info") -> bool:
         """Send a push notification to a single device via FCM."""
         url = FCM_ENDPOINT.format(project_id=self.project_id)
         access_token = self._get_access_token()
@@ -47,17 +47,51 @@ class PushNotificationService:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
         }
+        
+        # Map notification type to icon name (will be referenced on app side)
+        icon_map = {
+            "light_on": "ic_light_on",
+            "light_off": "ic_light_off",
+            "device_online": "ic_device_online",
+            "device_offline": "ic_device_offline",
+            "temperature_high": "ic_temperature_high",
+            "temperature_low": "ic_temperature_low",
+            "warning": "ic_warning",
+            "info": "ic_info",
+        }
+        
+        android_icon = icon_map.get(notification_type, "ic_info")
+        
         message = {
             "message": {
                 "token": token,
-                "notification": {"title": title, "body": body},
-                "data": data or {},
+                "notification": {
+                    "title": title,
+                    "body": body,
+                },
+                "data": {
+                    **(data or {}),
+                    "notification_type": notification_type,
+                },
+                "android": {
+                    "priority": "high",
+                    "notification": {
+                        "title": title,
+                        "body": body,
+                        "icon": android_icon,
+                        "color": "#2196F3",
+                        "sound": "default",
+                        "channel_id": "tankctl_notifications",
+                        "click_action": "FLUTTER_NOTIFICATION_CLICK",
+                    },
+                },
             }
         }
+        
         try:
             resp = requests.post(url, headers=headers, json=message, timeout=5)
             if resp.status_code == 200:
-                logger.info("fcm_sent", token=token, title=title)
+                logger.info("fcm_sent", token=token, title=title, type=notification_type)
                 return True
             else:
                 logger.error("fcm_failed", status=resp.status_code, response=resp.text[:200])
@@ -66,12 +100,12 @@ class PushNotificationService:
             logger.error("fcm_error", error=str(e))
             return False
 
-    def broadcast_fcm(self, device_id: str, title: str, body: str, data: dict = None) -> int:
+    def broadcast_fcm(self, device_id: str, title: str, body: str, data: dict = None, notification_type: str = "info") -> int:
         """Send a push notification to all tokens for a device."""
         tokens = self.token_repository.get_tokens_for_device(device_id)
         sent = 0
         for token in tokens:
-            if self.send_fcm_notification(token, title, body, data):
+            if self.send_fcm_notification(token, title, body, data, notification_type):
                 sent += 1
         return sent
 

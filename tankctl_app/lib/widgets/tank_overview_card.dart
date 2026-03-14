@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/providers/dashboard_provider.dart';
@@ -90,7 +91,7 @@ class TankOverviewCard extends ConsumerWidget {
         ),
         error: (e, _) => Row(
           children: [
-            const Icon(Icons.cloud_off_outlined, color: Colors.white38, size: 20),
+            const Icon(AppIcons.cloudOffOutlined, color: Colors.white38, size: 20),
             const SizedBox(width: 10),
             Text(
               'Could not load overview',

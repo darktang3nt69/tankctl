@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tankctl_app/providers/app_settings_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/services/device_service.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 
 class QuickActionsFab extends ConsumerStatefulWidget {
   const QuickActionsFab({super.key});
@@ -16,10 +19,36 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
     Offset _fabOffset = Offset.zero;
   bool _expanded = false;
   bool _busy = false;
+  Timer? _autoCollapseTimer;
+
+  @override
+  void dispose() {
+    _autoCollapseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _resetAutoCollapseTimer(int autoCollapseSeconds) {
+    _autoCollapseTimer?.cancel();
+    if (_expanded) {
+      _autoCollapseTimer = Timer(Duration(seconds: autoCollapseSeconds), () {
+        if (mounted && _expanded) {
+          setState(() => _expanded = false);
+        }
+      });
+    }
+  }
 
   void _toggle() {
     HapticFeedback.mediumImpact();
     setState(() => _expanded = !_expanded);
+    if (_expanded) {
+      // Start timer when opening FAB
+      final autoCollapseSeconds = 
+          (ref.read(fabAutoCollapseSecondsProvider).valueOrNull) ?? 10;
+      _resetAutoCollapseTimer(autoCollapseSeconds);
+    } else {
+      _autoCollapseTimer?.cancel();
+    }
   }
 
   Future<void> _confirmAndRun(String title, String message, Future<void> Function(List<String>) action) async {
@@ -37,6 +66,11 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
       ),
     );
     if (confirmed == true) {
+      // Reset auto-collapse timer when action is initiated
+      final autoCollapseSeconds = 
+          (ref.read(fabAutoCollapseSecondsProvider).valueOrNull) ?? 10;
+      _resetAutoCollapseTimer(autoCollapseSeconds);
+      
       setState(() => _busy = true);
       await action([for (final d in devices) d['device_id'] as String]);
       setState(() => _busy = false);
@@ -65,7 +99,7 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
     // Removed unused theme variable
     final devicesAsync = ref.watch(devicesListProvider);
     Color fabColor = Colors.blueAccent;
-    IconData fabIcon = Icons.flash_on_rounded;
+    IconData fabIcon = AppIcons.flash;
     bool hasWarning = false;
     bool hasOffline = false;
     bool allHealthy = false;
@@ -80,129 +114,132 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
 
     if (hasOffline) {
       fabColor = Colors.redAccent;
-      fabIcon = Icons.warning_amber_rounded;
+      fabIcon = AppIcons.warning;
     } else if (hasWarning) {
       fabColor = Colors.orangeAccent;
-      fabIcon = Icons.error_outline_rounded;
+      fabIcon = AppIcons.error;
     } else if (allHealthy) {
       fabColor = Colors.green;
-      fabIcon = Icons.check_circle_rounded;
+      fabIcon = AppIcons.checkCircle;
     }
 
     return Stack(
       alignment: Alignment.bottomRight,
       children: [
-        AnimatedSlide(
-          offset: _expanded ? Offset.zero : const Offset(0, 0.2),
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOutCubic,
-          child: AnimatedOpacity(
-            opacity: _expanded ? 1.0 : 0.0,
+        IgnorePointer(
+          ignoring: !_expanded,
+          child: AnimatedSlide(
+            offset: _expanded ? Offset.zero : const Offset(0, 0.2),
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeOutCubic,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 80, right: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  FloatingActionButton(
-                    heroTag: 'fab-reboot',
-                    mini: true,
-                    backgroundColor: Colors.blueAccent,
-                    onPressed: _busy
-                        ? null
-                        : () {
-                            HapticFeedback.mediumImpact();
-                            _confirmAndRun(
-                              'Reboot All Devices',
-                              'Are you sure you want to reboot all tanks?',
-                              (ids) async {
-                                final svc = ref.read(deviceServiceProvider);
-                                for (final id in ids) {
-                                  await svc.rebootDevice(id);
-                                }
-                              },
-                            );
-                          },
-                    tooltip: 'Reboot All',
-                    child: const Icon(Icons.autorenew_rounded),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FloatingActionButton(
-                        heroTag: 'fab-light-on',
-                        mini: true,
-                        backgroundColor: Colors.yellow.shade700,
-                        onPressed: _busy
-                            ? null
-                            : () {
-                                HapticFeedback.mediumImpact();
-                                _confirmAndRun(
-                                  'Turn All Lights ON',
-                                  'Turn ON lights for all tanks?',
-                                  (ids) async {
-                                    for (final id in ids) {
-                                      final notifier = ref.read(lightStateFamilyProvider(id).notifier);
-                                      await notifier.toggle(true);
-                                    }
-                                  },
-                                );
-                              },
-                        tooltip: 'Lights ON',
-                        child: const Icon(Icons.wb_incandescent_rounded, color: Colors.amberAccent),
-                      ),
-                      const SizedBox(width: 8),
-                      FloatingActionButton(
-                        heroTag: 'fab-light-off',
-                        mini: true,
-                        backgroundColor: Colors.grey.shade700,
-                        onPressed: _busy
-                            ? null
-                            : () {
-                                HapticFeedback.mediumImpact();
-                                _confirmAndRun(
-                                  'Turn All Lights OFF',
-                                  'Turn OFF lights for all tanks?',
-                                  (ids) async {
-                                    for (final id in ids) {
-                                      final notifier = ref.read(lightStateFamilyProvider(id).notifier);
-                                      await notifier.toggle(false);
-                                    }
-                                  },
-                                );
-                              },
-                        tooltip: 'Lights OFF',
-                        child: const Icon(Icons.nightlight_round, color: Colors.blueGrey),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  FloatingActionButton(
-                    heroTag: 'fab-ack',
-                    mini: true,
-                    backgroundColor: Colors.green,
-                    onPressed: _busy
-                        ? null
-                        : () {
-                            HapticFeedback.mediumImpact();
-                            _confirmAndRun(
-                              'Acknowledge All Warnings',
-                              'Acknowledge all warnings for all tanks?',
-                              (ids) async {
-                                final svc = ref.read(deviceServiceProvider);
-                                for (final id in ids) {
-                                  await svc.acknowledgeWarning(id, 'sensor_unavailable');
-                                }
-                              },
-                            );
-                          },
-                    tooltip: 'Acknowledge All Warnings',
-                    child: const Icon(Icons.verified_rounded, color: Colors.lightGreenAccent),
-                  ),
-                ],
+            child: AnimatedOpacity(
+              opacity: _expanded ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 80, right: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FloatingActionButton(
+                      heroTag: 'fab-reboot',
+                      mini: true,
+                      backgroundColor: Colors.blueAccent,
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              HapticFeedback.mediumImpact();
+                              _confirmAndRun(
+                                'Reboot All Devices',
+                                'Are you sure you want to reboot all tanks?',
+                                (ids) async {
+                                  final svc = ref.read(deviceServiceProvider);
+                                  for (final id in ids) {
+                                    await svc.rebootDevice(id);
+                                  }
+                                },
+                              );
+                            },
+                      tooltip: 'Reboot All',
+                      child: const Icon(AppIcons.reboot),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingActionButton(
+                          heroTag: 'fab-light-on',
+                          mini: true,
+                          backgroundColor: Colors.yellow.shade700,
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  HapticFeedback.mediumImpact();
+                                  _confirmAndRun(
+                                    'Turn All Lights ON',
+                                    'Turn ON lights for all tanks?',
+                                    (ids) async {
+                                      for (final id in ids) {
+                                        final notifier = ref.read(lightStateFamilyProvider(id).notifier);
+                                        await notifier.toggle(true);
+                                      }
+                                    },
+                                  );
+                                },
+                          tooltip: 'Lights ON',
+                          child: const Icon(AppIcons.lightOn, color: Colors.amberAccent),
+                        ),
+                        const SizedBox(width: 8),
+                        FloatingActionButton(
+                          heroTag: 'fab-light-off',
+                          mini: true,
+                          backgroundColor: Colors.grey.shade700,
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  HapticFeedback.mediumImpact();
+                                  _confirmAndRun(
+                                    'Turn All Lights OFF',
+                                    'Turn OFF lights for all tanks?',
+                                    (ids) async {
+                                      for (final id in ids) {
+                                        final notifier = ref.read(lightStateFamilyProvider(id).notifier);
+                                        await notifier.toggle(false);
+                                      }
+                                    },
+                                  );
+                                },
+                          tooltip: 'Lights OFF',
+                          child: const Icon(AppIcons.nightlight, color: Colors.blueGrey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    FloatingActionButton(
+                      heroTag: 'fab-ack',
+                      mini: true,
+                      backgroundColor: Colors.green,
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              HapticFeedback.mediumImpact();
+                              _confirmAndRun(
+                                'Acknowledge All Warnings',
+                                'Acknowledge all warnings for all tanks?',
+                                (ids) async {
+                                  final svc = ref.read(deviceServiceProvider);
+                                  for (final id in ids) {
+                                    await svc.acknowledgeWarning(id, 'sensor_unavailable');
+                                  }
+                                },
+                              );
+                            },
+                      tooltip: 'Acknowledge All Warnings',
+                      child: const Icon(AppIcons.verified, color: Colors.lightGreenAccent),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -230,7 +267,7 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
                     decoration: BoxDecoration(
                       boxShadow: [
                         BoxShadow(
-                          color: fabColor.withOpacity(0.6),
+                          color: fabColor.withValues(alpha: 0.6),
                           blurRadius: 18,
                           spreadRadius: 2,
                           offset: const Offset(0, 4),
@@ -242,10 +279,10 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
                       heroTag: 'fab-main',
                       backgroundColor: fabColor,
                       onPressed: _busy ? null : _toggle,
+                      tooltip: 'Quick Actions',
                       child: _busy
                           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Icon(_expanded ? Icons.close : fabIcon),
-                      tooltip: 'Quick Actions',
+                          : Icon(_expanded ? AppIcons.close : fabIcon),
                     ),
                   ),
                 ),

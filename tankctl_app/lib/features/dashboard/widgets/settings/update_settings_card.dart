@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/settings_card_shell.dart';
 import 'package:tankctl_app/providers/app_update_provider.dart';
@@ -18,7 +19,7 @@ class UpdateSettingsCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.system_update_rounded),
+              const Icon(AppIcons.systemUpdate),
               const SizedBox(width: 10),
               Text(
                 'App Update',

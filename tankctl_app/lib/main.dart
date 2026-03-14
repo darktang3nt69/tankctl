@@ -14,14 +14,12 @@ import 'app/live_event_notification_service.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   // You can show a local notification here if needed
-  print('Handling a background message: \\${message.messageId}');
+  // debugPrint('Handling a background message: ${message.messageId}', wrapWidth: 1024);
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Register background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -37,7 +35,7 @@ Future<void> main() async {
 
   // Helper to register FCM token with backend
   Future<void> registerFcmToken(String? token) async {
-    print('FCM Token: \\${token ?? "(null)"}');
+    // debugPrint('FCM Token: ${token ?? "(null)"}', wrapWidth: 1024);
     if (token != null) {
       try {
         final backendUrl = '${ApiConstants.baseUrl}/mobile/push-token';
@@ -48,14 +46,12 @@ Future<void> main() async {
             'token': token,
             'platform': 'android',
           },
-          options: Options(
-            headers: {'Content-Type': 'application/json'},
-          ),
+          options: Options(headers: {'Content-Type': 'application/json'}),
         );
-        print('FCM token registered with backend');
+        // debugPrint('FCM token registered with backend', wrapWidth: 1024);
         // Show a toast/snackbar for user feedback (if context available)
       } catch (e) {
-        print('Failed to register FCM token: $e');
+        // debugPrint('Failed to register FCM token: $e', wrapWidth: 1024);
         // Optionally show error feedback to user
       }
     }
@@ -72,7 +68,7 @@ Future<void> main() async {
 
   // Foreground message handler
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    print('Received FCM message in foreground: \\${message.notification?.title}');
+    // debugPrint('Received FCM message in foreground: ${message.notification?.title}', wrapWidth: 1024);
     // Show a local notification for FCM message
     final data = message.data;
     final deviceId = data['device_id'] ?? ApiConstants.defaultDeviceId;
@@ -82,24 +78,21 @@ Future<void> main() async {
         message.notification!.title,
         message.notification!.body,
         payload: deviceId,
+        data: data,
       );
     }
   });
 
   // Notification tap handler (when app is opened from notification)
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    print('Notification tap: \\${message.data}');
+    // debugPrint('Notification tap: ${message.data}', wrapWidth: 1024);
     // Example navigation: push to device detail if navigatorKey is set up
     // final deviceId = message.data['device_id'] ?? ApiConstants.defaultDeviceId;
     // navigatorKey.currentState?.pushNamed('/device/$deviceId');
     // TODO: Implement navigation to device detail screen if needed
   });
 
-  runApp(
-    const ProviderScope(
-      child: TankCtlApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: TankCtlApp()));
 }
 
 class TankCtlApp extends StatelessWidget {
@@ -107,8 +100,6 @@ class TankCtlApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const LiveUpdatesBootstrap(
-      child: TankCtlMaterialApp(),
-    );
+    return const LiveUpdatesBootstrap(child: TankCtlMaterialApp());
   }
 }

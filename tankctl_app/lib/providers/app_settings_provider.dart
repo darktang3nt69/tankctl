@@ -25,6 +25,8 @@ final updateCheckFrequencyProvider =
 
 const _liveRefreshIntervalKey = 'live_refresh_interval_seconds';
 const _defaultLiveRefreshIntervalSeconds = 3;
+const _fabAutoCollapseSecondsKey = 'fab_auto_collapse_seconds';
+const _defaultFabAutoCollapseSeconds = 10;
 const _serverBaseUrlKey = 'server_base_url';
 const _sensorWarningsEnabledKey = 'sensor_warning_notifications_enabled';
 
@@ -103,4 +105,23 @@ class SensorWarningNotificationsNotifier extends AsyncNotifier<bool> {
 final sensorWarningNotificationsEnabledProvider =
     AsyncNotifierProvider<SensorWarningNotificationsNotifier, bool>(
       SensorWarningNotificationsNotifier.new,
+    );
+
+class FabAutoCollapseSecondsNotifier extends AsyncNotifier<int> {
+  @override
+  Future<int> build() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_fabAutoCollapseSecondsKey) ?? _defaultFabAutoCollapseSeconds;
+  }
+
+  Future<void> setAutoCollapseSeconds(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_fabAutoCollapseSecondsKey, seconds);
+    state = AsyncValue.data(seconds);
+  }
+}
+
+final fabAutoCollapseSecondsProvider =
+    AsyncNotifierProvider<FabAutoCollapseSecondsNotifier, int>(
+      FabAutoCollapseSecondsNotifier.new,
     );

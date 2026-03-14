@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/widgets/tank_card_chips.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
@@ -68,13 +69,13 @@ class TankCardHeader extends StatelessWidget {
         _RssiStatusIcon(isOnline: isOnline, rssi: rssi),
         IconButton(
           onPressed: onRefresh,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
+          icon: const Icon(AppIcons.refresh, size: 18),
           color: Colors.white70,
           tooltip: 'Refresh this tank',
           splashRadius: 18,
         ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_horiz_rounded, color: Colors.white70, size: 20),
+          icon: const Icon(AppIcons.moreHoriz, color: Colors.white70, size: 20),
           splashRadius: 18,
           onSelected: (value) {
             if (value == 'reboot') {
@@ -103,7 +104,7 @@ class _RssiStatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!isOnline) {
       return const Icon(
-        Icons.cloud_off_rounded,
+        AppIcons.cloudOff,
         size: 18,
         color: Colors.white38,
       );
@@ -111,10 +112,10 @@ class _RssiStatusIcon extends StatelessWidget {
 
     final quality = rssiToQuality(rssi);
     final (icon, color) = switch (quality) {
-      RssiQuality.strong => (Icons.wifi_rounded, TankCtlColors.success),
-      RssiQuality.medium => (Icons.wifi_2_bar_rounded, const Color(0xFFFFC58A)),
-      RssiQuality.weak => (Icons.wifi_1_bar_rounded, const Color(0xFFFFA76B)),
-      RssiQuality.unavailable => (Icons.wifi_off_rounded, Colors.white38),
+      RssiQuality.strong => (AppIcons.wifiStrong, TankCtlColors.success),
+      RssiQuality.medium => (AppIcons.wifiMedium, const Color(0xFFFFC58A)),
+      RssiQuality.weak => (AppIcons.wifiWeak, const Color(0xFFFFA76B)),
+      RssiQuality.unavailable => (AppIcons.wifiOff, Colors.white38),
     };
 
     return Icon(icon, size: 18, color: color);
@@ -244,7 +245,7 @@ class TankCardFooter extends StatelessWidget {
         ],
         const Spacer(),
         const Icon(
-          Icons.access_time_rounded,
+          AppIcons.time,
           size: 12,
           color: Colors.white24,
         ),

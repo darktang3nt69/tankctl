@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 
@@ -18,37 +19,37 @@ class TankStatusChip extends StatelessWidget {
     switch (status) {
       case TankStatus.healthy:
         label = 'Healthy';
-        icon = Icons.check_circle_rounded;
+        icon = AppIcons.checkCircle;
         color = TankCtlColors.success;
         break;
       case TankStatus.ok:
         label = 'OK';
-        icon = Icons.check_rounded;
+        icon = AppIcons.check;
         color = TankCtlColors.primary;
         break;
       case TankStatus.highTemp:
         label = 'HIGH TEMP ⚠';
-        icon = Icons.thermostat_rounded;
+        icon = AppIcons.thermostat;
         color = TankCtlColors.temperature;
         break;
       case TankStatus.lowTemp:
         label = 'LOW TEMP ⚠';
-        icon = Icons.ac_unit_rounded;
+        icon = AppIcons.acUnit;
         color = const Color(0xFF93C5FD);
         break;
       case TankStatus.offline:
         label = 'Offline';
-        icon = Icons.cloud_off_rounded;
+        icon = AppIcons.cloudOff;
         color = Colors.white24;
         break;
       case TankStatus.unknown:
         if (deviceWarning == 'sensor_unavailable') {
           label = 'No Temp Sensor';
-          icon = Icons.sensors_off_rounded;
+          icon = AppIcons.sensorsOff;
           color = Colors.white24;
         } else {
           label = 'No Data';
-          icon = Icons.help_outline_rounded;
+          icon = AppIcons.help;
           color = Colors.white24;
         }
         break;
@@ -97,7 +98,7 @@ class TankWarningChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.sensors_off_rounded, size: 11, color: color),
+          const Icon(AppIcons.sensorsOff, size: 11, color: color),
           const SizedBox(width: 4),
           Text(
             _label,
@@ -115,7 +116,7 @@ class TankWarningChip extends StatelessWidget {
               child: const Padding(
                 padding: EdgeInsets.all(1),
                 child: Icon(
-                  Icons.close_rounded,
+                  AppIcons.close,
                   size: 12,
                   color: color,
                 ),
