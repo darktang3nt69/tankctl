@@ -8,7 +8,7 @@ class TankStatusChip extends StatelessWidget {
   final TankStatus status;
   final String? deviceWarning;
 
-  const TankStatusChip({Key? key, required this.status, this.deviceWarning}) : super(key: key);
+  const TankStatusChip({super.key, required this.status, this.deviceWarning});
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +65,7 @@ class TankStatusChip extends StatelessWidget {
         ],
       ),
       backgroundColor: Colors.transparent,
-      shape: StadiumBorder(side: BorderSide(color: color.withOpacity(0.3))),
+      shape: StadiumBorder(side: BorderSide(color: color.withValues(alpha: 0.3))),
     );
   }
 }
