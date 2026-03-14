@@ -29,6 +29,10 @@ class DeviceModel(Base):
     wifi_status = Column(String(50), nullable=True)
     temp_threshold_low = Column(Float, nullable=True)
     temp_threshold_high = Column(Float, nullable=True)
+    device_name = Column(String(100), nullable=True)
+    location = Column(String(100), nullable=True)
+    icon_type = Column(String(50), default="fish_bowl")
+    description = Column(Text, nullable=True)
 
     def __repr__(self):
         return f"<DeviceModel(device_id={self.device_id}, status={self.status})>"
@@ -124,15 +128,36 @@ class LightScheduleModel(Base):
 
     __tablename__ = "light_schedules"
 
-    device_id = Column(String(50), primary_key=True)
-    on_time = Column(Time, nullable=False)
-    off_time = Column(Time, nullable=False)
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String(50), nullable=False, unique=True)
     enabled = Column(Boolean, default=True, nullable=False)
+        start_time = Column(Time, nullable=False)
+        end_time = Column(Time, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f"<LightScheduleModel(device_id={self.device_id}, on={self.on_time}, off={self.off_time}, enabled={self.enabled})>"
+        return f"<LightScheduleModel(device_id={self.device_id}, start={self.start_time}, end={self.end_time}, enabled={self.enabled})>"
+
+
+class WaterScheduleModel(Base):
+    """Water change reminder schedule table model."""
+
+    __tablename__ = "water_schedules"
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String(50), nullable=False, index=True)
+    schedule_type = Column(String(20), nullable=False)  # 'weekly' or 'custom'
+    day_of_week = Column(Integer, nullable=True)  # 0-6 for weekly
+    schedule_date = Column(String(10), nullable=True)  # YYYY-MM-DD for custom
+    schedule_time = Column(Time, nullable=False)
+    notes = Column(Text, nullable=True)
+    completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<WaterScheduleModel(device_id={self.device_id}, type={self.schedule_type})>"
 
 
 class WarningAcknowledgementModel(Base):

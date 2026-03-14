@@ -49,6 +49,10 @@ class DeviceResponse(BaseModel):
     """Device response model (overview without sensitive data)."""
 
     device_id: str
+    device_name: Optional[str] = None
+    location: Optional[str] = None
+    icon_type: str = "fish_bowl"
+    description: Optional[str] = None
     status: Literal["online", "offline"]
     firmware_version: Optional[str] = None
     created_at: Optional[str] = None
@@ -282,3 +286,149 @@ class ScheduleResponse(BaseModel):
     enabled: bool
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+
+
+# ============================================================================
+# Device Detail Management Schemas
+# ============================================================================
+
+class DeviceMetadataUpdateRequest(BaseModel):
+    """Request to update device metadata."""
+
+    device_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="User-friendly device name"
+    )
+    location: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Physical location of device"
+    )
+    icon_type: Optional[str] = Field(
+        None,
+        description="Icon type from predefined set"
+    )
+    description: Optional[str] = Field(
+        None,
+        description="User notes or description"
+    )
+    temp_threshold_low: Optional[float] = None
+    temp_threshold_high: Optional[float] = None
+
+    @model_validator(mode='after')
+    def validate_thresholds(self):
+        if (
+            self.temp_threshold_low is not None
+            and self.temp_threshold_high is not None
+            and self.temp_threshold_low >= self.temp_threshold_high
+        ):
+            raise ValueError("temp_threshold_low must be less than temp_threshold_high")
+        return self
+
+
+class LightScheduleRequest(BaseModel):
+    """Request to create/update light schedule."""
+
+    enabled: bool = Field(True, description="Whether schedule is enabled")
+    start_time: str = Field(
+        ...,
+        pattern=r"^([01]\d|2[0-3]):([0-5]\d)$",
+        description="Start time in HH:MM format (24-hour)"
+    )
+    end_time: str = Field(
+        ...,
+        pattern=r"^([01]\d|2[0-3]):([0-5]\d)$",
+        description="End time in HH:MM format (24-hour)"
+    )
+
+    @model_validator(mode='after')
+    def validate_times(self):
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be before end_time")
+        return self
+
+
+class LightScheduleResponse(BaseModel):
+    """Response with light schedule details."""
+
+    id: int
+    device_id: str
+    enabled: bool
+    start_time: str
+    end_time: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class WaterScheduleRequest(BaseModel):
+    """Request to create/update water change schedule."""
+
+    schedule_type: Literal["weekly", "custom"] = Field(
+        ...,
+        description="Type of schedule: weekly recurring or custom date"
+    )
+    day_of_week: Optional[int] = Field(
+        None,
+        ge=0,
+        le=6,
+        description="Day of week for weekly schedules (0=Sunday, 6=Saturday)"
+    )
+    schedule_date: Optional[str] = Field(
+        None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Date for custom schedules (YYYY-MM-DD)"
+    )
+    schedule_time: str = Field(
+        "12:00",
+        pattern=r"^([01]\d|2[0-3]):([0-5]\d)$",
+        description="Time for water change in HH:MM format"
+    )
+    notes: Optional[str] = Field(
+        None,
+        description="Notes about the water change"
+    )
+
+    @model_validator(mode='after')
+    def validate_schedule_type(self):
+        if self.schedule_type == "weekly" and self.day_of_week is None:
+            raise ValueError("day_of_week required for weekly schedule")
+        if self.schedule_type == "custom" and self.schedule_date is None:
+            raise ValueError("schedule_date required for custom schedule")
+        return self
+
+
+class WaterScheduleResponse(BaseModel):
+    """Response with water schedule details."""
+
+    id: int
+    device_id: str
+    schedule_type: Literal["weekly", "custom"]
+    day_of_week: Optional[int] = None
+    schedule_date: Optional[str] = None
+    schedule_time: str
+    notes: Optional[str] = None
+    completed: bool = False
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class DeviceDetailResponse(BaseModel):
+    """Complete device detail response with all current settings."""
+
+    device_id: str
+    device_name: Optional[str] = None
+    location: Optional[str] = None
+    icon_type: str
+    description: Optional[str] = None
+    status: Literal["online", "offline"]
+    firmware_version: Optional[str] = None
+    created_at: Optional[str] = None
+    last_seen: Optional[str] = None
+    uptime_ms: Optional[int] = None
+    rssi: Optional[int] = None
+    wifi_status: Optional[str] = None
+    temp_threshold_low: Optional[float] = None
+    temp_threshold_high: Optional[float] = None
+    light_schedule: Optional[LightScheduleResponse] = None
+    water_schedules: list[WaterScheduleResponse] = Field(default_factory=list)
