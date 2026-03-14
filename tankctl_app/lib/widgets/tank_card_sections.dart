@@ -110,15 +110,9 @@ class _RssiStatusIcon extends StatelessWidget {
       );
     }
 
-    final quality = rssiToQuality(rssi);
-    final (icon, color) = switch (quality) {
-      RssiQuality.strong => (AppIcons.wifiStrong, TankCtlColors.success),
-      RssiQuality.medium => (AppIcons.wifiMedium, const Color(0xFFFFC58A)),
-      RssiQuality.weak => (AppIcons.wifiWeak, const Color(0xFFFFA76B)),
-      RssiQuality.unavailable => (AppIcons.wifiOff, Colors.white38),
-    };
-
-    return Icon(icon, size: 18, color: color);
+    // Show a clear green wifi symbol when the device is online
+    // (replace the small/ambiguous dot with a WiFi icon).
+    return Icon(AppIcons.wifiStrong, size: 18, color: TankCtlColors.success);
   }
 }
 
