@@ -156,7 +156,6 @@ class EventFilter {
   final DateTime? toDate;
   final String sortOrder; // 'newest' (default), 'oldest', 'severity'
   final String? searchQuery;
-  final bool showAcknowledged;
 
   const EventFilter({
     this.tankId,
@@ -166,7 +165,6 @@ class EventFilter {
     this.toDate,
     this.sortOrder = 'newest',
     this.searchQuery,
-    this.showAcknowledged = true,
   });
 
   EventFilter copyWith({
@@ -177,17 +175,21 @@ class EventFilter {
     DateTime? toDate,
     String? sortOrder,
     String? searchQuery,
-    bool? showAcknowledged,
+    bool clearTankId = false,
+    bool clearCategory = false,
+    bool clearSeverity = false,
+    bool clearFromDate = false,
+    bool clearToDate = false,
+    bool clearSearchQuery = false,
   }) {
     return EventFilter(
-      tankId: tankId ?? this.tankId,
-      category: category ?? this.category,
-      severity: severity ?? this.severity,
-      fromDate: fromDate ?? this.fromDate,
-      toDate: toDate ?? this.toDate,
+      tankId: clearTankId ? null : (tankId ?? this.tankId),
+      category: clearCategory ? null : (category ?? this.category),
+      severity: clearSeverity ? null : (severity ?? this.severity),
+      fromDate: clearFromDate ? null : (fromDate ?? this.fromDate),
+      toDate: clearToDate ? null : (toDate ?? this.toDate),
       sortOrder: sortOrder ?? this.sortOrder,
-      searchQuery: searchQuery ?? this.searchQuery,
-      showAcknowledged: showAcknowledged ?? this.showAcknowledged,
+      searchQuery: clearSearchQuery ? null : (searchQuery ?? this.searchQuery),
     );
   }
 
@@ -198,8 +200,7 @@ class EventFilter {
       severity != null ||
       fromDate != null ||
       toDate != null ||
-      searchQuery != null ||
-      !showAcknowledged;
+      searchQuery != null;
 
   /// Reset all filters
   EventFilter reset() => const EventFilter();

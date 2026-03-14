@@ -5,17 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/domain/event.dart';
-import 'package:tankctl_app/providers/event_provider.dart';
 import 'package:tankctl_app/utils/app_icons.dart';
 
 class EventDetailsSheet extends ConsumerStatefulWidget {
   final Event event;
-  final VoidCallback? onAcknowledge;
 
   const EventDetailsSheet({
     super.key,
     required this.event,
-    this.onAcknowledge,
   });
 
   @override
@@ -23,8 +20,6 @@ class EventDetailsSheet extends ConsumerStatefulWidget {
 }
 
 class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
-  bool _isAcknowledging = false;
-
   /// Get icon for severity
   IconData _getSeverityIcon() {
     return switch (widget.event.severity) {
@@ -60,39 +55,6 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       return 'Yesterday at $timeStr';
     } else {
       return '$dateStr at $timeStr';
-    }
-  }
-
-  Future<void> _handleAcknowledge() async {
-    setState(() => _isAcknowledging = true);
-
-    try {
-      // Call acknowledge provider
-      await ref.read(acknowledgeEventProvider(widget.event.id).future);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Event acknowledged'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        // Close sheet after acknowledging
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to acknowledge: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isAcknowledging = false);
-      }
     }
   }
 
@@ -302,57 +264,6 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
               ),
 
               const SizedBox(height: 16),
-
-              // Acknowledge button (for Phase 3)
-              if (!widget.event.isAcknowledged &&
-                  (widget.event.severity == EventSeverity.warning ||
-                      widget.event.severity == EventSeverity.critical))
-                ElevatedButton(
-                  onPressed: _isAcknowledging ? null : _handleAcknowledge,
-                  child: _isAcknowledging
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text('Acknowledge this event'),
-                ),
-
-              if (widget.event.isAcknowledged) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: TankCtlColors.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: TankCtlColors.success.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        AppIcons.checkCircle,
-                        color: TankCtlColors.success,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'This event has been acknowledged',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: TankCtlColors.success,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 8),
             ],
           ),
         );

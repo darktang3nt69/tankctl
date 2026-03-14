@@ -8,13 +8,11 @@ import 'package:tankctl_app/widgets/event_card.dart';
 class EventTimeline extends StatelessWidget {
   final Map<String, List<Event>> groupedEvents;
   final void Function(Event) onEventTap;
-  final void Function(String)? onAcknowledge;
 
   const EventTimeline({
     super.key,
     required this.groupedEvents,
     required this.onEventTap,
-    this.onAcknowledge,
   });
 
   /// Order for time group keys
@@ -83,9 +81,6 @@ class EventTimeline extends StatelessWidget {
                 event: event,
                 isUnread: isUnread,
                 onTap: () => onEventTap(event),
-                onAcknowledge: onAcknowledge != null
-                    ? () => onAcknowledge!(event.id)
-                    : null,
               );
             }),
 

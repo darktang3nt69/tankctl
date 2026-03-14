@@ -9,14 +9,12 @@ import 'package:tankctl_app/utils/app_icons.dart';
 class EventCard extends StatelessWidget {
   final Event event;
   final VoidCallback onTap;
-  final VoidCallback? onAcknowledge;
   final bool isUnread;
 
   const EventCard({
     super.key,
     required this.event,
     required this.onTap,
-    this.onAcknowledge,
     this.isUnread = false,
   });
 
@@ -232,32 +230,6 @@ class EventCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!event.isAcknowledged &&
-                      (event.severity == EventSeverity.warning ||
-                          event.severity == EventSeverity.critical) &&
-                      onAcknowledge != null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: TextButton(
-                        onPressed: onAcknowledge,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'Ack',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: severityColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ],

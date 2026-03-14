@@ -45,19 +45,33 @@ class EventFilterNotifier extends StateNotifier<EventFilter> {
   void setFilter(EventFilter filter) => state = filter;
 
   void updateTankFilter(String? tankId) {
-    state = state.copyWith(tankId: tankId);
+    state = state.copyWith(
+      tankId: tankId,
+      clearTankId: tankId == null,
+    );
   }
 
   void updateCategoryFilter(EventCategory? category) {
-    state = state.copyWith(category: category);
+    state = state.copyWith(
+      category: category,
+      clearCategory: category == null,
+    );
   }
 
   void updateSeverityFilter(EventSeverity? severity) {
-    state = state.copyWith(severity: severity);
+    state = state.copyWith(
+      severity: severity,
+      clearSeverity: severity == null,
+    );
   }
 
   void updateDateRange(DateTime? fromDate, DateTime? toDate) {
-    state = state.copyWith(fromDate: fromDate, toDate: toDate);
+    state = state.copyWith(
+      fromDate: fromDate,
+      toDate: toDate,
+      clearFromDate: fromDate == null,
+      clearToDate: toDate == null,
+    );
   }
 
   void updateSortOrder(String sortOrder) {
@@ -65,11 +79,10 @@ class EventFilterNotifier extends StateNotifier<EventFilter> {
   }
 
   void updateSearchQuery(String? query) {
-    state = state.copyWith(searchQuery: query);
-  }
-
-  void toggleAcknowledged() {
-    state = state.copyWith(showAcknowledged: !state.showAcknowledged);
+    state = state.copyWith(
+      searchQuery: query,
+      clearSearchQuery: query == null,
+    );
   }
 
   void resetFilters() {
@@ -104,11 +117,6 @@ final filteredEventsProvider =
 
   var events = (eventsData['events'] as List<Event>?) ?? [];
 
-  // Apply acknowledged filter (client-side)
-  if (!filter.showAcknowledged) {
-    events = events.where((e) => !e.isAcknowledged).toList();
-  }
-
   // Apply search filter (client-side for now, could be backend)
   if (filter.searchQuery != null && filter.searchQuery!.isNotEmpty) {
     final query = filter.searchQuery!.toLowerCase();
@@ -122,17 +130,6 @@ final filteredEventsProvider =
   }
 
   return events;
-});
-
-/// Acknowledge an event and refetch the list
-final acknowledgeEventProvider =
-    FutureProvider.family<void, String>((ref, eventId) async {
-  final eventService = ref.watch(eventServiceProvider);
-  await eventService.acknowledgeEvent(eventId);
-
-  // Invalidate filtered events to refetch from backend
-  // This ensures the list reflects the server's updated state
-  ref.invalidate(filteredEventsProvider);
 });
 
 /// Group events by date sections for timeline view (Phase 2)

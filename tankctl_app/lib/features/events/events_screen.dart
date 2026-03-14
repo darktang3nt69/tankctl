@@ -69,9 +69,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                         onEventTap: (event) {
                           _showEventDetails(context, event);
                         },
-                        onAcknowledge: (eventId) {
-                          _handleAcknowledge(eventId);
-                        },
                       ),
                     );
                   },
@@ -182,30 +179,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     );
   }
 
-  /// Handle acknowledge action
-  Future<void> _handleAcknowledge(String eventId) async {
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      // Call acknowledge provider
-      await ref.read(acknowledgeEventProvider(eventId).future);
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Event acknowledged'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to acknowledge: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
   /// Show event detail sheet (Phase 2)
   void _showEventDetails(BuildContext context, Event event) {
     showModalBottomSheet(
@@ -214,9 +187,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => EventDetailsSheet(
         event: event,
-        onAcknowledge: () {
-          _handleAcknowledge(event.id);
-        },
       ),
     );
   }

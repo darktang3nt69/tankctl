@@ -15,6 +15,19 @@ class EventFilterBar extends ConsumerStatefulWidget {
 
 class _EventFilterBarState extends ConsumerState<EventFilterBar> {
   bool _showAdvanced = false;
+  late TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +37,37 @@ class _EventFilterBarState extends ConsumerState<EventFilterBar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Search field
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) {
+              ref.read(eventFilterProvider.notifier).updateSearchQuery(
+                    value.isEmpty ? null : value,
+                  );
+            },
+            decoration: InputDecoration(
+              hintText: 'Search events...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        ref.read(eventFilterProvider.notifier).updateSearchQuery(null);
+                      },
+                    )
+                  : null,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+
         // Quick filter chips
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -233,16 +277,52 @@ class _EventFilterBarState extends ConsumerState<EventFilterBar> {
                 ),
                 const SizedBox(height: 8),
 
-                // Acknowledged toggle
-                CheckboxListTile(
-                  title: const Text('Show acknowledged events'),
-                  value: filter.showAcknowledged,
+                // Tank filter dropdown
+                DropdownButton<String?>(
+                  value: filter.tankId,
+                  hint: const Text('Filter by Tank'),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All Tanks')),
+                    DropdownMenuItem(value: 'tank1', child: Text('Tank 1')),
+                    DropdownMenuItem(value: 'tank2', child: Text('Tank 2')),
+                    DropdownMenuItem(value: 'tank3', child: Text('Tank 3')),
+                  ],
                   onChanged: (value) {
-                    ref.read(eventFilterProvider.notifier).toggleAcknowledged();
+                    ref.read(eventFilterProvider.notifier).updateTankFilter(value);
                   },
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  dense: true,
+                  isExpanded: true,
+                  isDense: true,
+                ),
+                const SizedBox(height: 8),
+
+                // Event type filter dropdown
+                DropdownButton<EventCategory?>(
+                  value: filter.category,
+                  hint: const Text('Filter by Event Type'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Events')),
+                    DropdownMenuItem(
+                      value: EventCategory.light,
+                      child: Text('Light - ${EventCategory.light.displayName}'),
+                    ),
+                    DropdownMenuItem(
+                      value: EventCategory.temperature,
+                      child: Text('Temperature - ${EventCategory.temperature.displayName}'),
+                    ),
+                    DropdownMenuItem(
+                      value: EventCategory.connectivity,
+                      child: Text('Connectivity - ${EventCategory.connectivity.displayName}'),
+                    ),
+                    DropdownMenuItem(
+                      value: EventCategory.system,
+                      child: Text('System - ${EventCategory.system.displayName}'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    ref.read(eventFilterProvider.notifier).updateCategoryFilter(value);
+                  },
+                  isExpanded: true,
+                  isDense: true,
                 ),
               ],
             ),
