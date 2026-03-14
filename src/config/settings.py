@@ -119,7 +119,4 @@ class Settings:
     fcm_service_account_json: str = os.getenv("FCM_SERVICE_ACCOUNT_JSON", "tankctl-firebase-adminsdk-fbsvc-2efd3c5518.json")
     fcm_project_id: str = os.getenv("FCM_PROJECT_ID", "")
 
-
-fcm_service_account_json: str = os.getenv("FCM_SERVICE_ACCOUNT_JSON", "firebase-service-account.json")
-fcm_project_id: str = os.getenv("FCM_PROJECT_ID", "")
 settings = Settings()

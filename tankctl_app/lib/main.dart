@@ -89,8 +89,8 @@ Future<void> main() async {
   // Notification tap handler (when app is opened from notification)
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
     print('Notification tap: \\${message.data}');
-    final deviceId = message.data['device_id'] ?? ApiConstants.defaultDeviceId;
     // Example navigation: push to device detail if navigatorKey is set up
+    // final deviceId = message.data['device_id'] ?? ApiConstants.defaultDeviceId;
     // navigatorKey.currentState?.pushNamed('/device/$deviceId');
     // TODO: Implement navigation to device detail screen if needed
   });
