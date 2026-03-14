@@ -60,8 +60,8 @@ class DeviceDetailService {
       final response = await dio.post(
         '/devices/$deviceId/schedule',
         data: {
-          'start_time': startTime,
-          'end_time': endTime,
+          'on_time': startTime,
+          'off_time': endTime,
           'enabled': enabled,
         },
       );

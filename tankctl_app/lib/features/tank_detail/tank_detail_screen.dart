@@ -51,69 +51,8 @@ class TankDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with device name and status
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              device.deviceName ?? device.deviceId,
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            if (device.location != null)
-                              Text(
-                                device.location!,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: device.status == 'online'
-                              ? Colors.green.withValues(alpha: 0.1)
-                              : Colors.red.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          device.status,
-                          style: TextStyle(
-                            color: device.status == 'online'
-                                ? Colors.green
-                                : Colors.red,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (device.lastSeen != null)
-                    Text(
-                      'Last seen: ${_formatTime(device.lastSeen!)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey,
-                          ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Health Metrics
-            HealthMetricsSection(device: device),
+            // Tank Header with Health Metrics (Combined)
+            TankHeaderWithHealthSection(device: device),
             const SizedBox(height: 24),
 
             // Temperature Graph & Thresholds
@@ -168,25 +107,7 @@ class TankDetailScreen extends ConsumerWidget {
     );
   }
 
-  String _formatTime(String timestamp) {
-    try {
-      final dt = DateTime.parse(timestamp);
-      final now = DateTime.now();
-      final diff = now.difference(dt);
 
-      if (diff.inMinutes < 1) {
-        return 'Just now';
-      } else if (diff.inMinutes < 60) {
-        return '${diff.inMinutes}m ago';
-      } else if (diff.inHours < 24) {
-        return '${diff.inHours}h ago';
-      } else {
-        return '${diff.inDays}d ago';
-      }
-    } catch (_) {
-      return timestamp;
-    }
-  }
 }
 
 /// Recent events for this device

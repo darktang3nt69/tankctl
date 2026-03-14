@@ -32,6 +32,15 @@ final waterSchedulesProvider =
   return service.getWaterSchedules(deviceId);
 });
 
+/// Light schedule enabled state for a device (for immediate UI feedback)
+/// Tracks the enabled state with optimistic updates
+final lightScheduleEnabledProvider =
+    StateProvider.family<bool?, String>((ref, deviceId) {
+  // Initialize from the device detail when it loads
+  final deviceAsync = ref.watch(deviceDetailProvider(deviceId));
+  return deviceAsync.whenData((device) => device.lightSchedule?.enabled).value;
+});
+
 /// Device metadata editor state (local form state)
 class DeviceMetadataState {
   final String? deviceName;
