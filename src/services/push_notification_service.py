@@ -27,8 +27,17 @@ class PushNotificationService:
             self._credentials = service_account.Credentials.from_service_account_file(
                 self.service_account_path, scopes=[FCM_SCOPE]
             )
-        self._credentials.refresh(Request())
-        return self._credentials.token
+        try:
+            self._credentials.refresh(Request())
+            return self._credentials.token
+        except Exception as e:
+            logger.error(
+                "fcm_auth_error",
+                error=str(e),
+                service_account_path=self.service_account_path,
+                hint="Check that the service account JSON is valid, present at the path, and that the container/system clock is correct",
+            )
+            raise
 
     def send_fcm_notification(self, token: str, title: str, body: str, data: dict = None) -> bool:
         """Send a push notification to a single device via FCM."""
