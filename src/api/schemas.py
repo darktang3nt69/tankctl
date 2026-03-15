@@ -368,11 +368,9 @@ class WaterScheduleRequest(BaseModel):
         ...,
         description="Type of schedule: weekly recurring or custom date"
     )
-    day_of_week: Optional[int] = Field(
+    days_of_week: Optional[list[int]] = Field(
         None,
-        ge=0,
-        le=6,
-        description="Day of week for weekly schedules (0=Sunday, 6=Saturday)"
+        description="Days of week for weekly schedules (0=Sunday, 6=Saturday). e.g., [1,3,5] for Mon,Wed,Fri"
     )
     schedule_date: Optional[str] = Field(
         None,
@@ -388,11 +386,19 @@ class WaterScheduleRequest(BaseModel):
         None,
         description="Notes about the water change"
     )
+    enabled: bool = Field(
+        True,
+        description="Enable push notifications for this schedule"
+    )
 
     @model_validator(mode='after')
     def validate_schedule_type(self):
-        if self.schedule_type == "weekly" and self.day_of_week is None:
-            raise ValueError("day_of_week required for weekly schedule")
+        if self.schedule_type == "weekly" and not self.days_of_week:
+            raise ValueError("days_of_week required for weekly schedule")
+        if self.days_of_week:
+            for day in self.days_of_week:
+                if not (0 <= day <= 6):
+                    raise ValueError("days_of_week values must be 0-6")
         if self.schedule_type == "custom" and self.schedule_date is None:
             raise ValueError("schedule_date required for custom schedule")
         return self
@@ -404,11 +410,12 @@ class WaterScheduleResponse(BaseModel):
     id: int
     device_id: str
     schedule_type: Literal["weekly", "custom"]
-    day_of_week: Optional[int] = None
+    days_of_week: Optional[list[int]] = None
     schedule_date: Optional[str] = None
     schedule_time: str
     notes: Optional[str] = None
     completed: bool = False
+    enabled: bool = True
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

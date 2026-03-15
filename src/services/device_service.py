@@ -381,11 +381,12 @@ class DeviceService:
                     "id": ws.id,
                     "device_id": ws.device_id,
                     "schedule_type": ws.schedule_type,
-                    "day_of_week": ws.day_of_week,
-                    "schedule_date": ws.schedule_date,
+                    "days_of_week": [int(d.strip()) for d in ws.days_of_week.split(",")] if ws.days_of_week else None,
+                    "schedule_date": ws.schedule_date.isoformat() if ws.schedule_date else None,
                     "schedule_time": str(ws.schedule_time),
                     "notes": ws.notes,
                     "completed": ws.completed,
+                    "enabled": ws.enabled,
                     "created_at": ws.created_at.isoformat() if ws.created_at else None,
                     "updated_at": ws.updated_at.isoformat() if ws.updated_at else None,
                 }
@@ -443,18 +444,57 @@ class DeviceService:
             return None
 
         schedule_time = time.fromisoformat(schedule_data["schedule_time"])
+        
+        # Convert days_of_week list to comma-separated string
+        days_of_week_str = None
+        if schedule_data.get("days_of_week"):
+            days_of_week_str = ",".join(str(d) for d in schedule_data["days_of_week"])
 
         new_schedule = WaterScheduleModel(
             device_id=device_id,
             schedule_type=schedule_data["schedule_type"],
-            day_of_week=schedule_data.get("day_of_week"),
+            days_of_week=days_of_week_str,
             schedule_date=schedule_data.get("schedule_date"),
             schedule_time=schedule_time,
             notes=schedule_data.get("notes"),
+            enabled=schedule_data.get("enabled", True),
         )
         self.session.add(new_schedule)
         self.session.commit()
         return new_schedule
+
+    def update_water_schedule(self, device_id: str, schedule_id: int, schedule_data: dict):
+        """Update water change schedule for device."""
+        from src.infrastructure.db.models import WaterScheduleModel
+        from datetime import time as time_type
+
+        schedule = self.session.query(WaterScheduleModel).filter_by(
+            id=schedule_id,
+            device_id=device_id,
+        ).first()
+
+        if not schedule:
+            return None
+
+        if "schedule_time" in schedule_data and schedule_data["schedule_time"]:
+            schedule.schedule_time = time_type.fromisoformat(schedule_data["schedule_time"])
+        if "schedule_type" in schedule_data:
+            schedule.schedule_type = schedule_data["schedule_type"]
+        if "days_of_week" in schedule_data:
+            # Convert days_of_week list to comma-separated string
+            if schedule_data["days_of_week"]:
+                schedule.days_of_week = ",".join(str(d) for d in schedule_data["days_of_week"])
+            else:
+                schedule.days_of_week = None
+        if "schedule_date" in schedule_data:
+            schedule.schedule_date = schedule_data["schedule_date"]
+        if "notes" in schedule_data:
+            schedule.notes = schedule_data["notes"]
+        if "enabled" in schedule_data:
+            schedule.enabled = schedule_data["enabled"]
+
+        self.session.commit()
+        return schedule
 
     def get_water_schedules(self, device_id: str) -> list:
         """Get all water schedules for device."""

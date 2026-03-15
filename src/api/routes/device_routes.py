@@ -291,26 +291,32 @@ def get_light_schedule(
 @router.post("/{device_id}/schedule/water", response_model=WaterScheduleResponse)
 def create_water_schedule(
     device_id: str,
-    request,
+    request: WaterScheduleRequest,
     session: Session = Depends(get_db),
 ):
     """Create water change schedule for device."""
     try:
         service = DeviceService(session)
-        schedule = service.create_water_schedule(device_id, request)
+        schedule = service.create_water_schedule(device_id, request.model_dump())
 
         if not schedule:
             raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+
+        # Parse days_of_week from comma-separated string to list
+        days_of_week = None
+        if schedule.days_of_week:
+            days_of_week = [int(d.strip()) for d in schedule.days_of_week.split(",")]
 
         return WaterScheduleResponse(
             id=schedule.id,
             device_id=schedule.device_id,
             schedule_type=schedule.schedule_type,
-            day_of_week=schedule.day_of_week,
-            schedule_date=schedule.schedule_date,
+            days_of_week=days_of_week,
+            schedule_date=schedule.schedule_date.isoformat() if schedule.schedule_date else None,
             schedule_time=str(schedule.schedule_time),
             notes=schedule.notes,
             completed=schedule.completed,
+            enabled=schedule.enabled,
             created_at=schedule.created_at.isoformat() if schedule.created_at else None,
             updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
         )
@@ -331,21 +337,27 @@ def get_water_schedules(
         service = DeviceService(session)
         schedules = service.get_water_schedules(device_id)
 
-        return [
-            WaterScheduleResponse(
+        result = []
+        for schedule in schedules:
+            # Parse days_of_week from comma-separated string to list
+            days_of_week = None
+            if schedule.days_of_week:
+                days_of_week = [int(d.strip()) for d in schedule.days_of_week.split(",")]
+            
+            result.append(WaterScheduleResponse(
                 id=schedule.id,
                 device_id=schedule.device_id,
                 schedule_type=schedule.schedule_type,
-                day_of_week=schedule.day_of_week,
-                schedule_date=schedule.schedule_date,
+                days_of_week=days_of_week,
+                schedule_date=schedule.schedule_date.isoformat() if schedule.schedule_date else None,
                 schedule_time=str(schedule.schedule_time),
                 notes=schedule.notes,
                 completed=schedule.completed,
+                enabled=schedule.enabled,
                 created_at=schedule.created_at.isoformat() if schedule.created_at else None,
                 updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
-            )
-            for schedule in schedules
-        ]
+            ))
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -372,4 +384,44 @@ def delete_water_schedule(
         raise
     except Exception as e:
         logger.error("delete_water_schedule_error", schedule_id=schedule_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/{device_id}/schedule/water/{schedule_id}", response_model=WaterScheduleResponse)
+def update_water_schedule(
+    device_id: str,
+    schedule_id: int,
+    request: WaterScheduleRequest,
+    session: Session = Depends(get_db),
+):
+    """Update water change schedule (time, day, notes, enabled flag)."""
+    try:
+        service = DeviceService(session)
+        schedule = service.update_water_schedule(device_id, schedule_id, request.model_dump())
+
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Water schedule not found")
+
+        # Parse days_of_week from comma-separated string to list
+        days_of_week = None
+        if schedule.days_of_week:
+            days_of_week = [int(d.strip()) for d in schedule.days_of_week.split(",")]
+
+        return WaterScheduleResponse(
+            id=schedule.id,
+            device_id=schedule.device_id,
+            schedule_type=schedule.schedule_type,
+            days_of_week=days_of_week,
+            schedule_date=schedule.schedule_date,
+            schedule_time=str(schedule.schedule_time),
+            notes=schedule.notes,
+            completed=schedule.completed,
+            enabled=schedule.enabled,
+            created_at=schedule.created_at.isoformat() if schedule.created_at else None,
+            updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_water_schedule_error", schedule_id=schedule_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -132,11 +132,12 @@ class WaterSchedule {
   final int id;
   final String deviceId;
   final String scheduleType;
-  final int? dayOfWeek;
+  final List<int> daysOfWeek;  // For weekly: [1,3,5] = Mon,Wed,Fri
   final String? scheduleDate;
   final String scheduleTime;
   final String? notes;
   final bool completed;
+  final bool enabled;
   final String? createdAt;
   final String? updatedAt;
 
@@ -144,25 +145,38 @@ class WaterSchedule {
     required this.id,
     required this.deviceId,
     required this.scheduleType,
-    this.dayOfWeek,
+    this.daysOfWeek = const [],
     this.scheduleDate,
     required this.scheduleTime,
     this.notes,
     this.completed = false,
+    this.enabled = true,
     this.createdAt,
     this.updatedAt,
   });
 
   factory WaterSchedule.fromJson(Map<String, dynamic> json) {
+    // Parse days_of_week from comma-separated string or list
+    List<int> daysOfWeek = [];
+    final doWValue = json['days_of_week'] ?? json['daysOfWeek'];
+    if (doWValue != null) {
+      if (doWValue is String && doWValue.isNotEmpty) {
+        daysOfWeek = doWValue.split(',').map((d) => int.parse(d.trim())).toList();
+      } else if (doWValue is List) {
+        daysOfWeek = List<int>.from(doWValue);
+      }
+    }
+    
     return WaterSchedule(
       id: json['id'] ?? 0,
       deviceId: json['device_id'] ?? json['deviceId'] ?? '',
       scheduleType: json['schedule_type'] ?? json['scheduleType'] ?? 'weekly',
-      dayOfWeek: json['day_of_week'] ?? json['dayOfWeek'],
+      daysOfWeek: daysOfWeek,
       scheduleDate: json['schedule_date'] ?? json['scheduleDate'],
       scheduleTime: json['schedule_time'] ?? json['scheduleTime'] ?? '12:00',
       notes: json['notes'],
       completed: json['completed'] ?? false,
+      enabled: json['enabled'] ?? true,
       createdAt: json['created_at'] ?? json['createdAt'],
       updatedAt: json['updated_at'] ?? json['updatedAt'],
     );
@@ -172,11 +186,12 @@ class WaterSchedule {
     'id': id,
     'device_id': deviceId,
     'schedule_type': scheduleType,
-    'day_of_week': dayOfWeek,
+    'days_of_week': daysOfWeek.isNotEmpty ? daysOfWeek.join(',') : null,
     'schedule_date': scheduleDate,
     'schedule_time': scheduleTime,
     'notes': notes,
     'completed': completed,
+    'enabled': enabled,
     'created_at': createdAt,
     'updated_at': updatedAt,
   };
@@ -184,11 +199,11 @@ class WaterSchedule {
   /// Get human-readable schedule type
   String get displayType => scheduleType == 'weekly' ? 'Weekly' : 'Custom';
 
-  /// Get human-readable day name for weekly schedules
-  String? get dayName {
-    if (scheduleType != 'weekly' || dayOfWeek == null) return null;
+  /// Get human-readable day names for weekly schedules
+  String? get dayNames {
+    if (scheduleType != 'weekly' || daysOfWeek.isEmpty) return null;
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[dayOfWeek!];
+    return daysOfWeek.map((d) => days[d]).join(', ');
   }
 
   /// Get next scheduled date

@@ -31,7 +31,6 @@ def main():
             app,
             host=settings.api.host,
             port=settings.api.port,
-            debug=settings.api.debug,
             log_level=settings.log_level.lower(),
         )
     except KeyboardInterrupt:

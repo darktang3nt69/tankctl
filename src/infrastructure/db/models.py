@@ -148,11 +148,13 @@ class WaterScheduleModel(Base):
     id = Column(Integer, primary_key=True)
     device_id = Column(String(50), nullable=False, index=True)
     schedule_type = Column(String(20), nullable=False)  # 'weekly' or 'custom'
-    day_of_week = Column(Integer, nullable=True)  # 0-6 for weekly
+    days_of_week = Column(String(20), nullable=True)  # Comma-separated: "1,3,5" for Mon,Wed,Fri
     schedule_date = Column(String(10), nullable=True)  # YYYY-MM-DD for custom
     schedule_time = Column(Time, nullable=False)
     notes = Column(Text, nullable=True)
     completed = Column(Boolean, default=False)
+    enabled = Column(Boolean, default=True)
+    last_reminder_sent_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

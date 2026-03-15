@@ -90,22 +90,24 @@ class DeviceDetailService {
   Future<WaterSchedule> createWaterSchedule(
     String deviceId, {
     required String scheduleType,
-    int? dayOfWeek,
+    List<int>? daysOfWeek,
     String? scheduleDate,
     required String scheduleTime,
     String? notes,
+    bool enabled = true,
   }) async {
     try {
       final data = <String, dynamic>{
         'schedule_type': scheduleType,
         'schedule_time': scheduleTime,
+        'enabled': enabled,
       };
-      if (dayOfWeek != null) data['day_of_week'] = dayOfWeek;
+      if (daysOfWeek != null && daysOfWeek.isNotEmpty) data['days_of_week'] = daysOfWeek;
       if (scheduleDate != null) data['schedule_date'] = scheduleDate;
       if (notes != null) data['notes'] = notes;
 
       final response = await dio.post(
-        '/devices/$deviceId/water-schedules',
+        '/devices/$deviceId/schedule/water',
         data: data,
       );
 
@@ -118,7 +120,7 @@ class DeviceDetailService {
   /// Get all water schedules for device
   Future<List<WaterSchedule>> getWaterSchedules(String deviceId) async {
     try {
-      final response = await dio.get('/devices/$deviceId/water-schedules');
+      final response = await dio.get('/devices/$deviceId/schedule/water');
 
       final List<dynamic> data = response.data;
       return data.map((json) => WaterSchedule.fromJson(json as Map<String, dynamic>)).toList();
@@ -127,11 +129,49 @@ class DeviceDetailService {
     }
   }
 
+  /// Update water schedule (enabled toggle or full edit)
+  ///
+  /// Requires passing the existing [schedule] so required backend fields are
+  /// always included. Pass [enabled] to override just the notification flag.
+  Future<WaterSchedule> updateWaterSchedule(
+    String deviceId,
+    WaterSchedule schedule, {
+    bool? enabled,
+    List<int>? daysOfWeek,
+    String? scheduleDate,
+    String? scheduleTime,
+    String? notes,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'schedule_type': schedule.scheduleType,
+        'schedule_time': scheduleTime ?? schedule.scheduleTime,
+        'enabled': enabled ?? schedule.enabled,
+      };
+      if ((daysOfWeek ?? schedule.daysOfWeek).isNotEmpty) {
+        data['days_of_week'] = daysOfWeek ?? schedule.daysOfWeek;
+      }
+      if ((scheduleDate ?? schedule.scheduleDate) != null) {
+        data['schedule_date'] = scheduleDate ?? schedule.scheduleDate;
+      }
+      data['notes'] = notes ?? schedule.notes;
+
+      final response = await dio.put(
+        '/devices/$deviceId/schedule/water/${schedule.id}',
+        data: data,
+      );
+
+      return WaterSchedule.fromJson(response.data);
+    } on DioException catch (e) {
+      throw Exception('Failed to update water schedule: ${e.message}');
+    }
+  }
+
   /// Delete water schedule
   Future<void> deleteWaterSchedule(String deviceId, int scheduleId) async {
     try {
       await dio.delete(
-        '/devices/$deviceId/water-schedules/$scheduleId',
+        '/devices/$deviceId/schedule/water/$scheduleId',
       );
     } on DioException catch (e) {
       throw Exception('Failed to delete water schedule: ${e.message}');
