@@ -86,7 +86,7 @@ final deviceMetadataEditorProvider =
 });
 
 class DeviceMetadataEditor extends StateNotifier<DeviceMetadataState> {
-  DeviceMetadataEditor(DeviceMetadataState initialState) : super(initialState);
+  DeviceMetadataEditor(super.initialState);
 
   void setDeviceName(String? value) => state = state.copyWith(deviceName: value);
   void setLocation(String? value) => state = state.copyWith(location: value);
@@ -127,7 +127,7 @@ final lightScheduleEditorProvider = StateNotifierProvider<LightScheduleEditor, L
 });
 
 class LightScheduleEditor extends StateNotifier<LightScheduleEditorState> {
-  LightScheduleEditor(LightScheduleEditorState initialState) : super(initialState);
+  LightScheduleEditor(super.initialState);
 
   void setStartTime(String value) => state = state.copyWith(startTime: value);
   void setEndTime(String value) => state = state.copyWith(endTime: value);
@@ -173,7 +173,7 @@ final waterScheduleEditorProvider = StateNotifierProvider<WaterScheduleEditor, W
 });
 
 class WaterScheduleEditor extends StateNotifier<WaterScheduleEditorState> {
-  WaterScheduleEditor(WaterScheduleEditorState initialState) : super(initialState);
+  WaterScheduleEditor(super.initialState);
 
   void setScheduleType(String type) => state = state.copyWith(scheduleType: type);
   void setDayOfWeek(int? day) => state = state.copyWith(dayOfWeek: day);

@@ -15,10 +15,10 @@ class AppIcons {
   // Devices & connectivity
   static const IconData cloudOff = FluentIcons.cloud_off_24_regular;
   static const IconData cloudOffOutlined = FluentIcons.cloud_off_24_regular;
-  static const IconData wifiStrong = FluentIcons.wifi_4_24_regular;
-  static const IconData wifiMedium = FluentIcons.wifi_2_24_regular;
-  static const IconData wifiWeak = FluentIcons.wifi_1_24_regular;
-  static const IconData wifiOff = FluentIcons.wifi_off_24_regular;
+  static const IconData wifiStrong = Icons.signal_wifi_4_bar;
+  static const IconData wifiMedium = Icons.signal_wifi_3_bar;
+  static const IconData wifiWeak = Icons.signal_wifi_2_bar;
+  static const IconData wifiOff = Icons.wifi_off;
   static const IconData sensorsOff = FluentIcons.alert_off_24_regular;
   static const IconData reload = FluentIcons.arrow_sync_24_regular;
 

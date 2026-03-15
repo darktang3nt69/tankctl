@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tankctl_app/app/live_updates_bootstrap.dart';
+import 'package:tankctl_app/app/navigation.dart';
 import 'package:tankctl_app/app/tankctl_material_app.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -138,11 +139,8 @@ Future<void> main() async {
 
   // Notification tap handler (when app is opened from notification)
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    // debugPrint('Notification tap: ${message.data}', wrapWidth: 1024);
-    // Example navigation: push to device detail if navigatorKey is set up
-    // final deviceId = message.data['device_id'] ?? ApiConstants.defaultDeviceId;
-    // navigatorKey.currentState?.pushNamed('/device/$deviceId');
-    // TODO: Implement navigation to device detail screen if needed
+    final deviceId = message.data['device_id'] ?? ApiConstants.defaultDeviceId;
+    navigatorKey.currentState?.pushNamed('/device/$deviceId');
   });
 
   runApp(const ProviderScope(child: TankCtlApp()));

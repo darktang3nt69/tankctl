@@ -48,6 +48,38 @@ class TelemetryService {
         .reversed
         .toList();
   }
+
+  /// Returns temperature readings with timestamps, oldest-first.
+  /// Used for the detail chart with axes.
+  Future<List<TelemetryReading>> getTemperatureHistoryWithTime(
+    String deviceId, {
+    int limit = 50,
+  }) async {
+    final response = await _dio.get(
+      '/devices/$deviceId/telemetry/temperature',
+      queryParameters: {'limit': limit},
+    );
+    final data = response.data as Map<String, dynamic>;
+    final readings = (data['data'] as List?) ?? [];
+    final result = <TelemetryReading>[];
+    for (final r in readings) {
+      final map = r as Map<String, dynamic>;
+      final value = normalizeTemperatureReading(map['value']);
+      if (value == null) continue;
+      final timeStr = map['time'] as String?;
+      final time = timeStr != null ? DateTime.tryParse(timeStr) : null;
+      result.add(TelemetryReading(value: value, time: time?.toLocal()));
+    }
+    // API returns newest-first; reverse to oldest-first.
+    return result.reversed.toList();
+  }
+}
+
+/// A single telemetry reading with an optional timestamp.
+class TelemetryReading {
+  const TelemetryReading({required this.value, this.time});
+  final double value;
+  final DateTime? time;
 }
 
 final telemetryServiceProvider = Provider<TelemetryService>(

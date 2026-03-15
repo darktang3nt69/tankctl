@@ -1,6 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tankctl_app/domain/time_range.dart';
 import 'package:tankctl_app/services/telemetry_service.dart';
 import 'package:tankctl_app/services/websocket_service.dart';
+
+/// Selected time range for temperature chart visualization per device.
+final temperatureTimeRangeProvider = StateProvider.family<TimeRange, String>((
+  ref,
+  deviceId,
+) {
+  return TimeRange.defaultRange;
+});
 
 /// Temperature history (oldest-first, 20 readings) for a specific device.
 /// Used to render sparkline charts on the dashboard.
@@ -9,6 +18,16 @@ final temperatureHistoryProvider = FutureProvider.family<List<double>, String>(
       .watch(telemetryServiceProvider)
       .getTemperatureHistory(deviceId, limit: 20),
 );
+
+/// Temperature history with timestamps for the device detail chart with axes.
+/// Responds to changes in the selected time range (see [temperatureTimeRangeProvider]).
+final temperatureHistoryWithTimeProvider =
+    FutureProvider.family<List<TelemetryReading>, String>((ref, deviceId) {
+      final timeRange = ref.watch(temperatureTimeRangeProvider(deviceId));
+      return ref
+          .watch(telemetryServiceProvider)
+          .getTemperatureHistoryWithTime(deviceId, limit: timeRange.apiLimit);
+    });
 
 /// Live temperature stream for a device, driven by WebSocket telemetry events.
 /// Iterates directly over the persistent broadcast stream from [WebSocketService]
@@ -41,5 +60,6 @@ final secondTickProvider = StreamProvider<int>((ref) {
 /// Latest warning code received from the backend for a device.
 /// Set when a `device_warning` WS event arrives; cleared when a valid
 /// temperature reading arrives (sensor reconnected).
-final deviceWarningProvider =
-    StateProvider.family<String?, String>((ref, deviceId) => null);
+final deviceWarningProvider = StateProvider.family<String?, String>(
+  (ref, deviceId) => null,
+);

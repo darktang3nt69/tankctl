@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tankctl_app/domain/device_detail.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 
-/// Tank header with health metrics - combines title, status, and health info
+/// Tank header with health metrics - combined into one compact pane
 class TankHeaderWithHealthSection extends StatelessWidget {
   final DeviceDetail device;
 
@@ -9,21 +10,25 @@ class TankHeaderWithHealthSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isOnline = device.status == 'online';
+    final statusColor = isOnline ? Colors.green : Colors.red;
+    final textTheme = Theme.of(context).textTheme;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: Colors.grey.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color.fromARGB(255, 185, 65, 65).withValues(alpha: 0.2)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title row with device name and status badge
+            // Single row: name + status badge
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Column(
@@ -31,70 +36,65 @@ class TankHeaderWithHealthSection extends StatelessWidget {
                     children: [
                       Text(
                         device.deviceName ?? device.deviceId,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (device.location != null) ...[
-                        const SizedBox(height: 4),
+                      if (device.lastSeen != null)
                         Text(
-                          device.location!,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          _formatTime(device.lastSeen!),
+                          style: textTheme.labelSmall?.copyWith(
                             color: Colors.grey,
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: device.status == 'online'
-                        ? Colors.green.withValues(alpha: 0.1)
-                        : Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     device.status.toUpperCase(),
                     style: TextStyle(
-                      color: device.status == 'online'
-                          ? Colors.green
-                          : Colors.red,
+                      color: statusColor,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 11,
+                      letterSpacing: 0.8,
                     ),
                   ),
                 ),
               ],
             ),
-            
-            // Last seen
-            if (device.lastSeen != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Last seen: ${_formatTime(device.lastSeen!)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-            
-            // Divider
-            const SizedBox(height: 16),
-            Divider(color: Colors.grey.withValues(alpha: 0.2)),
-            const SizedBox(height: 16),
-            
-            // Health metrics row
+            const SizedBox(height: 14),
+            // Compact metrics row: WiFi · Uptime · Location
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildMetric(context, 'WiFi', '${device.rssi ?? 0}%'),
-                _buildMetric(context, 'Uptime', _formatUptime(device.uptimeMs ?? 0)),
-                _buildMetric(context, 'Connection', device.status.toUpperCase()),
+                _buildInlineMetric(
+                  context,
+                  icon: _rssiIcon(device.rssi),
+                  iconColor: _rssiColor(device.rssi, isOnline),
+                  label: device.rssi != null ? '${device.rssi} dBm' : '—',
+                ),
+                _buildDivider(),
+                _buildInlineMetric(
+                  context,
+                  icon: AppIcons.time,
+                  iconColor: Colors.white54,
+                  label: _formatUptime(device.uptimeMs ?? 0),
+                ),
+                if (device.location != null) ...[
+                  _buildDivider(),
+                  _buildInlineMetric(
+                    context,
+                    icon: Icons.location_on_outlined,
+                    iconColor: Colors.white38,
+                    label: device.location!,
+                  ),
+                ],
               ],
             ),
           ],
@@ -103,24 +103,45 @@ class TankHeaderWithHealthSection extends StatelessWidget {
     );
   }
 
-  Widget _buildMetric(BuildContext context, String label, String value) {
-    return Column(
+  Widget _buildInlineMetric(
+    BuildContext context, {
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
+        Icon(icon, size: 14, color: iconColor),
+        const SizedBox(width: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Colors.white70,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildDivider() => const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 10),
+    child: Text('·', style: TextStyle(color: Colors.white24, fontSize: 16)),
+  );
+
+  IconData _rssiIcon(int? rssi) {
+    if (rssi == null) return AppIcons.wifiOff;
+    if (rssi > -60) return AppIcons.wifiStrong;
+    if (rssi >= -75) return AppIcons.wifiMedium;
+    return AppIcons.wifiWeak;
+  }
+
+  Color _rssiColor(int? rssi, bool isOnline) {
+    if (!isOnline || rssi == null) return Colors.white38;
+    if (rssi > -60) return Colors.green;
+    if (rssi >= -75) return Colors.orange;
+    return Colors.red;
   }
 
   String _formatUptime(int uptimeMs) {

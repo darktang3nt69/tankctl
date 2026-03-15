@@ -41,19 +41,10 @@ class TankOverviewCard extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: TankCtlColors.success,
-                        boxShadow: [
-                          BoxShadow(
-                            color: TankCtlColors.success.withValues(alpha: 0.5),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
+                    Icon(
+                      AppIcons.wifiStrong,
+                      size: 18,
+                      color: TankCtlColors.success,
                     ),
                     const SizedBox(width: 8),
                     Text(
