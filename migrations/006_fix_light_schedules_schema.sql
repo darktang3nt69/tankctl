@@ -1,22 +1,19 @@
 -- Migration: Fix light_schedules table schema
 -- Date: 2026-03-15
--- Purpose: Add id primary key and normalize column names for light_schedules table
+-- Purpose: Rename start_time/end_time columns to on_time/off_time for light_schedules table
 
--- Drop the existing light_schedules table with its constraints
-DROP TABLE IF EXISTS light_schedules CASCADE;
-
--- Create light_schedule table with correct schema (using on_time/off_time to match domain model)
-CREATE TABLE IF NOT EXISTS light_schedules (
-  id SERIAL PRIMARY KEY,
-  device_id VARCHAR(50) NOT NULL,
-  enabled BOOLEAN DEFAULT true,
-  on_time TIME NOT NULL,
-  off_time TIME NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE,
-  UNIQUE(device_id)
-);
-
--- Create indices for faster queries
-CREATE INDEX IF NOT EXISTS idx_light_schedules_device_id ON light_schedules(device_id);
+-- Check if table exists before attempting migration
+DO $$ 
+BEGIN
+  -- Only rename columns if they still have the old names
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name='light_schedules' AND column_name='start_time'
+  ) THEN
+    ALTER TABLE light_schedules RENAME COLUMN start_time TO on_time;
+    ALTER TABLE light_schedules RENAME COLUMN end_time TO off_time;
+    RAISE NOTICE 'Successfully renamed light_schedules columns: start_time→on_time, end_time→off_time';
+  ELSE
+    RAISE NOTICE 'Column rename already applied or table structure different - skipping';
+  END IF;
+END $$;

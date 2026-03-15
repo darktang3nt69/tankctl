@@ -66,8 +66,8 @@ class AlertService:
         device_id = event.device_id or "unknown"
         alert_key = f"offline:{device_id}"
         timestamp = self._get_timestamp()
-        title = "🚨 DEVICE OFFLINE"
-        message = f"Device: {device_id}\nStatus: DISCONNECTED\nTime: {timestamp}\nCheck: Power & Network"
+        title = f"🚨 {device_id} is Offline"
+        message = f"{device_id} stopped responding at {timestamp}.\nCheck power and network connectivity."
         self._send_rate_limited(alert_key, device_id, title, message, "device_offline")
 
     def handle_device_online_event(self, event: Event) -> None:
@@ -75,8 +75,8 @@ class AlertService:
         device_id = event.device_id or "unknown"
         alert_key = f"online:{device_id}"
         timestamp = self._get_timestamp()
-        title = "✅ DEVICE ONLINE"
-        message = f"Device: {device_id}\nStatus: ONLINE\nTime: {timestamp}\nSystem resumed normal operation"
+        title = f"✅ {device_id} is Back Online"
+        message = f"{device_id} reconnected and is operating normally at {timestamp}."
         self._send_rate_limited(alert_key, device_id, title, message, "device_online")
 
     def handle_light_state_change_event(self, event: Event) -> None:
@@ -92,8 +92,9 @@ class AlertService:
         alert_key = f"light_state:{device_id}"
         timestamp = self._get_timestamp()
         state_text = "ON" if light_state.lower() == "on" else "OFF"
-        title = f"💡 LIGHT {state_text}"
-        message = f"Device: {device_id}\nState: {state_text}\nTime: {timestamp}"
+        emoji = "💡" if light_state.lower() == "on" else "🌙"
+        title = f"{emoji} Lights {state_text} — {device_id}"
+        message = f"Aquarium lights on {device_id} turned {state_text.lower()} at {timestamp}."
         notification_type = "light_on" if light_state.lower() == "on" else "light_off"
         self._send_rate_limited(alert_key, device_id, title, message, notification_type)
 
@@ -111,15 +112,31 @@ class AlertService:
             return
 
         timestamp = self._get_timestamp()
+        
+        # Handle HIGH temperature alert
+        high_alert_key = f"temp_high:{device_id}"
         if temp_c > settings.alerts.temperature_high_c:
-            alert_key = f"temp_high:{device_id}"
+            # Temperature is high — send alert if cooldown elapsed
             temp_diff = temp_c - settings.alerts.temperature_high_c
-            title = "🔥 TEMPERATURE HIGH"
-            message = f"Device: {device_id}\nReading: {temp_c:.1f}°C (⬆️ +{temp_diff:.1f}°C)\nThreshold: >{settings.alerts.temperature_high_c}°C\nTime: {timestamp}\nAction: Check cooling system"
-            self._send_rate_limited(alert_key, device_id, title, message, "temperature_high")
-        elif temp_c < settings.alerts.temperature_low_c:
-            alert_key = f"temp_low:{device_id}"
+            title = f"🔥 High Temp Alert — {device_id}"
+            message = f"Water temperature is {temp_c:.1f}°C — {temp_diff:.1f}°C above the {settings.alerts.temperature_high_c}°C limit.\nCheck your cooling system immediately. Detected at {timestamp}."
+            self._send_rate_limited(high_alert_key, device_id, title, message, "temperature_high")
+        else:
+            # Temperature returned to normal — clear cooldown so next alert sends immediately
+            if high_alert_key in self._last_sent_by_key:
+                del self._last_sent_by_key[high_alert_key]
+                logger.info("temperature_high_resolved", device_id=device_id, reading=temp_c)
+        
+        # Handle LOW temperature alert
+        low_alert_key = f"temp_low:{device_id}"
+        if temp_c < settings.alerts.temperature_low_c:
+            # Temperature is low — send alert if cooldown elapsed
             temp_diff = settings.alerts.temperature_low_c - temp_c
-            title = "❄️ TEMPERATURE LOW"
-            message = f"Device: {device_id}\nReading: {temp_c:.1f}°C (⬇️ -{temp_diff:.1f}°C)\nThreshold: <{settings.alerts.temperature_low_c}°C\nTime: {timestamp}\nAction: Check heating system"
-            self._send_rate_limited(alert_key, device_id, title, message, "temperature_low")
+            title = f"❄️ Low Temp Alert — {device_id}"
+            message = f"Water temperature is {temp_c:.1f}°C — {temp_diff:.1f}°C below the {settings.alerts.temperature_low_c}°C limit.\nCheck your heating system immediately. Detected at {timestamp}."
+            self._send_rate_limited(low_alert_key, device_id, title, message, "temperature_low")
+        else:
+            # Temperature returned to normal — clear cooldown so next alert sends immediately
+            if low_alert_key in self._last_sent_by_key:
+                del self._last_sent_by_key[low_alert_key]
+                logger.info("temperature_low_resolved", device_id=device_id, reading=temp_c)

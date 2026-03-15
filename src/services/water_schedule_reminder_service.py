@@ -30,9 +30,9 @@ REMINDER_OFFSETS: dict[str, timedelta] = {
 }
 
 _MESSAGES: dict[str, tuple[str, str]] = {
-    "day_before": ("💧 Water Change Tomorrow", "scheduled tomorrow at {time}"),
-    "hour_before": ("💧 Water Change in 1 Hour", "starting in 1 hour at {time}"),
-    "on_time": ("🪣 Time to Change Water!", "due now at {time}"),
+    "day_before": ("💧 Water Change Tomorrow — {label}", "Water change for {label} is scheduled for tomorrow at {time}. Prepare your supplies."),
+    "hour_before": ("💧 Water Change in 1 Hour — {label}", "Water change for {label} starts in 1 hour at {time}. Time to get ready."),
+    "on_time": ("🪣 Time to Change Water — {label}", "Your scheduled water change for {label} is due now at {time}."),
 }
 
 
@@ -172,6 +172,7 @@ class WaterScheduleReminderService:
         """Return (title, body) for the given reminder type."""
         label = device_name or device_id
         time_str = self.format_time(schedule.schedule_time)
-        title, body_template = _MESSAGES[reminder_type]
-        body = f"{label}: Water change {body_template.format(time=time_str)} IST"
+        title_template, body = _MESSAGES[reminder_type]
+        title = title_template.format(label=label)
+        body = body.format(label=label, time=f"{time_str} IST")
         return title, body

@@ -450,11 +450,17 @@ class DeviceService:
         if schedule_data.get("days_of_week"):
             days_of_week_str = ",".join(str(d) for d in schedule_data["days_of_week"])
 
+        # For weekly schedules, clear schedule_date. For custom, clear days_of_week.
+        schedule_date = None
+        if schedule_data["schedule_type"] == "custom":
+            schedule_date = schedule_data.get("schedule_date")
+            days_of_week_str = None  # Custom schedules don't use days_of_week
+
         new_schedule = WaterScheduleModel(
             device_id=device_id,
             schedule_type=schedule_data["schedule_type"],
             days_of_week=days_of_week_str,
-            schedule_date=schedule_data.get("schedule_date"),
+            schedule_date=schedule_date,
             schedule_time=schedule_time,
             notes=schedule_data.get("notes"),
             enabled=schedule_data.get("enabled", True),
@@ -480,6 +486,11 @@ class DeviceService:
             schedule.schedule_time = time_type.fromisoformat(schedule_data["schedule_time"])
         if "schedule_type" in schedule_data:
             schedule.schedule_type = schedule_data["schedule_type"]
+            # Clear type-specific fields when changing schedule_type
+            if schedule_data["schedule_type"] == "weekly":
+                schedule.schedule_date = None
+            elif schedule_data["schedule_type"] == "custom":
+                schedule.days_of_week = None
         if "days_of_week" in schedule_data:
             # Convert days_of_week list to comma-separated string
             if schedule_data["days_of_week"]:
@@ -488,6 +499,13 @@ class DeviceService:
                 schedule.days_of_week = None
         if "schedule_date" in schedule_data:
             schedule.schedule_date = schedule_data["schedule_date"]
+        
+        # Ensure type-specific fields are cleared
+        if schedule.schedule_type == "weekly":
+            schedule.schedule_date = None
+        elif schedule.schedule_type == "custom":
+            schedule.days_of_week = None
+            
         if "notes" in schedule_data:
             schedule.notes = schedule_data["notes"]
         if "enabled" in schedule_data:
