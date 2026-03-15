@@ -122,3 +122,4 @@ whatsapp-bot/session/
 **/*.iml
 google-services.json
 tankctl_app/lib/app/google-services.json
+*firebase-adminsdk*.json
