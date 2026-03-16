@@ -161,16 +161,15 @@ class TemperatureSection extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                constraints: BoxConstraints(
-                  minWidth: MediaQuery.of(context).size.width - 48,
-                ),
+            Container(
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: TemperatureMiniChart(
                   data: points,
                   height: 200,

@@ -80,11 +80,16 @@ class LiveEventNotificationService {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return;
     }
-    const androidInit = AndroidInitializationSettings('ic_notification');
-    const initSettings = InitializationSettings(android: androidInit);
-    await _notificationsPlugin.initialize(
-      initSettings,
-    );
-    _notificationsReady = true;
+    try {
+      const androidInit = AndroidInitializationSettings('ic_notification');
+      const initSettings = InitializationSettings(android: androidInit);
+      await _notificationsPlugin.initialize(
+        initSettings,
+      );
+      _notificationsReady = true;
+    } catch (e) {
+      print('⚠️  Failed to initialize notifications: $e');
+      _notificationsReady = false;
+    }
   }
 }

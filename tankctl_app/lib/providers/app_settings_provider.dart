@@ -27,6 +27,8 @@ const _liveRefreshIntervalKey = 'live_refresh_interval_seconds';
 const _defaultLiveRefreshIntervalSeconds = 3;
 const _fabAutoCollapseSecondsKey = 'fab_auto_collapse_seconds';
 const _defaultFabAutoCollapseSeconds = 10;
+const _chartPointDeselectSecondsKey = 'chart_point_deselect_seconds';
+const _defaultChartPointDeselectSeconds = 3;
 const _serverBaseUrlKey = 'server_base_url';
 const _sensorWarningsEnabledKey = 'sensor_warning_notifications_enabled';
 
@@ -124,4 +126,23 @@ class FabAutoCollapseSecondsNotifier extends AsyncNotifier<int> {
 final fabAutoCollapseSecondsProvider =
     AsyncNotifierProvider<FabAutoCollapseSecondsNotifier, int>(
       FabAutoCollapseSecondsNotifier.new,
+    );
+
+class ChartPointDeselectSecondsNotifier extends AsyncNotifier<int> {
+  @override
+  Future<int> build() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_chartPointDeselectSecondsKey) ?? _defaultChartPointDeselectSeconds;
+  }
+
+  Future<void> setDeselectSeconds(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_chartPointDeselectSecondsKey, seconds);
+    state = AsyncValue.data(seconds);
+  }
+}
+
+final chartPointDeselectSecondsProvider =
+    AsyncNotifierProvider<ChartPointDeselectSecondsNotifier, int>(
+      ChartPointDeselectSecondsNotifier.new,
     );

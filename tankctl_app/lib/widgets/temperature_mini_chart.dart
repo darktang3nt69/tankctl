@@ -1,14 +1,14 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
+import 'package:tankctl_app/providers/app_settings_provider.dart';
 
-/// Compact sparkline chart rendered with a CustomPainter — no extra packages needed.
-///
-/// Pass [showAxes]=true (with optional [timestamps]) to enable Y and X axis
-/// labels. Used in the detail screen. Dashboard sparklines keep the default
-/// [showAxes]=false so they are unaffected.
-class TemperatureMiniChart extends StatelessWidget {
+/// Interactive sparkline chart with tap-to-show crosshair.
+/// Tap any point to see its temperature and time. Auto-deselects after configurable duration.
+class TemperatureMiniChart extends ConsumerStatefulWidget {
   const TemperatureMiniChart({
     super.key,
     required this.data,
@@ -29,21 +29,130 @@ class TemperatureMiniChart extends StatelessWidget {
   final List<DateTime>? timestamps;
 
   @override
+  ConsumerState<TemperatureMiniChart> createState() => _TemperatureChartState();
+}
+
+class _TemperatureChartState extends ConsumerState<TemperatureMiniChart>
+    with TickerProviderStateMixin {
+  int? selectedIndex;
+  Timer? _deselectTimer;
+  late AnimationController _fadeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+  }
+
+  @override
+  void dispose() {
+    _deselectTimer?.cancel();
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  void _onChartTap(TapDownDetails details, Size chartSize, List<double> points,
+      double chartLeft, double chartHeight) {
+    final tapX = details.localPosition.dx;
+    final tapY = details.localPosition.dy;
+
+    final chartWidth = chartSize.width - chartLeft;
+    final chartBottom = chartSize.height;
+
+    // Convert tap position to chart space
+    if (tapX < chartLeft || tapX > chartSize.width || tapY < 0 || tapY > chartBottom) {
+      return;
+    }
+
+    var minVal = points.reduce(math.min);
+    var maxVal = points.reduce(math.max);
+    if (widget.thresholdLow != null) minVal = math.min(minVal, widget.thresholdLow!);
+    if (widget.thresholdHigh != null) maxVal = math.max(maxVal, widget.thresholdHigh!);
+    final range = (maxVal - minVal).abs();
+    final effectiveRange = range < 0.001 ? 1.0 : range;
+    final vPad = chartHeight * 0.10;
+
+    // Find closest data point
+    double minDistance = double.infinity;
+    int? closestIndex;
+
+    for (int i = 0; i < points.length; i++) {
+      final x = chartLeft + chartWidth * i / (points.length - 1);
+      final norm = (points[i] - minVal) / effectiveRange;
+      final y = chartBottom - vPad - norm * (chartHeight - vPad * 2);
+
+      final distance = math.sqrt((tapX - x) * (tapX - x) + (tapY - y) * (tapY - y));
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    // Only select if within touch tolerance (32px)
+    if (closestIndex != null && minDistance < 32) {
+      // Trigger fade animation for transition
+      _fadeController.forward(from: 0.0);
+      
+      setState(() {
+        selectedIndex = closestIndex;
+        _deselectTimer?.cancel();
+        
+        // Get the configured deselect duration
+        final deselectSeconds = ref.read(chartPointDeselectSecondsProvider).maybeWhen(
+          data: (seconds) => seconds,
+          orElse: () => 3,
+        );
+        
+        _deselectTimer = Timer(Duration(seconds: deselectSeconds), () {
+          if (mounted) {
+            setState(() {
+              selectedIndex = null;
+            });
+          }
+        });
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final points = data.where((value) => value != 0).toList(growable: false);
-    if (points.length < 2) return SizedBox(height: height);
-    final lineColor = color ?? Theme.of(context).colorScheme.primary;
+    final points = widget.data.where((value) => value != 0).toList(growable: false);
+    if (points.length < 2) return SizedBox(height: widget.height);
+
+    final lineColor = widget.color ?? Theme.of(context).colorScheme.primary;
+    final chartLeft = widget.showAxes ? 50.0 : 0.0;
+    final chartHeight = widget.showAxes ? widget.height - 28 : widget.height;
+
     return SizedBox(
-      height: height,
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _SparklinePainter(
-          data: points,
-          color: lineColor,
-          thresholdHigh: thresholdHigh,
-          thresholdLow: thresholdLow,
-          showAxes: showAxes,
-          timestamps: timestamps,
+      height: widget.height,
+      child: GestureDetector(
+        onTapDown: (details) => _onChartTap(
+          details,
+          Size(double.infinity, widget.height),
+          points,
+          chartLeft,
+          chartHeight,
+        ),
+        child: FadeTransition(
+          opacity: Tween<double>(begin: 0.8, end: 1.0).animate(
+            CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+          ),
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: _SparklinePainter(
+              data: points,
+              color: lineColor,
+              thresholdHigh: widget.thresholdHigh,
+              thresholdLow: widget.thresholdLow,
+              showAxes: widget.showAxes,
+              timestamps: widget.timestamps,
+              selectedIndex: selectedIndex,
+            ),
+          ),
         ),
       ),
     );
@@ -58,6 +167,7 @@ class _SparklinePainter extends CustomPainter {
     this.thresholdLow,
     this.showAxes = false,
     this.timestamps,
+    this.selectedIndex,
   });
 
   final List<double> data;
@@ -66,6 +176,7 @@ class _SparklinePainter extends CustomPainter {
   final double? thresholdLow;
   final bool showAxes;
   final List<DateTime>? timestamps;
+  final int? selectedIndex;
 
   static const _leftPad = 50.0;
   static const _bottomPad = 28.0;
@@ -74,6 +185,12 @@ class _SparklinePainter extends CustomPainter {
     fontSize: 9,
     height: 1.0,
     fontFamily: 'monospace',
+  );
+
+  static const _tooltipStyle = TextStyle(
+    color: Color(0xFFFFFFFF),
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
   );
 
   @override
@@ -212,6 +329,126 @@ class _SparklinePainter extends CustomPainter {
         ..color = latestPointColor.withValues(alpha: 0.25)
         ..style = PaintingStyle.fill,
     );
+
+    // Draw crosshair when point is selected
+    if (selectedIndex != null && selectedIndex! < points.length) {
+      _drawCrosshair(canvas, size, points, selectedIndex!, chartLeft, chartBottom,
+          chartHeight, minVal, maxVal, effectiveRange, vPad);
+    }
+  }
+
+  void _drawCrosshair(
+    Canvas canvas,
+    Size size,
+    List<Offset> points,
+    int index,
+    double chartLeft,
+    double chartBottom,
+    double chartHeight,
+    double minVal,
+    double maxVal,
+    double effectiveRange,
+    double vPad,
+  ) {
+    final point = points[index];
+    final accentColor = const Color(0xFF60A5FA).withValues(alpha: 0.7);
+
+    // Vertical dashed line
+    _drawDashedVertical(
+      canvas,
+      x: point.dx,
+      y1: 0,
+      y2: chartBottom,
+      color: accentColor,
+    );
+
+    // Highlight point
+    canvas.drawCircle(point, 6, Paint()..color = const Color(0xFF60A5FA));
+    canvas.drawCircle(
+      point,
+      8,
+      Paint()
+        ..color = const Color(0xFF60A5FA).withValues(alpha: 0.2)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Temperature label
+    final temp = '${data[index].toStringAsFixed(1)}°C';
+    final tempTP = TextPainter(
+      text: TextSpan(text: temp, style: _tooltipStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // Background for temp label
+    final tempBg = RRect.fromRectAndRadius(
+      Rect.fromLTWH(point.dx - tempTP.width / 2 - 6, point.dy - 28, tempTP.width + 12, 20),
+      Radius.circular(4),
+    );
+    canvas.drawRRect(
+      tempBg,
+      Paint()
+        ..color = const Color(0xFF1E293B).withValues(alpha: 0.9)
+        ..style = PaintingStyle.fill,
+    );
+    tempTP.paint(canvas, Offset(point.dx - tempTP.width / 2, point.dy - 26));
+
+    // Time label
+    String timeLabel = '';
+    if (timestamps != null && index < timestamps!.length) {
+      final now = DateTime.now();
+      final diff = now.difference(timestamps![index]);
+      if (diff.inMinutes < 2) {
+        timeLabel = 'now';
+      } else if (diff.inHours < 1) {
+        timeLabel = '${diff.inMinutes}m ago';
+      } else if (diff.inHours < 24) {
+        timeLabel = '${diff.inHours}h ago';
+      } else {
+        timeLabel = '${diff.inDays}d ago';
+      }
+    } else {
+      timeLabel = 'Point ${index + 1}';
+    }
+
+    final timeTP = TextPainter(
+      text: TextSpan(text: timeLabel, style: _tooltipStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // Background for time label
+    final timeBg = RRect.fromRectAndRadius(
+      Rect.fromLTWH(point.dx - timeTP.width / 2 - 6, point.dy + 8, timeTP.width + 12, 20),
+      Radius.circular(4),
+    );
+    canvas.drawRRect(
+      timeBg,
+      Paint()
+        ..color = const Color(0xFF1E293B).withValues(alpha: 0.9)
+        ..style = PaintingStyle.fill,
+    );
+    timeTP.paint(canvas, Offset(point.dx - timeTP.width / 2, point.dy + 10));
+  }
+
+  void _drawDashedVertical(
+    Canvas canvas, {
+    required double x,
+    required double y1,
+    required double y2,
+    required Color color,
+  }) {
+    const dash = 5.0;
+    const gap = 4.0;
+    var y = y1;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+    while (y < y2) {
+      final end = math.min(y + dash, y2);
+      canvas.drawLine(Offset(x, y), Offset(x, end), paint);
+      y += dash + gap;
+    }
   }
 
   void _drawYAxis(
@@ -327,5 +564,6 @@ class _SparklinePainter extends CustomPainter {
       old.thresholdHigh != thresholdHigh ||
       old.thresholdLow != thresholdLow ||
       old.showAxes != showAxes ||
-      old.timestamps != timestamps;
+      old.timestamps != timestamps ||
+      old.selectedIndex != selectedIndex;
 }

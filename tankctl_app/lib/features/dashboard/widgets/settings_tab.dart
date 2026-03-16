@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/backend_settings_card.dart';
+import 'package:tankctl_app/features/dashboard/widgets/settings/chart_settings_card.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/live_updates_settings_card.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/notifications_settings_card.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/settings_section_header.dart';
@@ -27,6 +28,14 @@ class SettingsTab extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         const NotificationsSettingsCard(),
+        const SizedBox(height: 24),
+        const SettingsSectionHeader(
+          title: 'Charts',
+          subtitle:
+              'Customize how charts display interactive data points when you tap them.',
+        ),
+        const SizedBox(height: 20),
+        const ChartSettingsCard(),
         const SizedBox(height: 24),
         const SettingsSectionHeader(
           title: 'Live Updates',
