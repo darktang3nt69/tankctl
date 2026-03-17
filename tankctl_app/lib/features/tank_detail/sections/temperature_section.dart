@@ -161,24 +161,35 @@ class TemperatureSection extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: TemperatureMiniChart(
-                  data: points,
-                  height: 200,
-                  showAxes: true,
-                  timestamps: timestamps.isEmpty ? null : timestamps,
-                  thresholdHigh: device.tempThresholdHigh,
-                  thresholdLow: device.tempThresholdLow,
-                ),
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final screenSize = MediaQuery.of(context).size;
+                final isPortrait = screenSize.height > screenSize.width;
+                final responsiveHeight = isPortrait 
+                    ? screenSize.height * 0.25 
+                    : screenSize.height * 0.35;
+                final clampedHeight = responsiveHeight.clamp(180.0, 400.0);
+
+                return Container(
+                  width: double.infinity,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    child: TemperatureMiniChart(
+                      data: points,
+                      height: clampedHeight,
+                      showAxes: true,
+                      timestamps: timestamps.isEmpty ? null : timestamps,
+                      thresholdHigh: device.tempThresholdHigh,
+                      thresholdLow: device.tempThresholdLow,
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         );

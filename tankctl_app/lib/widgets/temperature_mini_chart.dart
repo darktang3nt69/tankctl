@@ -129,31 +129,36 @@ class _TemperatureChartState extends ConsumerState<TemperatureMiniChart>
 
     return SizedBox(
       height: widget.height,
-      child: GestureDetector(
-        onTapDown: (details) => _onChartTap(
-          details,
-          Size(double.infinity, widget.height),
-          points,
-          chartLeft,
-          chartHeight,
-        ),
-        child: FadeTransition(
-          opacity: Tween<double>(begin: 0.8, end: 1.0).animate(
-            CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-          ),
-          child: CustomPaint(
-            size: Size.infinite,
-            painter: _SparklinePainter(
-              data: points,
-              color: lineColor,
-              thresholdHigh: widget.thresholdHigh,
-              thresholdLow: widget.thresholdLow,
-              showAxes: widget.showAxes,
-              timestamps: widget.timestamps,
-              selectedIndex: selectedIndex,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final actualWidth = constraints.maxWidth;
+          return GestureDetector(
+            onTapDown: (details) => _onChartTap(
+              details,
+              Size(actualWidth, widget.height),
+              points,
+              chartLeft,
+              chartHeight,
             ),
-          ),
-        ),
+            child: FadeTransition(
+              opacity: Tween<double>(begin: 0.8, end: 1.0).animate(
+                CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+              ),
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: _SparklinePainter(
+                  data: points,
+                  color: lineColor,
+                  thresholdHigh: widget.thresholdHigh,
+                  thresholdLow: widget.thresholdLow,
+                  showAxes: widget.showAxes,
+                  timestamps: widget.timestamps,
+                  selectedIndex: selectedIndex,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
