@@ -36,7 +36,7 @@ def get_db():
         session.close()
 
 
-@router.post("/register", response_model=DeviceResponse)
+@router.post("/register", response_model=DeviceRegisterResponse)
 def register_device(
     request: DeviceRegisterRequest,
     session: Session = Depends(get_db),
@@ -44,17 +44,11 @@ def register_device(
     """Register a new device."""
     try:
         service = DeviceService(session)
-        device = service.register_device(request.device_id, request.device_secret)
+        device = service.register_device(request.device_id)
 
-        return DeviceResponse(
+        return DeviceRegisterResponse(
             device_id=device.device_id,
-            status=device.status,
-            firmware_version=device.firmware_version,
-            created_at=device.created_at.isoformat() if device.created_at else None,
-            last_seen=device.last_seen.isoformat() if device.last_seen else None,
-            uptime_ms=device.uptime_ms,
-            rssi=device.rssi,
-            wifi_status=device.wifi_status,
+            device_secret=device.device_secret,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))

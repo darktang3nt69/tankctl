@@ -58,6 +58,10 @@ class DeviceService:
         Register a new device.
 
         AUTO-GENERATES a secure device_secret that must be provisioned into the device.
+        
+        Sets default configuration:
+        - Temperature thresholds: 22°C (min) to 30°C (max)
+        - Light schedule: 2 PM to 8 PM (enabled)
 
         Args:
             device_id: Unique device identifier
@@ -79,11 +83,13 @@ class DeviceService:
         # Generate secure secret
         device_secret = generate_device_secret()
 
-        # Create device
+        # Create device with default temperature thresholds
         device = Device(
             device_id=device_id,
             device_secret=device_secret,
             status="offline",
+            temp_threshold_low=22.0,      # Default min temp
+            temp_threshold_high=30.0,     # Default max temp
         )
 
         registered = self.device_repo.create(device)
@@ -91,6 +97,22 @@ class DeviceService:
         # Create associated shadow
         shadow = DeviceShadow(device_id=device_id)
         self.shadow_repo.create(shadow)
+        
+        # Create default light schedule (2 PM to 8 PM)
+        try:
+            from datetime import time
+            from src.services.scheduling_service import SchedulingService
+            
+            scheduling_service = SchedulingService(self.session)
+            scheduling_service.create_schedule(
+                device_id=device_id,
+                on_time=time(14, 0),    # 2 PM
+                off_time=time(20, 0),   # 8 PM
+                enabled=True,
+            )
+            logger.info("default_schedule_created", device_id=device_id)
+        except Exception as e:
+            logger.warning("failed_to_create_default_schedule", device_id=device_id, error=str(e))
 
         logger.info("device_registered", device_id=device_id)
         

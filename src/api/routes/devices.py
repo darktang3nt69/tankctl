@@ -557,7 +557,23 @@ def update_device_metadata(
         device = device_service.update_device_metadata(device_id, request.model_dump(exclude_none=True))
         if not device:
             raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
-        return device
+        
+        return DeviceResponse(
+            device_id=device.device_id,
+            device_name=device.device_name,
+            location=device.location,
+            icon_type=device.icon_type,
+            description=device.description,
+            status=device.status,
+            firmware_version=device.firmware_version,
+            created_at=isoformat_in_app_timezone(device.created_at),
+            last_seen=isoformat_in_app_timezone(device.last_seen),
+            uptime_ms=device.uptime_ms,
+            rssi=device.rssi,
+            wifi_status=device.wifi_status,
+            temp_threshold_low=device.temp_threshold_low,
+            temp_threshold_high=device.temp_threshold_high,
+        )
     except HTTPException:
         raise
     except Exception as e:

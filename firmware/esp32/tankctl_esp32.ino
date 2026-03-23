@@ -5,7 +5,11 @@
 #define MQTT_SERVER "192.168.1.100"
 #define MQTT_PORT 1883
 
-#define DEFAULT_TANK_ID "tank1"
+#define REGISTRATION_SERVER "192.168.1.100"
+#define REGISTRATION_PORT 8000
+#define REGISTRATION_ENDPOINT "/api/devices/register"
+
+#define DEFAULT_TANK_ID "POND - ESP32"
 #define RELAY_PIN 4        // GPIO 4 for relay
 #define ONE_WIRE_PIN 23    // GPIO 23 for temperature sensor
 #define STATUS_LED_PIN 2   // GPIO 2 for status LED (optional, built-in on many ESP32 boards)
@@ -23,6 +27,7 @@
 #define TIMEZONE_OFFSET_SECONDS 19800
 
 #define TANK_ID_MAX_LEN 32
+#define DEVICE_SECRET_MAX_LEN 64
 #define FIRMWARE_VERSION "1.0.0-esp32"
 
 // ===== LIBRARIES =====
@@ -47,7 +52,9 @@ OneWire oneWire(ONE_WIRE_PIN);
 DallasTemperature sensors(&oneWire);
 
 char tankId[TANK_ID_MAX_LEN] = {0};
+char deviceSecret[DEVICE_SECRET_MAX_LEN] = {0};
 bool lightState = false;
+bool deviceRegistered = false;
 float temperature = 0.0;
 int lastCommandVersion = 0;
 
@@ -86,7 +93,7 @@ void updateStatusLED(bool wifiConnected, bool mqttConnected) {
 
 // ===== SETUP =====
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(1000);
   
   Serial.println("\n\n=== TankCtl ESP32 Device Starting ===\n");
@@ -126,6 +133,13 @@ void setup() {
   // Configure WiFi
   WiFi.mode(WIFI_STA);
   connectWiFi();
+  
+  // Try device registration if needed (after WiFi connects)
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!deviceRegistered) {
+      registerDevice();
+    }
+  }
   
   // Configure time via NTP
   configTime(TIMEZONE_OFFSET_SECONDS, 0, "pool.ntp.org", "time.nist.gov");
@@ -613,6 +627,18 @@ void loadConfig() {
   strncpy(tankId, savedTankId.c_str(), TANK_ID_MAX_LEN - 1);
   tankId[TANK_ID_MAX_LEN - 1] = 0;
   
+  // Load device secret (if exists, device is registered)
+  String savedSecret = preferences.getString("device_secret", "");
+  if (savedSecret.length() > 0) {
+    strncpy(deviceSecret, savedSecret.c_str(), DEVICE_SECRET_MAX_LEN - 1);
+    deviceSecret[DEVICE_SECRET_MAX_LEN - 1] = 0;
+    deviceRegistered = true;
+    Serial.println("Device already registered (secret found in NVS)");
+  } else {
+    deviceRegistered = false;
+    Serial.println("Device not registered yet (no secret in NVS)");
+  }
+  
   // Load schedule
   scheduleOnHour = preferences.getInt("sched_on_h", 18);
   scheduleOnMinute = preferences.getInt("sched_on_m", 0);
@@ -643,4 +669,153 @@ void saveSchedule() {
   preferences.putBool("sched_enabled", scheduleEnabled);
   
   Serial.println("Schedule saved to NVS");
+}
+
+// ===== DEVICE REGISTRATION =====
+void registerDevice() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[Registration] WiFi not connected, skipping registration");
+    return;
+  }
+  
+  if (deviceRegistered && strlen(deviceSecret) > 0) {
+    Serial.println("[Registration] Device already registered with secret");
+    return;
+  }
+  
+  Serial.println("\n[Registration] Starting device registration...");
+  Serial.print("[Registration] Tank ID: ");
+  Serial.println(tankId);
+  
+  // Create HTTP request
+  WiFiClient httpClient;
+  
+  if (!httpClient.connect(REGISTRATION_SERVER, REGISTRATION_PORT)) {
+    Serial.print("[Registration] Failed to connect to ");
+    Serial.print(REGISTRATION_SERVER);
+    Serial.print(":");
+    Serial.println(REGISTRATION_PORT);
+    return;
+  }
+  
+  Serial.print("[Registration] Connected to ");
+  Serial.print(REGISTRATION_SERVER);
+  Serial.print(":");
+  Serial.println(REGISTRATION_PORT);
+  
+  // Build JSON payload
+  StaticJsonDocument<128> requestDoc;
+  requestDoc["device_id"] = tankId;
+  
+  String payload;
+  serializeJson(requestDoc, payload);
+  
+  // Send HTTP POST request
+  String request = "POST ";
+  request += REGISTRATION_ENDPOINT;
+  request += " HTTP/1.1\r\n";
+  request += "Host: ";
+  request += REGISTRATION_SERVER;
+  request += ":";
+  request += REGISTRATION_PORT;
+  request += "\r\n";
+  request += "Content-Type: application/json\r\n";
+  request += "Content-Length: ";
+  request += payload.length();
+  request += "\r\n";
+  request += "Connection: close\r\n";
+  request += "\r\n";
+  request += payload;
+  
+  Serial.print("[Registration] Sending request... ");
+  httpClient.print(request);
+  Serial.println("done");
+  
+  // Wait for response
+  unsigned long timeout = millis() + 5000;  // 5 second timeout
+  String response = "";
+  String statusLine = "";
+  
+  while (httpClient.connected() || httpClient.available()) {
+    if (millis() > timeout) {
+      Serial.println("[Registration] Response timeout");
+      break;
+    }
+    
+    if (httpClient.available()) {
+      char c = httpClient.read();
+      response += c;
+    }
+    delay(1);
+  }
+  
+  httpClient.stop();
+  
+  // Extract HTTP status code from response
+  int statusCode = 200;
+  if (response.indexOf("HTTP/1.1") != -1) {
+    int spacePos = response.indexOf(" ");
+    if (spacePos != -1) {
+      String statusStr = response.substring(spacePos + 1, spacePos + 4);
+      statusCode = statusStr.toInt();
+    }
+  }
+  
+  Serial.print("[Registration] HTTP Status: ");
+  Serial.println(statusCode);
+  
+  // Parse response
+  if (response.length() > 0) {
+    // Find JSON part (skip HTTP headers)
+    int jsonStart = response.indexOf("\r\n\r\n");
+    if (jsonStart != -1) {
+      jsonStart += 4;  // Skip "\r\n\r\n"
+      String jsonStr = response.substring(jsonStart);
+      
+      Serial.print("[Registration] Raw response: ");
+      Serial.println(jsonStr);
+      
+      StaticJsonDocument<512> responseDoc;
+      DeserializationError error = deserializeJson(responseDoc, jsonStr);
+      
+      if (!error) {
+        if (statusCode == 409) {
+          // Device already registered - mark as registered without secret
+          Serial.println("[Registration] ✓ Device already registered on backend (409 Conflict)");
+          deviceRegistered = true;
+          // Try to load secret from storage in case it exists
+        } else if (responseDoc.containsKey("device_secret")) {
+          String secret = responseDoc["device_secret"];
+          strncpy(deviceSecret, secret.c_str(), DEVICE_SECRET_MAX_LEN - 1);
+          deviceSecret[DEVICE_SECRET_MAX_LEN - 1] = 0;
+          
+          // Save to NVS
+          preferences.putString("device_secret", secret);
+          deviceRegistered = true;
+          
+          Serial.println("[Registration] ✓ Device registered successfully!");
+          Serial.print("[Registration] Device Secret (first 16 chars): ");
+          Serial.print(secret.substring(0, 16));
+          Serial.println("...");
+        } else {
+          Serial.println("[Registration] ✗ Unexpected response (no device_secret)");
+          Serial.print("[Registration] Keys in response: ");
+          for (JsonPair p : responseDoc.as<JsonObject>()) {
+            Serial.print(p.key().c_str());
+            Serial.print(" ");
+          }
+          Serial.println();
+        }
+      } else {
+        Serial.print("[Registration] ✗ JSON parse error: ");
+        Serial.println(error.c_str());
+      }
+    } else {
+      Serial.println("[Registration] ✗ No JSON found in response");
+    }
+  } else {
+    Serial.println("[Registration] ✗ Empty response from server");
+  }
+  
+  Serial.println();
 }
