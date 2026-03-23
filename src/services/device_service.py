@@ -61,7 +61,7 @@ class DeviceService:
         
         Sets default configuration:
         - Temperature thresholds: 22°C (min) to 30°C (max)
-        - Light schedule: 2 PM to 8 PM (enabled)
+        - Light schedule: 3 PM to 10 PM (enabled)
 
         Args:
             device_id: Unique device identifier
@@ -98,7 +98,7 @@ class DeviceService:
         shadow = DeviceShadow(device_id=device_id)
         self.shadow_repo.create(shadow)
         
-        # Create default light schedule (2 PM to 8 PM)
+        # Create default light schedule (3 PM to 10 PM)
         try:
             from datetime import time
             from src.services.scheduling_service import SchedulingService
@@ -106,8 +106,8 @@ class DeviceService:
             scheduling_service = SchedulingService(self.session)
             scheduling_service.create_schedule(
                 device_id=device_id,
-                on_time=time(14, 0),    # 2 PM
-                off_time=time(20, 0),   # 8 PM
+                on_time=time(15, 0),    # 3 PM
+                off_time=time(22, 0),   # 10 PM
                 enabled=True,
             )
             logger.info("default_schedule_created", device_id=device_id)
