@@ -7,9 +7,9 @@
 
 #define REGISTRATION_SERVER "192.168.1.100"
 #define REGISTRATION_PORT 8000
-#define REGISTRATION_ENDPOINT "/api/devices/register"
+#define REGISTRATION_ENDPOINT "/devices"
 
-#define DEFAULT_TANK_ID "POND - ESP32"
+#define DEFAULT_TANK_ID "POND-ESP32"
 #define RELAY_PIN 4        // GPIO 4 for relay
 #define ONE_WIRE_PIN 23    // GPIO 23 for temperature sensor
 #define STATUS_LED_PIN 2   // GPIO 2 for status LED (optional, built-in on many ESP32 boards)

@@ -7,7 +7,7 @@
 
 #define REGISTRATION_SERVER "192.168.1.100"
 #define REGISTRATION_PORT 8000
-#define REGISTRATION_ENDPOINT "/api/devices/register"
+#define REGISTRATION_ENDPOINT "/devices/"
 
 #define DEFAULT_TANK_ID "tank1"
 #define RELAY_PIN 4 // Using pin 4 for the relay
