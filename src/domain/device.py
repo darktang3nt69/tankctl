@@ -41,6 +41,24 @@ class Device:
     wifi_status: str | None = None
     """WiFi connection status string from device"""
 
+    temp_threshold_low: float | None = None
+    """Configured low temperature threshold (deg C)"""
+
+    temp_threshold_high: float | None = None
+    """Configured high temperature threshold (deg C)"""
+
+    device_name: str | None = None
+    """User-friendly device name (e.g., 'Living Room Tank')"""
+
+    location: str | None = None
+    """Physical location of the device (e.g., 'Living Room', 'Office Desk')"""
+
+    icon_type: str = "fish_bowl"
+    """Icon type from predefined set (e.g., 'fish_bowl', 'tropical', 'planted_tank')"""
+
+    description: str | None = None
+    """User notes or description for the device"""
+
     def is_online(self, timeout_seconds: int = 60) -> bool:
         """
         Check if device is currently online.
@@ -65,3 +83,72 @@ class Device:
     def mark_offline(self) -> None:
         """Mark device as offline."""
         self.status = "offline"
+
+
+@dataclass
+class LightSchedule:
+    """
+    Light schedule for a device.
+
+    Controls when lights turn on/off.
+    """
+
+    id: int | None = None
+    """Database primary key"""
+
+    device_id: str | None = None
+    """Device identifier"""
+
+    enabled: bool = True
+    """Whether schedule is active"""
+
+    start_time: str = "08:00"
+    """Start time in HH:MM format"""
+
+    end_time: str = "20:00"
+    """End time in HH:MM format"""
+
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    """Timestamp when schedule was created"""
+
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    """Timestamp when schedule was last updated"""
+
+
+@dataclass
+class WaterSchedule:
+    """
+    Water change schedule for a device.
+
+    Tracks water change reminders (weekly or custom dates).
+    """
+
+    id: int | None = None
+    """Database primary key"""
+
+    device_id: str | None = None
+    """Device identifier"""
+
+    schedule_type: str = "weekly"  # 'weekly' or 'custom'
+    """Schedule type: weekly recurring or custom date"""
+
+    day_of_week: int | None = None
+    """Day of week for weekly schedules (0=Sunday, 6=Saturday)"""
+
+    schedule_date: str | None = None
+    """Custom date in YYYY-MM-DD format for custom schedules"""
+
+    schedule_time: str = "12:00"
+    """Time for water change in HH:MM format"""
+
+    notes: str | None = None
+    """Notes about the water change"""
+
+    completed: bool = False
+    """Whether this water change was completed"""
+
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    """Timestamp when schedule was created"""
+
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    """Timestamp when schedule was last updated"""

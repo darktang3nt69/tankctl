@@ -82,15 +82,6 @@ class SchedulerSettings:
     )
 
 
-@dataclass
-class WhatsAppSettings:
-    """WhatsApp bot notification configuration."""
-
-    enabled: bool = os.getenv("WHATSAPP_ENABLED", "false").lower() == "true"
-    bot_url: str = os.getenv("WHATSAPP_BOT_URL", "http://whatsapp-bot:3001/send")
-    phone_number: str = os.getenv("WHATSAPP_PHONE_NUMBER", "")
-    request_timeout_seconds: int = int(os.getenv("WHATSAPP_REQUEST_TIMEOUT_SECONDS", "5"))
-
 
 @dataclass
 class AlertSettings:
@@ -117,12 +108,15 @@ class Settings:
     timescale = TimescaleSettings()
     api = APISettings()
     scheduler = SchedulerSettings()
-    whatsapp = WhatsAppSettings()
     alerts = AlertSettings()
     app = AppSettings()
+
 
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # FCM (Firebase Cloud Messaging)
+    fcm_service_account_json: str = os.getenv("FCM_SERVICE_ACCOUNT_JSON", "tankctl-firebase-adminsdk-fbsvc-2efd3c5518.json")
+    fcm_project_id: str = os.getenv("FCM_PROJECT_ID", "")
 
 settings = Settings()

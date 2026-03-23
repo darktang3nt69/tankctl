@@ -56,6 +56,13 @@ class HeartbeatHandler(MessageHandler):
         try:
             session = db.get_session()
             service = DeviceService(session)
+            
+            # Check if device is registered
+            device = service.get_device(device_id)
+            if not device:
+                logger.warning("heartbeat_rejected_unregistered", device_id=device_id)
+                session.close()
+                return
 
             service.handle_heartbeat(
                 device_id,
@@ -86,8 +93,16 @@ class ReportedStateHandler(MessageHandler):
         """
         try:
             session = db.get_session()
-            shadow_service = ShadowService(session)
             device_service = DeviceService(session)
+            
+            # Check if device is registered
+            device = device_service.get_device(device_id)
+            if not device:
+                logger.warning("reported_state_rejected_unregistered", device_id=device_id)
+                session.close()
+                return
+
+            shadow_service = ShadowService(session)
 
             # Mark device as online
             device_service.handle_heartbeat(device_id)
@@ -131,6 +146,16 @@ class TelemetryHandler(MessageHandler):
             payload: Telemetry data from device
         """
         try:
+            # Check if device is registered first
+            check_session = db.get_session()
+            device_service = DeviceService(check_session)
+            device = device_service.get_device(device_id)
+            check_session.close()
+            
+            if not device:
+                logger.warning("telemetry_rejected_unregistered", device_id=device_id)
+                return
+
             # Use telemetry session
             session = db.get_timescale_session()
             service = TelemetryService(session)

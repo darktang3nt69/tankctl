@@ -13,7 +13,7 @@ from src.domain.light_schedule import LightSchedule
 from src.infrastructure.db.database import db
 from src.repository.light_schedule_repository import LightScheduleRepository
 from src.services.shadow_service import ShadowService
-from src.utils.datetime_utils import now_in_app_timezone
+from src.utils.datetime_utils import now_in_app_timezone, get_app_timezone
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -164,23 +164,25 @@ class SchedulingService:
         # Remove existing jobs if any
         self._unregister_scheduler_jobs(device_id)
 
-        # Register ON job
+        # Register ON job (with app timezone to ensure correct wall-clock time)
         self.scheduler.add_job(
             func=self._set_light_state,
             trigger='cron',
             hour=schedule.on_time.hour,
             minute=schedule.on_time.minute,
+            timezone=get_app_timezone(),
             id=on_job_id,
             args=[device_id, "on"],
             replace_existing=True,
         )
 
-        # Register OFF job
+        # Register OFF job (with app timezone to ensure correct wall-clock time)
         self.scheduler.add_job(
             func=self._set_light_state,
             trigger='cron',
             hour=schedule.off_time.hour,
             minute=schedule.off_time.minute,
+            timezone=get_app_timezone(),
             id=off_job_id,
             args=[device_id, "off"],
             replace_existing=True,

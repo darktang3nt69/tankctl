@@ -61,7 +61,7 @@ class AppUpdateService {
 
   /// Fetches the latest non-draft, non-prerelease GitHub release.
   Future<GithubReleaseInfo> fetchLatestRelease() async {
-    final response = await Dio().get<Map<String, dynamic>>(
+    final response = await _dio.get<Map<String, dynamic>>(
       '$_githubApiBase/repos/$_repo/releases/latest',
       options: Options(
         headers: {'Accept': 'application/vnd.github+json'},
@@ -73,23 +73,54 @@ class AppUpdateService {
     if (data == null) throw Exception('Empty response from GitHub API');
 
     final assets = (data['assets'] as List<dynamic>? ?? []);
-    final apkAsset = assets.firstWhere(
-      (a) => (a as Map)['name'] == _preferredAssetName,
-      orElse: () => assets.firstWhere(
-        (a) => ((a as Map)['name'] as String).endsWith('.apk'),
-        orElse: () => throw Exception('No APK asset found in latest release'),
-      ),
-    ) as Map<String, dynamic>;
+    
+    // Safely find APK asset with fallback
+    Map<String, dynamic>? apkAsset;
+    try {
+      apkAsset = assets.firstWhere(
+        (a) {
+          if (a is! Map) return false;
+          final name = a['name'] as String?;
+          return name == _preferredAssetName;
+        },
+        orElse: () => null,
+      ) as Map<String, dynamic>?;
+      
+      // Fallback: find any APK file
+      apkAsset ??= assets.firstWhere(
+        (a) {
+          if (a is! Map) return false;
+          final name = a['name'] as String?;
+          return name != null && name.endsWith('.apk');
+        },
+        orElse: () => null,
+      ) as Map<String, dynamic>?;
+      
+      if (apkAsset == null) {
+        throw Exception('No APK asset found in latest release');
+      }
+    } catch (e) {
+      throw Exception('Failed to parse release assets: $e');
+    }
+
+    // Safely parse published_at date
+    DateTime? publishedAt;
+    try {
+      final publishedAtStr = data['published_at'] as String?;
+      publishedAt = publishedAtStr != null ? DateTime.parse(publishedAtStr) : DateTime.now();
+    } catch (e) {
+      publishedAt = DateTime.now();
+    }
 
     return GithubReleaseInfo(
-      tagName: data['tag_name'] as String,
-      releaseName: (data['name'] as String?) ?? data['tag_name'] as String,
+      tagName: (data['tag_name'] as String?) ?? 'unknown',
+      releaseName: (data['name'] as String?) ?? (data['tag_name'] as String?) ?? 'Release',
       releaseNotes: _trimNotes(data['body'] as String? ?? ''),
-      releaseHtmlUrl: data['html_url'] as String,
-      assetDownloadUrl: apkAsset['browser_download_url'] as String,
-      assetId: apkAsset['id'] as int,
-      assetUpdatedAt: apkAsset['updated_at'] as String,
-      publishedAt: DateTime.parse(data['published_at'] as String),
+      releaseHtmlUrl: (data['html_url'] as String?) ?? '',
+      assetDownloadUrl: (apkAsset['browser_download_url'] as String?) ?? '',
+      assetId: (apkAsset['id'] as int?) ?? 0,
+      assetUpdatedAt: (apkAsset['updated_at'] as String?) ?? '',
+      publishedAt: publishedAt,
     );
   }
 
@@ -131,12 +162,16 @@ class AppUpdateService {
     void Function(double progress)? onProgress,
     CancelToken? cancelToken,
   }) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final filePath = '${dir.path}/update_${tagName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.apk';
+    final dir = Platform.isAndroid
+        ? (await getExternalStorageDirectory() ??
+              await getApplicationDocumentsDirectory())
+        : await getApplicationDocumentsDirectory();
+    final filePath =
+        '${dir.path}/update_${tagName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.apk';
     final file = File(filePath);
     if (await file.exists()) await file.delete();
 
-    await Dio().download(
+    await _dio.download(
       url,
       filePath,
       cancelToken: cancelToken,

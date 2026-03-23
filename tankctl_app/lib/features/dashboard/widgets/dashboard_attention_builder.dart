@@ -3,8 +3,8 @@ import 'package:tankctl_app/features/dashboard/widgets/dashboard_sorting.dart';
 import 'package:tankctl_app/features/dashboard/widgets/needs_attention_strip.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
 
-const highTempThreshold = 28.0;
-const lowTempThreshold = 18.0;
+const defaultHighTempThreshold = 26.0;
+const defaultLowTempThreshold = 18.0;
 
 List<AttentionIssue> buildAttentionIssues(
   WidgetRef ref,
@@ -16,6 +16,12 @@ List<AttentionIssue> buildAttentionIssues(
     final deviceId = device['device_id'] as String;
     final isOnline = device['status'] == 'online';
     final label = deviceLabel(deviceId);
+    final highTempThreshold =
+      (device['temp_threshold_high'] as num?)?.toDouble() ??
+      defaultHighTempThreshold;
+    final lowTempThreshold =
+      (device['temp_threshold_low'] as num?)?.toDouble() ??
+      defaultLowTempThreshold;
 
     if (!isOnline) {
       issues.add(
@@ -23,6 +29,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.offline,
+          warningCode: 'offline',
         ),
       );
       continue;
@@ -35,6 +42,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.noTempSensor,
+          warningCode: warningCode!,
         ),
       );
       continue;
@@ -52,6 +60,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.highTemp,
+          warningCode: 'high_temp',
           temperature: latestTemp,
         ),
       );
@@ -64,6 +73,7 @@ List<AttentionIssue> buildAttentionIssues(
           deviceId: deviceId,
           deviceLabel: label,
           type: AttentionIssueType.lowTemp,
+          warningCode: 'low_temp',
           temperature: latestTemp,
         ),
       );

@@ -3,26 +3,37 @@ Device Routes - Device management endpoints.
 
 GET /devices - List all devices
 GET /devices/{device_id} - Get device status
+GET /devices/{device_id}/detail - Get full device detail with schedules
 GET /devices/{device_id}/shadow - Get device shadow state
 POST /devices - Register new device
+PATCH /devices/{device_id} - Update device metadata
 POST /devices/{device_id}/schedule - Create or update light schedule
 GET /devices/{device_id}/schedule - Get light schedule
 DELETE /devices/{device_id}/schedule - Delete light schedule
+GET /devices/{device_id}/water-schedules - List water change schedules
+POST /devices/{device_id}/water-schedules - Add water change schedule
+DELETE /devices/{device_id}/water-schedules/{schedule_id} - Delete water change schedule
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from datetime import time as dt_time
 
 from src.api.schemas import (
     DeviceDeleteResponse,
+    DevicePatchRequest,
     DeviceResponse,
     DeviceShadowResponse,
     DeviceRegisterRequest,
     DeviceRegisterResponse,
     DeviceShadowUpdateRequest,
+    DeviceDetailResponse,
+    DeviceMetadataUpdateRequest,
     ScheduleRequest,
     ScheduleResponse,
+    WaterScheduleRequest,
+    WaterScheduleResponse,
+    WarningAckResponse,
 )
 from src.infrastructure.db.database import db
 from src.services.device_service import DeviceService
@@ -77,6 +88,8 @@ def list_devices(session: Session = Depends(get_db)):
                 uptime_ms=d.uptime_ms,
                 rssi=d.rssi,
                 wifi_status=d.wifi_status,
+                temp_threshold_low=d.temp_threshold_low,
+                temp_threshold_high=d.temp_threshold_high,
             )
             for d in devices
         ]
@@ -123,12 +136,108 @@ def get_device(device_id: str, session: Session = Depends(get_db)):
             uptime_ms=device.uptime_ms,
             rssi=device.rssi,
             wifi_status=device.wifi_status,
+            temp_threshold_low=device.temp_threshold_low,
+            temp_threshold_high=device.temp_threshold_high,
         )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error("get_device_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.patch("/{device_id}", response_model=DeviceResponse)
+def patch_device(
+    device_id: str,
+    request: DevicePatchRequest,
+    session: Session = Depends(get_db),
+):
+    """Patch mutable device settings such as threshold values."""
+    try:
+        logger.info("patching_device", device_id=device_id)
+        device_service = DeviceService(session)
+
+        existing = device_service.get_device(device_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+
+        low = (
+            request.temp_threshold_low
+            if request.temp_threshold_low is not None
+            else existing.temp_threshold_low
+        )
+        high = (
+            request.temp_threshold_high
+            if request.temp_threshold_high is not None
+            else existing.temp_threshold_high
+        )
+
+        updated = device_service.update_thresholds(
+            device_id=device_id,
+            temp_threshold_low=low,
+            temp_threshold_high=high,
+        )
+
+        return DeviceResponse(
+            device_id=updated.device_id,
+            status=updated.status,
+            firmware_version=updated.firmware_version,
+            created_at=isoformat_in_app_timezone(updated.created_at),
+            last_seen=isoformat_in_app_timezone(updated.last_seen),
+            uptime_ms=updated.uptime_ms,
+            rssi=updated.rssi,
+            wifi_status=updated.wifi_status,
+            temp_threshold_low=updated.temp_threshold_low,
+            temp_threshold_high=updated.temp_threshold_high,
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("patch_device_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/warnings/acks", response_model=list[WarningAckResponse])
+def get_acknowledged_warnings(session: Session = Depends(get_db)):
+    """Return all acknowledged warning keys across devices."""
+    try:
+        rows = DeviceService(session).get_acknowledged_warnings()
+        return [
+            WarningAckResponse(device_id=device_id, warning_code=warning_code)
+            for device_id, warning_code in rows
+        ]
+    except Exception as e:
+        logger.error("list_warning_acks_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post(
+    "/{device_id}/warnings/{warning_code}/ack",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def acknowledge_warning(
+    device_id: str,
+    warning_code: str,
+    session: Session = Depends(get_db),
+):
+    """Persist acknowledgement for a warning code on a device."""
+    try:
+        DeviceService(session).acknowledge_warning(
+            device_id=device_id,
+            warning_code=warning_code,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "acknowledge_warning_error",
+            device_id=device_id,
+            warning_code=warning_code,
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -417,4 +526,127 @@ def delete_schedule(
         raise
     except Exception as e:
         logger.error("delete_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{device_id}/detail", response_model=DeviceDetailResponse)
+def get_device_detail(device_id: str, session: Session = Depends(get_db)):
+    """Get full device detail including metadata, schedules, and health metrics."""
+    try:
+        device_service = DeviceService(session)
+        detail = device_service.get_device_detail(device_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        return detail
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_device_detail_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/{device_id}/metadata", response_model=DeviceResponse)
+def update_device_metadata(
+    device_id: str,
+    request: DeviceMetadataUpdateRequest,
+    session: Session = Depends(get_db),
+):
+    """Update device metadata: name, location, icon, description, thresholds."""
+    try:
+        device_service = DeviceService(session)
+        device = device_service.update_device_metadata(device_id, request.model_dump(exclude_none=True))
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        
+        return DeviceResponse(
+            device_id=device.device_id,
+            device_name=device.device_name,
+            location=device.location,
+            icon_type=device.icon_type,
+            description=device.description,
+            status=device.status,
+            firmware_version=device.firmware_version,
+            created_at=isoformat_in_app_timezone(device.created_at),
+            last_seen=isoformat_in_app_timezone(device.last_seen),
+            uptime_ms=device.uptime_ms,
+            rssi=device.rssi,
+            wifi_status=device.wifi_status,
+            temp_threshold_low=device.temp_threshold_low,
+            temp_threshold_high=device.temp_threshold_high,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_device_metadata_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+def _serialize_water_schedule(schedule) -> WaterScheduleResponse:
+    """Convert WaterScheduleModel to WaterScheduleResponse."""
+    days_of_week = None
+    if schedule.days_of_week:
+        days_of_week = [int(d.strip()) for d in schedule.days_of_week.split(",")]
+    return WaterScheduleResponse(
+        id=schedule.id,
+        device_id=schedule.device_id,
+        schedule_type=schedule.schedule_type,
+        days_of_week=days_of_week,
+        schedule_date=schedule.schedule_date.isoformat() if schedule.schedule_date else None,
+        schedule_time=str(schedule.schedule_time),
+        notes=schedule.notes,
+        completed=schedule.completed,
+        enabled=schedule.enabled,
+        created_at=schedule.created_at.isoformat() if schedule.created_at else None,
+        updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
+    )
+
+
+@router.get("/{device_id}/water-schedules", response_model=list[WaterScheduleResponse])
+def get_water_schedules(device_id: str, session: Session = Depends(get_db)):
+    """List all water change schedules for a device."""
+    try:
+        device_service = DeviceService(session)
+        schedules = device_service.get_water_schedules(device_id)
+        return [_serialize_water_schedule(s) for s in schedules]
+    except Exception as e:
+        logger.error("get_water_schedules_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{device_id}/water-schedules", response_model=WaterScheduleResponse, status_code=201)
+def create_water_schedule(
+    device_id: str,
+    request: WaterScheduleRequest,
+    session: Session = Depends(get_db),
+):
+    """Add a water change schedule for a device."""
+    try:
+        device_service = DeviceService(session)
+        schedule = device_service.create_water_schedule(device_id, request.model_dump())
+        if not schedule:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        return _serialize_water_schedule(schedule)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("create_water_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/{device_id}/water-schedules/{schedule_id}", status_code=204)
+def delete_water_schedule(
+    device_id: str,
+    schedule_id: int,
+    session: Session = Depends(get_db),
+):
+    """Delete a water change schedule."""
+    try:
+        device_service = DeviceService(session)
+        deleted = device_service.delete_water_schedule(device_id, schedule_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Water schedule {schedule_id} not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_water_schedule_error", device_id=device_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

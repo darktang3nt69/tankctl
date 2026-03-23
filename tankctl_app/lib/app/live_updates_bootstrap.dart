@@ -26,15 +26,28 @@ class LiveUpdatesBootstrap extends ConsumerStatefulWidget {
 class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     with WidgetsBindingObserver {
   late final ProviderSubscription<AsyncValue<Map<String, dynamic>>>
-      _subscription;
+  _subscription;
   late final ProviderSubscription<AsyncValue<int>> _settingsSubscription;
   Timer? _refreshTimer;
+  Timer? _updateCheckTimer;
   final Map<String, bool> _sensorUnavailableActiveByDevice = {};
   final LiveEventNotifier _notifier = LiveEventNotifier();
   bool _isInForeground = true;
   DateTime? _lastUpdateCheck;
 
   static const _updateCheckThreshold = Duration(hours: 12);
+
+  void _handleUpdateCheckFrequency(
+    AsyncValue<int>? previous,
+    AsyncValue<int> next,
+  ) {
+    final hours = next.valueOrNull ?? 24;
+    _updateCheckTimer?.cancel();
+    _updateCheckTimer = Timer.periodic(
+      Duration(hours: hours),
+      (_) => _triggerUpdateCheck(),
+    );
+  }
 
   @override
   void initState() {
@@ -46,8 +59,14 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
       _handleRefreshSetting,
       fireImmediately: true,
     );
-    unawaited(_notifier.initialize());
     unawaited(_triggerUpdateCheck());
+
+    // Listen for update check frequency changes and schedule timer
+    ref.listenManual(
+      updateCheckFrequencyProvider,
+      _handleUpdateCheckFrequency,
+      fireImmediately: true,
+    );
   }
 
   void _handleRefreshSetting(AsyncValue<int>? previous, AsyncValue<int> next) {
@@ -89,14 +108,8 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     }
 
     if (eventName == 'device_online' || eventName == 'device_offline') {
-      if (deviceId != null) {
-        unawaited(
-          _notifier.showDeviceStatus(
-            deviceId,
-            eventName == 'device_online',
-            isInForeground: _isInForeground,
-          ),
-        );
+      if (deviceId != null && _isInForeground) {
+        unawaited(_notifier.showDeviceStatusToast(deviceId, eventName == 'device_online'));
       }
       _syncLiveState();
       return;
@@ -105,24 +118,12 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
     if (eventName == 'telemetry_received') {
       ref.invalidate(dashboardOverviewProvider);
       if (deviceId != null) {
-        ref.read(lastTelemetryTimeProvider(deviceId).notifier).state =
-            DateTime.now();
+        ref.read(lastTelemetryTimeProvider(deviceId).notifier).state = DateTime.now();
         ref.invalidate(temperatureHistoryProvider(deviceId));
         final metrics = event['metadata'] as Map<String, dynamic>?;
         if (normalizeTemperatureReading(metrics?['temperature']) != null) {
           ref.read(deviceWarningProvider(deviceId).notifier).state = null;
-          final hadSensorOutage =
-              _sensorUnavailableActiveByDevice[deviceId] ?? false;
-          if (hadSensorOutage) {
-            _sensorUnavailableActiveByDevice[deviceId] = false;
-            final sensorWarningsEnabled = ref
-                    .read(sensorWarningNotificationsEnabledProvider)
-                    .valueOrNull ??
-                true;
-            if (sensorWarningsEnabled) {
-              unawaited(_notifier.showSensorRecovered(deviceId));
-            }
-          }
+          _sensorUnavailableActiveByDevice[deviceId] = false;
         }
       }
       return;
@@ -134,19 +135,7 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
         final code = metadata?['code'] as String? ?? 'unknown';
         ref.read(deviceWarningProvider(deviceId).notifier).state = code;
         if (code == 'sensor_unavailable') {
-          final alreadyActive =
-              _sensorUnavailableActiveByDevice[deviceId] ?? false;
           _sensorUnavailableActiveByDevice[deviceId] = true;
-
-          if (!alreadyActive) {
-            final sensorWarningsEnabled = ref
-                    .read(sensorWarningNotificationsEnabledProvider)
-                    .valueOrNull ??
-                true;
-            if (sensorWarningsEnabled) {
-              unawaited(_notifier.showSensorWarning(deviceId));
-            }
-          }
         }
       }
       return;
@@ -163,18 +152,12 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
         ref.invalidate(deviceShadowProvider(deviceId));
         ref.invalidate(lightStateFamilyProvider(deviceId));
 
-        if (eventName == 'light_state_changed') {
+        if (eventName == 'light_state_changed' && _isInForeground) {
           final metadata = event['metadata'] as Map<String, dynamic>?;
           final lightState = metadata?['light'] as String?;
           if (lightState != null) {
             final lightOn = lightState == 'on';
-            unawaited(
-              _notifier.showLightState(
-                deviceId,
-                lightOn,
-                isInForeground: _isInForeground,
-              ),
-            );
+            unawaited(_notifier.showLightToast(deviceId, lightOn));
           }
         }
       }
@@ -183,13 +166,36 @@ class _LiveUpdatesBootstrapState extends ConsumerState<LiveUpdatesBootstrap>
 
   Future<void> _triggerUpdateCheck() async {
     _lastUpdateCheck = DateTime.now();
-    await ref.read(appUpdateProvider.notifier).checkForUpdate();
+    final notifier = ref.read(appUpdateProvider.notifier);
+    await notifier.checkForUpdate();
+    final update = ref.read(appUpdateProvider);
+    if (update.status == UpdateStatus.updateAvailable) {
+      await notifier.downloadUpdate();
+    }
+    if (update.status == UpdateStatus.readyToInstall &&
+        update.downloadedApkPath != null) {
+      // Show install prompt
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('App update downloaded. Tap to install.'),
+            action: SnackBarAction(
+              label: 'Install',
+              onPressed: () async {
+                await notifier.installUpdate();
+              },
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _updateCheckTimer?.cancel();
     _settingsSubscription.close();
     _subscription.close();
     super.dispose();

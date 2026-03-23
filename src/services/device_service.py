@@ -15,7 +15,11 @@ from src.domain.device_shadow import DeviceShadow
 from src.infrastructure.db.database import db
 from src.infrastructure.events.event_publisher import event_publisher
 from src.domain.event import device_registered_event, device_online_event, device_offline_event
-from src.repository.device_repository import DeviceRepository, DeviceShadowRepository
+from src.repository.device_repository import (
+    DeviceRepository,
+    DeviceShadowRepository,
+    WarningAcknowledgementRepository,
+)
 from src.repository.light_schedule_repository import LightScheduleRepository
 from src.repository.telemetry_repository import CommandRepository, TelemetryRepository
 from src.utils.logger import get_logger
@@ -44,6 +48,7 @@ class DeviceService:
         self.session = session or db.get_session()
         self.device_repo = DeviceRepository(self.session)
         self.shadow_repo = DeviceShadowRepository(self.session)
+        self.warning_ack_repo = WarningAcknowledgementRepository(self.session)
 
     def register_device(
         self,
@@ -53,6 +58,10 @@ class DeviceService:
         Register a new device.
 
         AUTO-GENERATES a secure device_secret that must be provisioned into the device.
+        
+        Sets default configuration:
+        - Temperature thresholds: 22°C (min) to 30°C (max)
+        - Light schedule: 2 PM to 8 PM (enabled)
 
         Args:
             device_id: Unique device identifier
@@ -74,11 +83,13 @@ class DeviceService:
         # Generate secure secret
         device_secret = generate_device_secret()
 
-        # Create device
+        # Create device with default temperature thresholds
         device = Device(
             device_id=device_id,
             device_secret=device_secret,
             status="offline",
+            temp_threshold_low=22.0,      # Default min temp
+            temp_threshold_high=30.0,     # Default max temp
         )
 
         registered = self.device_repo.create(device)
@@ -86,6 +97,22 @@ class DeviceService:
         # Create associated shadow
         shadow = DeviceShadow(device_id=device_id)
         self.shadow_repo.create(shadow)
+        
+        # Create default light schedule (2 PM to 8 PM)
+        try:
+            from datetime import time
+            from src.services.scheduling_service import SchedulingService
+            
+            scheduling_service = SchedulingService(self.session)
+            scheduling_service.create_schedule(
+                device_id=device_id,
+                on_time=time(14, 0),    # 2 PM
+                off_time=time(20, 0),   # 8 PM
+                enabled=True,
+            )
+            logger.info("default_schedule_created", device_id=device_id)
+        except Exception as e:
+            logger.warning("failed_to_create_default_schedule", device_id=device_id, error=str(e))
 
         logger.info("device_registered", device_id=device_id)
         
@@ -281,3 +308,252 @@ class DeviceService:
     def close(self) -> None:
         """Close the session."""
         self.session.close()
+
+    def update_thresholds(
+        self,
+        device_id: str,
+        temp_threshold_low: float | None,
+        temp_threshold_high: float | None,
+    ) -> Device:
+        """Update per-device chart/alert thresholds."""
+        if (
+            temp_threshold_low is not None
+            and temp_threshold_high is not None
+            and temp_threshold_low >= temp_threshold_high
+        ):
+            raise ValueError("temp_threshold_low must be less than temp_threshold_high")
+
+        return self.device_repo.update_thresholds(
+            device_id=device_id,
+            temp_threshold_low=temp_threshold_low,
+            temp_threshold_high=temp_threshold_high,
+        )
+
+    def acknowledge_warning(self, device_id: str, warning_code: str) -> None:
+        """Persist warning acknowledgement for a specific device/code pair."""
+        if not self.device_repo.get_by_id(device_id):
+            raise ValueError(f"Device {device_id} not found")
+        self.warning_ack_repo.acknowledge(device_id=device_id, warning_code=warning_code)
+
+    def get_acknowledged_warnings(self) -> list[tuple[str, str]]:
+        """List all acknowledged warning keys."""
+        return self.warning_ack_repo.get_all()
+
+    def update_device_metadata(self, device_id: str, metadata: dict) -> Optional[Device]:
+        """Update device metadata (name, location, icon, description, thresholds)."""
+        device = self.device_repo.get_by_id(device_id)
+        if not device:
+            return None
+
+        # Update fields if provided
+        if "device_name" in metadata:
+            device.device_name = metadata["device_name"]
+        if "location" in metadata:
+            device.location = metadata["location"]
+        if "icon_type" in metadata:
+            device.icon_type = metadata["icon_type"]
+        if "description" in metadata:
+            device.description = metadata["description"]
+        if "temp_threshold_low" in metadata:
+            device.temp_threshold_low = metadata["temp_threshold_low"]
+        if "temp_threshold_high" in metadata:
+            device.temp_threshold_high = metadata["temp_threshold_high"]
+
+        # Update in repository
+        return self.device_repo.update(device)
+
+    def get_device_detail(self, device_id: str) -> Optional[dict]:
+        """Get complete device detail with all settings and schedules."""
+        device = self.device_repo.get_by_id(device_id)
+        if not device:
+            return None
+
+        # Build detail response with device info, light schedule, water schedules
+        from src.infrastructure.db.models import LightScheduleModel, WaterScheduleModel
+        
+        light_schedule = self.session.query(LightScheduleModel).filter_by(device_id=device_id).first()
+        water_schedules = self.session.query(WaterScheduleModel).filter_by(device_id=device_id).all()
+
+        return {
+            "device_id": device.device_id,
+            "device_name": device.device_name,
+            "location": device.location,
+            "icon_type": device.icon_type,
+            "description": device.description,
+            "status": device.status,
+            "firmware_version": device.firmware_version,
+            "created_at": device.created_at.isoformat() if device.created_at else None,
+            "last_seen": device.last_seen.isoformat() if device.last_seen else None,
+            "uptime_ms": device.uptime_ms,
+            "rssi": device.rssi,
+            "wifi_status": device.wifi_status,
+            "temp_threshold_low": device.temp_threshold_low,
+            "temp_threshold_high": device.temp_threshold_high,
+            "light_schedule": {
+                "id": light_schedule.id,
+                "device_id": light_schedule.device_id,
+                "enabled": light_schedule.enabled,
+                "start_time": str(light_schedule.on_time),
+                "end_time": str(light_schedule.off_time),
+                "created_at": light_schedule.created_at.isoformat() if light_schedule.created_at else None,
+                "updated_at": light_schedule.updated_at.isoformat() if light_schedule.updated_at else None,
+            } if light_schedule else None,
+            "water_schedules": [
+                {
+                    "id": ws.id,
+                    "device_id": ws.device_id,
+                    "schedule_type": ws.schedule_type,
+                    "days_of_week": [int(d.strip()) for d in ws.days_of_week.split(",")] if ws.days_of_week else None,
+                    "schedule_date": ws.schedule_date.isoformat() if ws.schedule_date else None,
+                    "schedule_time": str(ws.schedule_time),
+                    "notes": ws.notes,
+                    "completed": ws.completed,
+                    "enabled": ws.enabled,
+                    "created_at": ws.created_at.isoformat() if ws.created_at else None,
+                    "updated_at": ws.updated_at.isoformat() if ws.updated_at else None,
+                }
+                for ws in water_schedules
+            ],
+        }
+
+    def set_light_schedule(self, device_id: str, schedule_data: dict):
+        """Create or update light schedule for device."""
+        from src.infrastructure.db.models import LightScheduleModel
+        from datetime import time
+
+        device = self.device_repo.get_by_id(device_id)
+        if not device:
+            return None
+
+        # Parse times
+        on_time = time.fromisoformat(schedule_data["start_time"])
+        off_time = time.fromisoformat(schedule_data["end_time"])
+
+        # Check if schedule exists
+        existing = self.session.query(LightScheduleModel).filter_by(device_id=device_id).first()
+        
+        if existing:
+            existing.enabled = schedule_data.get("enabled", True)
+            existing.on_time = on_time
+            existing.off_time = off_time
+            existing.updated_at = datetime.utcnow()
+            self.session.commit()
+            return existing
+        else:
+            new_schedule = LightScheduleModel(
+                device_id=device_id,
+                enabled=schedule_data.get("enabled", True),
+                on_time=on_time,
+                off_time=off_time,
+            )
+            self.session.add(new_schedule)
+            self.session.commit()
+            return new_schedule
+
+    def get_light_schedule(self, device_id: str):
+        """Get light schedule for device."""
+        from src.infrastructure.db.models import LightScheduleModel
+        
+        return self.session.query(LightScheduleModel).filter_by(device_id=device_id).first()
+
+    def create_water_schedule(self, device_id: str, schedule_data: dict):
+        """Create water change schedule for device."""
+        from src.infrastructure.db.models import WaterScheduleModel
+        from datetime import time
+
+        device = self.device_repo.get_by_id(device_id)
+        if not device:
+            return None
+
+        schedule_time = time.fromisoformat(schedule_data["schedule_time"])
+        
+        # Convert days_of_week list to comma-separated string
+        days_of_week_str = None
+        if schedule_data.get("days_of_week"):
+            days_of_week_str = ",".join(str(d) for d in schedule_data["days_of_week"])
+
+        # For weekly schedules, clear schedule_date. For custom, clear days_of_week.
+        schedule_date = None
+        if schedule_data["schedule_type"] == "custom":
+            schedule_date = schedule_data.get("schedule_date")
+            days_of_week_str = None  # Custom schedules don't use days_of_week
+
+        new_schedule = WaterScheduleModel(
+            device_id=device_id,
+            schedule_type=schedule_data["schedule_type"],
+            days_of_week=days_of_week_str,
+            schedule_date=schedule_date,
+            schedule_time=schedule_time,
+            notes=schedule_data.get("notes"),
+            enabled=schedule_data.get("enabled", True),
+        )
+        self.session.add(new_schedule)
+        self.session.commit()
+        return new_schedule
+
+    def update_water_schedule(self, device_id: str, schedule_id: int, schedule_data: dict):
+        """Update water change schedule for device."""
+        from src.infrastructure.db.models import WaterScheduleModel
+        from datetime import time as time_type
+
+        schedule = self.session.query(WaterScheduleModel).filter_by(
+            id=schedule_id,
+            device_id=device_id,
+        ).first()
+
+        if not schedule:
+            return None
+
+        if "schedule_time" in schedule_data and schedule_data["schedule_time"]:
+            schedule.schedule_time = time_type.fromisoformat(schedule_data["schedule_time"])
+        if "schedule_type" in schedule_data:
+            schedule.schedule_type = schedule_data["schedule_type"]
+            # Clear type-specific fields when changing schedule_type
+            if schedule_data["schedule_type"] == "weekly":
+                schedule.schedule_date = None
+            elif schedule_data["schedule_type"] == "custom":
+                schedule.days_of_week = None
+        if "days_of_week" in schedule_data:
+            # Convert days_of_week list to comma-separated string
+            if schedule_data["days_of_week"]:
+                schedule.days_of_week = ",".join(str(d) for d in schedule_data["days_of_week"])
+            else:
+                schedule.days_of_week = None
+        if "schedule_date" in schedule_data:
+            schedule.schedule_date = schedule_data["schedule_date"]
+        
+        # Ensure type-specific fields are cleared
+        if schedule.schedule_type == "weekly":
+            schedule.schedule_date = None
+        elif schedule.schedule_type == "custom":
+            schedule.days_of_week = None
+            
+        if "notes" in schedule_data:
+            schedule.notes = schedule_data["notes"]
+        if "enabled" in schedule_data:
+            schedule.enabled = schedule_data["enabled"]
+
+        self.session.commit()
+        return schedule
+
+    def get_water_schedules(self, device_id: str) -> list:
+        """Get all water schedules for device."""
+        from src.infrastructure.db.models import WaterScheduleModel
+        
+        return self.session.query(WaterScheduleModel).filter_by(device_id=device_id).all()
+
+    def delete_water_schedule(self, device_id: str, schedule_id: int) -> bool:
+        """Delete water change schedule."""
+        from src.infrastructure.db.models import WaterScheduleModel
+        
+        schedule = self.session.query(WaterScheduleModel).filter_by(
+            id=schedule_id,
+            device_id=device_id
+        ).first()
+        
+        if not schedule:
+            return False
+
+        self.session.delete(schedule)
+        self.session.commit()
+        return True

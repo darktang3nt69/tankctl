@@ -110,7 +110,9 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
 
   Future<void> checkForUpdate() async {
     if (state.status == UpdateStatus.checking ||
-        state.status == UpdateStatus.downloading) return;
+        state.status == UpdateStatus.downloading) {
+      return;
+    }
 
     state = state.copyWith(status: UpdateStatus.checking, errorMessage: null);
 

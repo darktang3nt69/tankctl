@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/api/api_constants.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/settings_card_shell.dart';
@@ -22,7 +23,7 @@ class BackendSettingsCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.dns_rounded),
+                const Icon(AppIcons.dns),
                 const SizedBox(width: 10),
                 Text(
                   'Server URL',
@@ -42,7 +43,7 @@ class BackendSettingsCard extends ConsumerWidget {
               children: [
                 FilledButton.icon(
                   onPressed: () => _changeUrl(context, ref, serverUrl),
-                  icon: const Icon(Icons.edit_rounded),
+                  icon: const Icon(AppIcons.edit),
                   label: const Text('Change URL'),
                 ),
                 const SizedBox(width: 10),

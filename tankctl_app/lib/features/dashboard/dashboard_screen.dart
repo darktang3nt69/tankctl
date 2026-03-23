@@ -4,7 +4,9 @@ import 'package:tankctl_app/providers/dashboard_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/features/dashboard/widgets/dashboard_tab.dart';
+import 'package:tankctl_app/features/events/events_screen.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings_tab.dart';
+import 'package:tankctl_app/features/dashboard/widgets/quick_actions_fab.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -54,6 +56,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         index: _selectedIndex,
         children: [
           DashboardTab(onRefresh: _refresh),
+          const EventsScreen(),
           const SettingsTab(),
         ],
       ),
@@ -67,12 +70,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             label: 'Dashboard',
           ),
           NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Events',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
             label: 'Settings',
           ),
         ],
       ),
+      floatingActionButton: _selectedIndex == 0 ? const QuickActionsFab() : null,
     );
   }
 }

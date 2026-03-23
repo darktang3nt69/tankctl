@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from src.domain.device import Device
 from src.domain.device_shadow import DeviceShadow
-from src.infrastructure.db.models import DeviceModel, DeviceShadowModel, EventRecord
+from src.infrastructure.db.models import (
+    DeviceModel,
+    DeviceShadowModel,
+    EventRecord,
+    WarningAcknowledgementModel,
+)
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,6 +54,8 @@ class DeviceRepository:
                 uptime_ms=device.uptime_ms,
                 rssi=device.rssi,
                 wifi_status=device.wifi_status,
+                temp_threshold_low=device.temp_threshold_low,
+                temp_threshold_high=device.temp_threshold_high,
             )
             self.session.add(db_device)
             self.session.commit()
@@ -87,6 +94,8 @@ class DeviceRepository:
                 uptime_ms=db_device.uptime_ms,
                 rssi=db_device.rssi,
                 wifi_status=db_device.wifi_status,
+                temp_threshold_low=db_device.temp_threshold_low,
+                temp_threshold_high=db_device.temp_threshold_high,
             )
         except Exception as e:
             logger.error("device_get_failed", device_id=device_id, error=str(e))
@@ -115,6 +124,8 @@ class DeviceRepository:
                         uptime_ms=db_device.uptime_ms,
                         rssi=db_device.rssi,
                         wifi_status=db_device.wifi_status,
+                        temp_threshold_low=db_device.temp_threshold_low,
+                        temp_threshold_high=db_device.temp_threshold_high,
                     )
                 )
 
@@ -150,6 +161,8 @@ class DeviceRepository:
             db_device.uptime_ms = device.uptime_ms
             db_device.rssi = device.rssi
             db_device.wifi_status = device.wifi_status
+            db_device.temp_threshold_low = device.temp_threshold_low
+            db_device.temp_threshold_high = device.temp_threshold_high
 
             self.session.commit()
             logger.info("device_updated", device_id=device.device_id)
@@ -158,6 +171,38 @@ class DeviceRepository:
             self.session.rollback()
             logger.error("device_update_failed", device_id=device.device_id, error=str(e))
             raise
+
+    def update_thresholds(
+        self,
+        device_id: str,
+        temp_threshold_low: float | None,
+        temp_threshold_high: float | None,
+    ) -> Device:
+        """Update threshold settings on an existing device."""
+        db_device = self.session.query(DeviceModel).filter(
+            DeviceModel.device_id == device_id
+        ).first()
+
+        if not db_device:
+            raise ValueError(f"Device {device_id} not found")
+
+        db_device.temp_threshold_low = temp_threshold_low
+        db_device.temp_threshold_high = temp_threshold_high
+        self.session.commit()
+
+        return Device(
+            device_id=db_device.device_id,
+            device_secret=db_device.device_secret,
+            status=db_device.status,
+            firmware_version=db_device.firmware_version,
+            created_at=db_device.created_at,
+            last_seen=db_device.last_seen,
+            uptime_ms=db_device.uptime_ms,
+            rssi=db_device.rssi,
+            wifi_status=db_device.wifi_status,
+            temp_threshold_low=db_device.temp_threshold_low,
+            temp_threshold_high=db_device.temp_threshold_high,
+        )
 
     def update_last_seen(self, device_id: str) -> None:
         """
@@ -400,3 +445,29 @@ class DeviceShadowRepository:
             self.session.rollback()
             logger.error("shadow_delete_failed", device_id=device_id, error=str(e))
             raise
+
+
+class WarningAcknowledgementRepository:
+    """Repository for warning acknowledgement persistence."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def acknowledge(self, device_id: str, warning_code: str) -> None:
+        existing = self.session.query(WarningAcknowledgementModel).filter(
+            WarningAcknowledgementModel.device_id == device_id,
+            WarningAcknowledgementModel.warning_code == warning_code,
+        ).first()
+
+        if existing is None:
+            self.session.add(
+                WarningAcknowledgementModel(
+                    device_id=device_id,
+                    warning_code=warning_code,
+                )
+            )
+            self.session.commit()
+
+    def get_all(self) -> list[tuple[str, str]]:
+        rows = self.session.query(WarningAcknowledgementModel).all()
+        return [(r.device_id, r.warning_code) for r in rows]

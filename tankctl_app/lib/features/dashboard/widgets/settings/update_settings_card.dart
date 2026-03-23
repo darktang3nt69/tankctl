@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/features/dashboard/widgets/settings/settings_card_shell.dart';
 import 'package:tankctl_app/providers/app_update_provider.dart';
+import 'package:tankctl_app/providers/app_settings_provider.dart';
 
 class UpdateSettingsCard extends ConsumerWidget {
   const UpdateSettingsCard({super.key});
@@ -17,7 +19,7 @@ class UpdateSettingsCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.system_update_rounded),
+              const Icon(AppIcons.systemUpdate),
               const SizedBox(width: 10),
               Text(
                 'App Update',
@@ -51,8 +53,58 @@ class UpdateSettingsCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 14),
-
-          // ── Version rows ────────────────────────────────────────────────
+          // Update check frequency setting
+          Consumer(
+            builder: (context, ref, _) {
+              final freqAsync = ref.watch(updateCheckFrequencyProvider);
+              final freq = freqAsync.value ?? 24;
+              final options = <int, String>{
+                1: '1 hour',
+                2: '2 hours',
+                6: '6 hours',
+                12: '12 hours',
+                24: '1 day',
+                48: '2 days',
+                168: '1 week',
+              };
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 12),
+                  Text(
+                    'Update Check Frequency',
+                    style: textTheme.labelMedium?.copyWith(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButton<int>(
+                    value: freq,
+                    items: options.entries
+                        .map(
+                          (e) => DropdownMenuItem<int>(
+                            value: e.key,
+                            child: Text(e.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        ref
+                            .read(updateCheckFrequencyProvider.notifier)
+                            .setFrequency(v);
+                      }
+                    },
+                    dropdownColor: Colors.grey[900],
+                    style: textTheme.bodyMedium?.copyWith(color: Colors.white),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _ActionButtons(update: update),
           _InfoRow(
             label: 'Installed',
             value: update.currentVersion.isEmpty
@@ -66,7 +118,8 @@ class UpdateSettingsCard extends ConsumerWidget {
               value: update.latestVersion!.startsWith('v')
                   ? update.latestVersion!
                   : 'v${update.latestVersion}',
-              highlight: update.status == UpdateStatus.updateAvailable ||
+              highlight:
+                  update.status == UpdateStatus.updateAvailable ||
                   update.status == UpdateStatus.readyToInstall,
             ),
           ],
@@ -143,9 +196,6 @@ class UpdateSettingsCard extends ConsumerWidget {
           ],
 
           const SizedBox(height: 16),
-
-          // ── Action buttons ──────────────────────────────────────────────
-          _ActionButtons(update: update),
         ],
       ),
     );
@@ -215,10 +265,12 @@ class _ActionButtons extends ConsumerWidget {
           ),
           if (update.status == UpdateStatus.error)
             Text(
-              update.latestVersion != null ? 'Last known: ${update.latestVersion}' : '',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white38,
-              ),
+              update.latestVersion != null
+                  ? 'Last known: ${update.latestVersion}'
+                  : '',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.white38),
             ),
         ],
       ),
@@ -269,7 +321,13 @@ class _ActionButtons extends ConsumerWidget {
             onPressed: () async {
               final ok = await notifier.installUpdate();
               if (!ok && context.mounted) {
-                await notifier.openReleasePage();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Could not open installer. Re-download the update and try again.',
+                    ),
+                  ),
+                );
               }
             },
             icon: const Icon(Icons.install_mobile_rounded),

@@ -40,6 +40,7 @@ WORKDIR /app
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
@@ -54,6 +55,13 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*
 # Copy only runtime application code to keep image minimal
 COPY --chown=tankctl:tankctl src ./src
 
+# Copy migrations directory
+COPY --chown=tankctl:tankctl migrations ./migrations
+
+# Copy entrypoint script
+COPY --chown=tankctl:tankctl entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 # Remove wheels after installation to reduce image size
 RUN rm -rf /wheels
 
@@ -67,5 +75,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
 
-# Run application
+# Use entrypoint script for migrations
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

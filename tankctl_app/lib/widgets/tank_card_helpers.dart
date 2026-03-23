@@ -49,6 +49,21 @@ String formatAgeFromLastSeen(DateTime? lastSeen) {
 
 enum TankStatus { healthy, ok, highTemp, lowTemp, offline, unknown }
 
+enum RssiQuality { strong, medium, weak, unavailable }
+
+RssiQuality rssiToQuality(int? rssi) {
+  if (rssi == null) {
+    return RssiQuality.unavailable;
+  }
+  if (rssi > -60) {
+    return RssiQuality.strong;
+  }
+  if (rssi >= -75) {
+    return RssiQuality.medium;
+  }
+  return RssiQuality.weak;
+}
+
 TankStatus evaluateTankStatus(double? temp, bool isOnline) {
   if (!isOnline) {
     return TankStatus.offline;

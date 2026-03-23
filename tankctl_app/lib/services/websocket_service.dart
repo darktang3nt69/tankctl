@@ -46,13 +46,17 @@ class WebSocketService {
   }
 
   void _handleMessage(dynamic message) {
-    if (message is! String) {
+    if (message is! String || _disposed || _controller.isClosed) {
       return;
     }
 
-    final decoded = jsonDecode(message);
-    if (decoded is Map<String, dynamic>) {
-      _controller.add(decoded);
+    try {
+      final decoded = jsonDecode(message);
+      if (decoded is Map<String, dynamic>) {
+        _controller.add(decoded);
+      }
+    } catch (e) {
+      // Silently ignore decoding errors
     }
   }
 

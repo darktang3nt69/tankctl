@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tankctl_app/utils/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/providers/dashboard_provider.dart';
@@ -40,19 +41,10 @@ class TankOverviewCard extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: TankCtlColors.success,
-                        boxShadow: [
-                          BoxShadow(
-                            color: TankCtlColors.success.withValues(alpha: 0.5),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
+                    Icon(
+                      AppIcons.wifiStrong,
+                      size: 18,
+                      color: TankCtlColors.success,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -64,7 +56,7 @@ class TankOverviewCard extends ConsumerWidget {
               ],
             ),
             const Spacer(),
-            if (overview.avgTemp != null)
+            if (overview.avgTempOnlineOnly != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -74,7 +66,7 @@ class TankOverviewCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${overview.avgTemp!.toStringAsFixed(1)}°C',
+                    '${overview.avgTempOnlineOnly!.toStringAsFixed(1)}°C',
                     style: textTheme.headlineSmall?.copyWith(
                       color: TankCtlColors.primary,
                       fontWeight: FontWeight.bold,
@@ -90,7 +82,7 @@ class TankOverviewCard extends ConsumerWidget {
         ),
         error: (e, _) => Row(
           children: [
-            const Icon(Icons.cloud_off_outlined, color: Colors.white38, size: 20),
+            const Icon(AppIcons.cloudOffOutlined, color: Colors.white38, size: 20),
             const SizedBox(width: 10),
             Text(
               'Could not load overview',

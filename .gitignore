@@ -120,3 +120,6 @@ whatsapp-bot/session/
 **/GeneratedPluginRegistrant.h
 **/GeneratedPluginRegistrant.m
 **/*.iml
+google-services.json
+tankctl_app/lib/app/google-services.json
+*firebase-adminsdk*.json

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
+import 'package:tankctl_app/features/dashboard/providers/attention_dismissals_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
 import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
+import 'package:tankctl_app/services/device_service.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 import 'package:tankctl_app/widgets/tank_card_sections.dart';
 import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
@@ -23,12 +25,45 @@ class TankCard extends ConsumerWidget {
   final bool isOnline;
   final VoidCallback onTap;
 
+  Future<void> _confirmAndReboot(BuildContext context, WidgetRef ref) async {
+    final shouldReboot = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reboot device?'),
+        content: Text('Reboot $deviceId now?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reboot'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldReboot == true) {
+      await ref.read(deviceServiceProvider).rebootDevice(deviceId);
+    }
+  }
+
+  Future<void> _refreshTank(WidgetRef ref) async {
+    await ref.read(deviceServiceProvider).requestStatus(deviceId);
+    ref.invalidate(temperatureHistoryProvider(deviceId));
+    ref.invalidate(deviceShadowProvider(deviceId));
+    ref.invalidate(devicesListProvider);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final historyAsync = ref.watch(temperatureHistoryProvider(deviceId));
     // Watch the full AsyncValue so we can distinguish cold-start (AsyncLoading)
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final deviceWarning = ref.watch(deviceWarningProvider(deviceId));
+    final acknowledgedWarnings =
+        ref.watch(attentionDismissalsProvider).valueOrNull ?? const <String>{};
     final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
@@ -43,15 +78,11 @@ class TankCard extends ConsumerWidget {
 
     final history = historyAsync.valueOrNull ?? const [];
 
-    // wsLastSeen is set by main.dart on every telemetry_received WS event
-    // (including events where temperature normalised away to null).  It is a
-    // StateProvider so it survives WS reconnections, unlike the StreamProvider
-    // which resets to AsyncLoading on reconnect and would otherwise cause a
-    // brief fallback to the stale history value.
-    final hasReceivedLiveTelemetry = wsLastSeen != null;
-    final latestTemp = hasReceivedLiveTelemetry
-        ? liveTemp
-        : (history.isNotEmpty ? history.last : null);
+    // When the device reports a missing sensor, do not surface stale
+    // historical values as "current" temperature.
+    final latestTemp = deviceWarning == 'sensor_unavailable'
+        ? null
+        : (liveTemp ?? (history.isNotEmpty ? history.last : null));
 
     final reported = shadowAsync.valueOrNull?['reported'] as Map?;
     final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));
@@ -59,7 +90,21 @@ class TankCard extends ConsumerWidget {
         lightFamilyAsync.valueOrNull ?? (reported?['light'] == 'on');
 
     final status = evaluateTankStatus(latestTemp, isOnline);
-    final tempHigh = latestTemp != null && latestTemp > 28.0;
+    final thresholdHigh = (deviceData?['temp_threshold_high'] as num?)
+        ?.toDouble();
+    final thresholdLow = (deviceData?['temp_threshold_low'] as num?)
+        ?.toDouble();
+    final effectiveHigh = thresholdHigh ?? 28.0;
+    final tempHigh = latestTemp != null && latestTemp > effectiveHigh;
+    final rssi = (deviceData?['rssi'] as num?)?.toInt();
+    final firmwareVersion = deviceData?['firmware_version'] as String?;
+    final warningKey = deviceWarning == null
+        ? null
+        : '${deviceId}_$deviceWarning';
+    final effectiveWarning =
+        (warningKey != null && acknowledgedWarnings.contains(warningKey))
+        ? null
+        : deviceWarning;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -77,6 +122,10 @@ class TankCard extends ConsumerWidget {
                 TankCardHeader(
                   deviceId: deviceId,
                   isOnline: isOnline,
+                  rssi: rssi,
+                  firmwareVersion: firmwareVersion,
+                  onRefresh: () => _refreshTank(ref),
+                  onReboot: () => _confirmAndReboot(context, ref),
                 ),
 
                 const SizedBox(height: 12),
@@ -99,6 +148,8 @@ class TankCard extends ConsumerWidget {
                     data: history,
                     height: 40,
                     color: isOnline ? TankCtlColors.primary : Colors.white12,
+                    thresholdHigh: thresholdHigh,
+                    thresholdLow: thresholdLow,
                   ),
                 ],
 
@@ -106,8 +157,17 @@ class TankCard extends ConsumerWidget {
 
                 TankCardFooter(
                   status: status,
-                  warningCode: deviceWarning,
+                  warningCode: effectiveWarning,
                   lastSeen: lastSeen,
+                  onAcknowledgeWarning: effectiveWarning == null
+                      ? null
+                      : () async {
+                          await ref
+                              .read(deviceServiceProvider)
+                              .acknowledgeWarning(deviceId, effectiveWarning);
+                          ref.invalidate(attentionDismissalsProvider);
+                          ref.invalidate(deviceWarningProvider(deviceId));
+                        },
                 ),
               ],
             ),

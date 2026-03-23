@@ -5,10 +5,20 @@ Database initialization and session management for TankCtl.
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, scoped_session
 
 from src.config.settings import settings
-from src.infrastructure.db.models import Base, CommandModel, DeviceModel, DeviceShadowModel, EventRecord, LightScheduleModel
+from src.infrastructure.db.models import (
+    Base,
+    DeviceModel,
+    DeviceShadowModel,
+    CommandModel,
+    EventRecord,
+    LightScheduleModel,
+    WaterScheduleModel,
+    WarningAcknowledgementModel,
+    DevicePushTokenModel,
+)
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -58,6 +68,9 @@ class Database:
                     CommandModel.__table__,
                     EventRecord.__table__,
                     LightScheduleModel.__table__,
+                    WaterScheduleModel.__table__,
+                    WarningAcknowledgementModel.__table__,
+                    DevicePushTokenModel.__table__,
                 ],
             )
             self._init_timescale_schema()
@@ -152,3 +165,11 @@ class Database:
 
 # Singleton database instance
 db = Database()
+
+# Define a function to provide a database session dependency
+def get_db():
+    session = db.SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()

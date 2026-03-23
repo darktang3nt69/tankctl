@@ -15,6 +15,9 @@ from src.config.settings import settings
 from src.infrastructure.db.database import db
 from src.services.device_service import DeviceService
 from src.services.shadow_service import ShadowService
+from src.services.water_schedule_reminder_service import WaterScheduleReminderService
+from src.services.push_notification_service import PushNotificationService
+from src.repository.device_push_token_repository import DevicePushTokenRepository
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -29,6 +32,7 @@ class TankCtlScheduler:
             timezone=ZoneInfo(settings.app.timezone)
         )
         self._is_running = False
+        self._reminder_service = WaterScheduleReminderService()
     
     def start(self):
         """
@@ -68,7 +72,17 @@ class TankCtlScheduler:
                 job_id="check_device_health",
                 interval=f"{settings.scheduler.offline_detection_interval}s",
             )
-            
+
+            # Register water schedule reminder job (every 60s)
+            self.scheduler.add_job(
+                self._check_water_schedule_reminders_job,
+                trigger=IntervalTrigger(seconds=60),
+                id="check_water_reminders",
+                name="Water Schedule Reminders",
+                replace_existing=True,
+            )
+            logger.info("job_registered", job_id="check_water_reminders", interval="60s")
+
             self.scheduler.start()
             self._is_running = True
             logger.info("scheduler_started")
@@ -166,3 +180,66 @@ class TankCtlScheduler:
         
         except Exception as e:
             logger.error("check_device_health_job_error", error=str(e))
+
+    def _check_water_schedule_reminders_job(self):
+        """
+        Periodic job: Send FCM push notifications for upcoming water changes.
+
+        Runs every 60 seconds.  For each enabled, incomplete water schedule the
+        reminder service evaluates whether a 24-h, 1-h, or on-time notification
+        should fire right now (wall-clock IST).
+        """
+        try:
+            from src.infrastructure.db.models import WaterScheduleModel, DeviceModel
+
+            session = db.get_session()
+            try:
+                schedules = (
+                    session.query(WaterScheduleModel)
+                    .filter_by(enabled=True, completed=False)
+                    .all()
+                )
+
+                due = self._reminder_service.get_due_reminders(schedules)
+                if not due:
+                    return
+
+                token_repo = DevicePushTokenRepository(session)
+                push_service = PushNotificationService(
+                    token_repo,
+                    settings.fcm_service_account_json,
+                    settings.fcm_project_id,
+                )
+
+                for schedule, reminder_type in due:
+                    try:
+                        device = session.get(DeviceModel, schedule.device_id)
+                        device_name = device.device_name if device else None
+
+                        title, body = self._reminder_service.build_notification(
+                            device_name, schedule.device_id, schedule, reminder_type
+                        )
+
+                        sent = push_service.broadcast_fcm(
+                            schedule.device_id, title, body,
+                            notification_type="water_change",
+                        )
+                        logger.info(
+                            "water_reminder_sent",
+                            device_id=schedule.device_id,
+                            schedule_id=schedule.id,
+                            reminder_type=reminder_type,
+                            sent=sent,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "water_reminder_error",
+                            schedule_id=schedule.id,
+                            reminder_type=reminder_type,
+                            error=str(e),
+                        )
+            finally:
+                session.close()
+
+        except Exception as e:
+            logger.error("check_water_reminders_job_error", error=str(e))

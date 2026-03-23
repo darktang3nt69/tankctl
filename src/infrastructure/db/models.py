@@ -7,7 +7,7 @@ These models map to PostgreSQL and TimescaleDB tables.
 from datetime import datetime
 import json
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Time, Boolean
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Time, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -27,6 +27,12 @@ class DeviceModel(Base):
     uptime_ms = Column(Integer, nullable=True)
     rssi = Column(Integer, nullable=True)
     wifi_status = Column(String(50), nullable=True)
+    temp_threshold_low = Column(Float, nullable=True)
+    temp_threshold_high = Column(Float, nullable=True)
+    device_name = Column(String(100), nullable=True)
+    location = Column(String(100), nullable=True)
+    icon_type = Column(String(50), default="fish_bowl")
+    description = Column(Text, nullable=True)
 
     def __repr__(self):
         return f"<DeviceModel(device_id={self.device_id}, status={self.status})>"
@@ -122,12 +128,72 @@ class LightScheduleModel(Base):
 
     __tablename__ = "light_schedules"
 
-    device_id = Column(String(50), primary_key=True)
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String(50), nullable=False, unique=True)
+    enabled = Column(Boolean, default=True, nullable=False)
     on_time = Column(Time, nullable=False)
     off_time = Column(Time, nullable=False)
-    enabled = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"<LightScheduleModel(device_id={self.device_id}, on={self.on_time}, off={self.off_time}, enabled={self.enabled})>"
+
+
+class WaterScheduleModel(Base):
+    """Water change reminder schedule table model."""
+
+    __tablename__ = "water_schedules"
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String(50), nullable=False, index=True)
+    schedule_type = Column(String(20), nullable=False)  # 'weekly' or 'custom'
+    days_of_week = Column(String(20), nullable=True)  # Comma-separated: "1,3,5" for Mon,Wed,Fri
+    schedule_date = Column(String(10), nullable=True)  # YYYY-MM-DD for custom
+    schedule_time = Column(Time, nullable=False)
+    notes = Column(Text, nullable=True)
+    completed = Column(Boolean, default=False)
+    enabled = Column(Boolean, default=True)
+    last_reminder_sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<WaterScheduleModel(device_id={self.device_id}, type={self.schedule_type})>"
+
+
+class WarningAcknowledgementModel(Base):
+    """Stores acknowledged warning codes per device."""
+
+    __tablename__ = "warning_acknowledgements"
+    __table_args__ = (
+        UniqueConstraint("device_id", "warning_code", name="uq_warning_ack_device_code"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_id = Column(String(100), nullable=False, index=True)
+    warning_code = Column(String(100), nullable=False, index=True)
+    acknowledged_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return (
+            "<WarningAcknowledgementModel("
+            f"device_id={self.device_id}, warning_code={self.warning_code}"
+            ")>"
+        )
+
+
+class DevicePushTokenModel(Base):
+    """Device push token table model for FCM, etc."""
+    __tablename__ = "device_push_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_id = Column(String, nullable=False, index=True)
+    token = Column(String, nullable=False, unique=True)
+    platform = Column(String, nullable=False)  # e.g., 'android', 'ios'
+    last_seen = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return (
+            f"<DevicePushToken(device_id={self.device_id}, platform={self.platform}, last_seen={self.last_seen})>"
+        )
