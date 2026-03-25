@@ -47,7 +47,7 @@ class HeartbeatHandler(MessageHandler):
         """
         Handle heartbeat from device.
 
-        Marks device as online and updates last_seen.
+        Marks device as online, updates last_seen, and reconciles shadow state.
 
         Args:
             device_id: Device ID
@@ -73,6 +73,18 @@ class HeartbeatHandler(MessageHandler):
             )
 
             logger.info("device_heartbeat_handled", device_id=device_id)
+            
+            # Reconcile shadow state to fix any drift from power loss or disconnections
+            # This sends commands to bring device into desired state if needed
+            shadow_service = ShadowService(session)
+            shadow = shadow_service.reconcile_shadow(device_id)
+            if shadow and not shadow.is_synchronized():
+                logger.info(
+                    "shadow_reconciliation_triggered_by_heartbeat",
+                    device_id=device_id,
+                    delta=shadow.get_delta(),
+                )
+            
             session.close()
         except Exception as e:
             logger.error("heartbeat_handler_error", device_id=device_id, error=str(e))
