@@ -42,6 +42,8 @@
 #include <DallasTemperature.h>
 #include <Preferences.h>
 #include <time.h>
+#include <Update.h>
+#include <HTTPClient.h>
 
 // Random temp range for testing (disable sensor reading)
 #define USE_RANDOM_TEMP 1  // Set to 0 to use real DS18B20 sensor
@@ -436,6 +438,8 @@ void handleCommand(JsonDocument& doc) {
     handleSetSchedule(doc);
   } else if (strcmp(command, "reboot_device") == 0) {
     handleRebootDevice();
+  } else if (strcmp(command, "update_firmware") == 0) {
+    handleUpdateFirmware(doc);
   } else {
     Serial.print("Unknown command: ");
     Serial.println(command);
@@ -525,6 +529,173 @@ void handleRebootDevice() {
   
   // ESP32 reboot
   ESP.restart();
+}
+
+void handleUpdateFirmware(JsonDocument& doc) {
+  if (!doc.containsKey("url")) {
+    Serial.println("update_firmware: missing url");
+    return;
+  }
+  
+  const char* url = doc["url"];
+  const char* version = doc.containsKey("version") ? (const char*)doc["version"] : "unknown";
+  
+  Serial.print("[Firmware Update] URL: ");
+  Serial.println(url);
+  Serial.print("[Firmware Update] Version: ");
+  Serial.println(version);
+  
+  // Publish status before starting update
+  publishFirmwareStatus("updating", version);
+  
+  // Small delay to ensure MQTT message is sent
+  delay(500);
+  mqttClient.loop();
+  
+  // Start firmware update
+  updateFirmwareFromURL(url, version);
+}
+
+void updateFirmwareFromURL(const char* url, const char* version) {
+  if (!WiFi.isConnected()) {
+    Serial.println("[Firmware Update] WiFi not connected, cannot update");
+    publishFirmwareStatus("failed", version, "WiFi not connected");
+    return;
+  }
+  
+  HTTPClient http;
+  
+  Serial.print("[Firmware Update] Connecting to: ");
+  Serial.println(url);
+  
+  http.begin(url);
+  int httpCode = http.GET();
+  
+  Serial.print("[Firmware Update] HTTP response code: ");
+  Serial.println(httpCode);
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print("[Firmware Update] Failed to download firmware: ");
+    Serial.println(httpCode);
+    publishFirmwareStatus("failed", version, "HTTP download failed");
+    http.end();
+    return;
+  }
+  
+  int contentLength = http.getSize();
+  Serial.print("[Firmware Update] Firmware size: ");
+  Serial.print(contentLength);
+  Serial.println(" bytes");
+  
+  if (contentLength <= 0) {
+    Serial.println("[Firmware Update] Invalid content length");
+    publishFirmwareStatus("failed", version, "Invalid content length");
+    http.end();
+    return;
+  }
+  
+  // Check if we have enough free space
+  if (!Update.begin(contentLength)) {
+    Serial.println("[Firmware Update] Not enough space for firmware update");
+    publishFirmwareStatus("failed", version, "Not enough space");
+    http.end();
+    return;
+  }
+  
+  Serial.println("[Firmware Update] Starting firmware update...");
+  
+  // Stream the firmware data
+  WiFiClient* stream = http.getStreamPtr();
+  size_t written = 0;
+  uint8_t buffer[4096];
+  
+  while (http.connected() && (written < contentLength)) {
+    size_t available = stream->available();
+    
+    if (available) {
+      int bytesRead = stream->readBytes(buffer, min((int)available, (int)sizeof(buffer)));
+      
+      if (Update.write(buffer, bytesRead) != bytesRead) {
+        Serial.println("[Firmware Update] Write failed");
+        Update.abort();
+        publishFirmwareStatus("failed", version, "Write failed");
+        http.end();
+        return;
+      }
+      
+      written += bytesRead;
+      int percent = (written / (contentLength / 100));
+      
+      // Log progress every 10%
+      static int lastPercent = 0;
+      if (percent != lastPercent && percent % 10 == 0) {
+        Serial.print("[Firmware Update] Progress: ");
+        Serial.print(percent);
+        Serial.println("%");
+        lastPercent = percent;
+      }
+    }
+    
+    delay(1);
+  }
+  
+  http.end();
+  
+  if (written != contentLength) {
+    Serial.print("[Firmware Update] Incomplete download: ");
+    Serial.print(written);
+    Serial.print(" / ");
+    Serial.println(contentLength);
+    Update.abort();
+    publishFirmwareStatus("failed", version, "Incomplete download");
+    return;
+  }
+  
+  if (!Update.end()) {
+    Serial.print("[Firmware Update] Error finalizing update: ");
+    Serial.println(Update.getError());
+    publishFirmwareStatus("failed", version, "Update finalization failed");
+    return;
+  }
+  
+  if (!Update.isFinished()) {
+    Serial.println("[Firmware Update] Update not finished");
+    publishFirmwareStatus("failed", version, "Update not finished");
+    return;
+  }
+  
+  Serial.println("[Firmware Update] Update successful! Rebooting...");
+  publishFirmwareStatus("success", version);
+  
+  // Give time for MQTT message to be sent
+  delay(1000);
+  
+  ESP.restart();
+}
+
+void publishFirmwareStatus(const char* status, const char* version, const char* error = nullptr) {
+  if (!mqttClient.connected()) {
+    return;
+  }
+  
+  char statusTopic[64];
+  snprintf(statusTopic, sizeof(statusTopic), "tankctl/%s/firmware_status", tankId);
+  
+  StaticJsonDocument<256> doc;
+  doc["status"] = status;
+  doc["version"] = version;
+  doc["timestamp"] = millis();
+  if (error) {
+    doc["error"] = error;
+  }
+  
+  char buffer[256];
+  serializeJson(doc, buffer);
+  
+  mqttClient.publish(statusTopic, buffer);
+  
+  Serial.print("[Firmware Status] ");
+  Serial.println(buffer);
 }
 
 // ===== LIGHT CONTROL =====

@@ -34,6 +34,7 @@ class CommandService:
         command: str,
         value: Optional[str] = None,
         version: Optional[int] = None,
+        metadata: Optional[dict] = None,
     ) -> Command:
         """
         Send a command to a device.
@@ -45,6 +46,7 @@ class CommandService:
             command: Command name (e.g., 'set_light', 'reboot_device')
             value: Optional command parameter
             version: Optional version number (auto-incremented if not provided)
+            metadata: Optional metadata dictionary (e.g., for firmware updates: {url, version, checksum})
 
         Returns:
             Created command
@@ -73,6 +75,10 @@ class CommandService:
                 version=version,
                 status=CommandStatus.PENDING,
             )
+            
+            # Attach metadata if provided
+            if metadata:
+                cmd.metadata = metadata
 
             # Store in database
             self.repo.create(cmd)

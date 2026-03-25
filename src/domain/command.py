@@ -68,6 +68,11 @@ class Command:
         }
         if self.value is not None:
             payload["value"] = self.value
+        
+        # Include metadata if present (for commands like firmware updates)
+        if hasattr(self, 'metadata') and self.metadata:
+            payload.update(self.metadata)
+        
         return payload
 
     def mark_sent(self) -> None:
