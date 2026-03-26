@@ -18,7 +18,15 @@ logger = get_logger(__name__)
 
 # Configure firmware storage directory
 FIRMWARE_STORAGE_DIR = os.getenv("FIRMWARE_STORAGE_DIR", "./firmware_releases")
-os.makedirs(FIRMWARE_STORAGE_DIR, exist_ok=True)
+
+
+def _ensure_firmware_dir():
+    """Create firmware storage directory if it doesn't exist."""
+    try:
+        os.makedirs(FIRMWARE_STORAGE_DIR, exist_ok=True)
+    except PermissionError as e:
+        logger.error(f"Failed to create firmware storage directory: {e}")
+        raise
 
 
 class FirmwareService:
@@ -49,6 +57,9 @@ class FirmwareService:
         Returns:
             FirmwareRelease object with metadata
         """
+        # Ensure firmware storage directory exists
+        _ensure_firmware_dir()
+        
         logger.info("firmware_upload_started", version=version, platform=platform, size=len(file_data))
 
         # Calculate file hash

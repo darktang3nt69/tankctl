@@ -15,7 +15,6 @@ from src.api.schemas import DeviceResponse
 from src.infrastructure.db.database import get_db
 from src.services.firmware_service import FirmwareService
 from src.services.device_service import DeviceService
-from src.infrastructure.scheduler.scheduler import get_scheduler
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
