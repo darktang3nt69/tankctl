@@ -4,6 +4,7 @@
 # Web Framework & Server
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+python-multipart==0.0.6
 
 # Data Validation & Serialization
 pydantic==2.5.0

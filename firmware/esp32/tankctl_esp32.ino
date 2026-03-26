@@ -531,6 +531,31 @@ void handleRebootDevice() {
   ESP.restart();
 }
 
+void publishFirmwareStatus(const char* status, const char* version, const char* error = nullptr) {
+  if (!mqttClient.connected()) {
+    return;
+  }
+  
+  char statusTopic[64];
+  snprintf(statusTopic, sizeof(statusTopic), "tankctl/%s/firmware_status", tankId);
+  
+  StaticJsonDocument<256> doc;
+  doc["status"] = status;
+  doc["version"] = version;
+  doc["timestamp"] = millis();
+  if (error) {
+    doc["error"] = error;
+  }
+  
+  char buffer[256];
+  serializeJson(doc, buffer);
+  
+  mqttClient.publish(statusTopic, buffer);
+  
+  Serial.print("[Firmware Status] ");
+  Serial.println(buffer);
+}
+
 void handleUpdateFirmware(JsonDocument& doc) {
   if (!doc.containsKey("url")) {
     Serial.println("update_firmware: missing url");
@@ -671,31 +696,6 @@ void updateFirmwareFromURL(const char* url, const char* version) {
   delay(1000);
   
   ESP.restart();
-}
-
-void publishFirmwareStatus(const char* status, const char* version, const char* error = nullptr) {
-  if (!mqttClient.connected()) {
-    return;
-  }
-  
-  char statusTopic[64];
-  snprintf(statusTopic, sizeof(statusTopic), "tankctl/%s/firmware_status", tankId);
-  
-  StaticJsonDocument<256> doc;
-  doc["status"] = status;
-  doc["version"] = version;
-  doc["timestamp"] = millis();
-  if (error) {
-    doc["error"] = error;
-  }
-  
-  char buffer[256];
-  serializeJson(doc, buffer);
-  
-  mqttClient.publish(statusTopic, buffer);
-  
-  Serial.print("[Firmware Status] ");
-  Serial.println(buffer);
 }
 
 // ===== LIGHT CONTROL =====
