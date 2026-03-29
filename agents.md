@@ -356,6 +356,25 @@ TankCtl has four specialized agents that automatically activate on relevant file
 
 **Example:** `"Create a Riverpod provider for device telemetry with caching"`
 
+## Documentation Agent
+
+### 6. docs-automation (Auto-Generated Documentation Sync)
+
+**Triggers on:** Changes to `src/api/`, `firmware/`, `src/infrastructure/mqtt/`, `src/domain/`
+
+**Responsibilities:**
+- Auto-sync code changes to ARCHITECTURE.md, DEVICES.md, MQTT_TOPICS.md, COMMANDS.md
+- Extract API endpoint schemas from Pydantic models
+- Extract MQTT topics from PubSubClient subscribe/publish calls
+- Extract device commands from Arduino callback functions
+- Generate documentation tables and schemas automatically
+- Flag orphaned code (documented but not in code) or missing docs (code but no docs)
+- Validate cross-references and link integrity
+
+**When active:** You've added new API endpoints, MQTT topics, device commands, or architecture changes and want docs auto-updated to match.
+
+**Example:** `"Auto-generate COMMANDS.md entries for the new pump_control endpoint and MQTT topics"`
+
 ## Agent Coordination
 
 These agents **automatically coordinate** through file patterns and shared architecture:
@@ -373,12 +392,13 @@ Services
 
 ### How Agents Work
 
-1. **User-Invocable**: All 5 agents are explicitly invocable via slash commands
+1. **User-Invocable**: All 6 agents are explicitly invocable via slash commands
    - Type `/backend-core` to request backend infrastructure expertise
    - Type `/device-communication` to request device protocol expertise
    - Type `/esp32-firmware` to request embedded firmware expertise
    - Type `/notifications-and-alerts` to request notification expertise
    - Type `/flutter-foundation` to request Flutter state management expertise
+   - Type `/docs-automation` to request documentation sync and validation
 
 2. **Discovery via Descriptions**: Agent descriptions contain trigger phrases and domain keywords
    - Copilot matches your request to the best agent based on description keywords
@@ -389,6 +409,7 @@ Services
    - `device-communication` knows about esp32-firmware for device-side implementation
    - `esp32-firmware` knows about device-communication for protocol details
    - `flutter-foundation` knows about backend-core
+   - **`docs-automation` coordinates with**: backend-core (API schemas), device-communication (MQTT topics), esp32-firmware (command formats)
    - They defer to each other for specialized concerns
 
 ### Best Practices for Using Agents
@@ -440,7 +461,36 @@ Services
 
 ---
 
-## Adding New Agents
+**Scenario: Add a pump control feature with automatic documentation**
+
+1. Define device protocol:
+   - Type `/device-communication Design pump command protocol with versioning for idempotency`
+   - Result: Command format, MQTT topics defined
+
+2. Build Arduino firmware:
+   - Type `/esp32-firmware Implement pump control with safety checks and status reporting`
+   - Result: Production Arduino sketch with relay logic
+
+3. Create backend API:
+   - Type `/backend-core Design pump control endpoint and device shadow updates`
+   - Result: REST API endpoint with validation
+
+4. Build mobile UI:
+   - Type `/flutter-foundation Create pump toggle UI with Riverpod command state provider`
+   - Result: User-facing pump control interface
+
+5. **Auto-sync documentation**:
+   - Type `/orchestrator` automatically invokes `/docs-automation` 
+   - **Automatically generates**:
+     - COMMANDS.md: Pump control endpoint + payload schema
+     - MQTT_TOPICS.md: tankctl/{device_id}/pump_status topic
+     - DEVICES.md: Arduino pump handler documentation
+     - ARCHITECTURE.md: Pump control data flow diagram
+     - Cross-references between all docs
+
+**Result**: Complete feature with end-to-end implementation AND auto-generated, cross-linked documentation.
+
+---
 
 To create additional specialized agents:
 

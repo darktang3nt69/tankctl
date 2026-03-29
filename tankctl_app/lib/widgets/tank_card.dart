@@ -3,12 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/core/theme/app_theme.dart';
 import 'package:tankctl_app/features/dashboard/providers/attention_dismissals_provider.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
-import 'package:tankctl_app/providers/light_provider.dart';
 import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/services/device_service.dart';
 import 'package:tankctl_app/widgets/tank_card_helpers.dart';
 import 'package:tankctl_app/widgets/tank_card_sections.dart';
-import 'package:tankctl_app/widgets/temperature_mini_chart.dart';
 
 // ── TankCard ──────────────────────────────────────────────────────────────────
 
@@ -58,13 +56,10 @@ class TankCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final historyAsync = ref.watch(temperatureHistoryProvider(deviceId));
-    // Watch the full AsyncValue so we can distinguish cold-start (AsyncLoading)
     final liveTemp = ref.watch(liveTelemetryProvider(deviceId)).valueOrNull;
     final deviceWarning = ref.watch(deviceWarningProvider(deviceId));
     final acknowledgedWarnings =
         ref.watch(attentionDismissalsProvider).valueOrNull ?? const <String>{};
-    final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
     // Rebuild every second so "Xs ago" ticks forward.
     ref.watch(secondTickProvider);
     final wsLastSeen = ref.watch(lastTelemetryTimeProvider(deviceId));
@@ -76,7 +71,7 @@ class TankCard extends ConsumerWidget {
     final deviceLastSeen = parseIsoToLocal(deviceData?['last_seen'] as String?);
     final lastSeen = wsLastSeen ?? deviceLastSeen;
 
-    final history = historyAsync.valueOrNull ?? const [];
+    final history = ref.watch(temperatureHistoryProvider(deviceId)).valueOrNull ?? const [];
 
     // When the device reports a missing sensor, do not surface stale
     // historical values as "current" temperature.
@@ -84,15 +79,8 @@ class TankCard extends ConsumerWidget {
         ? null
         : (liveTemp ?? (history.isNotEmpty ? history.last : null));
 
-    final reported = shadowAsync.valueOrNull?['reported'] as Map?;
-    final lightFamilyAsync = ref.watch(lightStateFamilyProvider(deviceId));
-    final lightOn =
-        lightFamilyAsync.valueOrNull ?? (reported?['light'] == 'on');
-
     final status = evaluateTankStatus(latestTemp, isOnline);
     final thresholdHigh = (deviceData?['temp_threshold_high'] as num?)
-        ?.toDouble();
-    final thresholdLow = (deviceData?['temp_threshold_low'] as num?)
         ?.toDouble();
     final effectiveHigh = thresholdHigh ?? 28.0;
     final tempHigh = latestTemp != null && latestTemp > effectiveHigh;
@@ -135,23 +123,7 @@ class TankCard extends ConsumerWidget {
                 TankCardMetricsRow(
                   latestTemp: latestTemp,
                   tempHigh: tempHigh,
-                  lightOn: lightOn,
-                  onToggleLight: (v) => ref
-                      .read(lightStateFamilyProvider(deviceId).notifier)
-                      .toggle(v),
                 ),
-
-                // ── Sparkline ─────────────────────────────────────────
-                if (history.length >= 2) ...[
-                  const SizedBox(height: 12),
-                  TemperatureMiniChart(
-                    data: history,
-                    height: 40,
-                    color: isOnline ? TankCtlColors.primary : Colors.white12,
-                    thresholdHigh: thresholdHigh,
-                    thresholdLow: thresholdLow,
-                  ),
-                ],
 
                 const SizedBox(height: 12),
 

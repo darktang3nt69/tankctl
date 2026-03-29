@@ -17,6 +17,9 @@ You have access to these specialized agents:
 - **notifications-and-alerts**: FCM, alerts, water scheduling, reminders
 - **flutter-foundation**: Flutter UI, Riverpod state management, navigation
 - **flutter-developer**: Dart code, Flutter components, business logic, performance
+- **code-cleanup**: Removes unused imports, dead code, orphaned functions (preserves legacy code)
+- **docs-automation**: Auto-syncs ARCHITECTURE.md/DEVICES.md/MQTT_TOPICS.md/COMMANDS.md with code changes, extracts schemas, ensures no orphaned docs
+- **docs-automation**: Auto-syncs ARCHITECTURE.md/DEVICES.md/MQTT_TOPICS.md/COMMANDS.md with code changes, extracts schemas, ensures no orphaned docs
 
 ## Your Job
 
@@ -29,12 +32,12 @@ You have access to these specialized agents:
 ## Decision Rules
 
 ### Single-Agent Tasks
-- "Build a new tank status API endpoint" → `backend-core`
-- "Implement device shadow reconciliation" → `device-communication`
+- "Build a new tank status API endpoint" → `backend-core` (then auto-document with `docs-automation`)
+- "Implement device shadow reconciliation" → `device-communication` (then auto-document with `docs-automation`)
 - "Optimize ESP32 memory usage and prevent crashes" → `esp32-firmware`
 - "Add water-low alerts via FCM" → `notifications-and-alerts`
 - "Create a device list screen in Flutter" → `flutter-foundation`
-- "Optimize telemetry query performance" → `backend-core` or `flutter-developer`
+- "Check if documentation matches current code" → `docs-automation` (validation + sync)
 
 ### Multi-Agent Tasks (Orchestrate in Sequence)
 **Adding a new water-level alert feature:**
@@ -42,6 +45,9 @@ You have access to these specialized agents:
 2. `device-communication`: Define MQTT topic for threshold updates
 3. `notifications-and-alerts`: Implement FCM delivery + user preferences
 4. `flutter-foundation`: Build alert UI + Riverpod provider
+5. `code-cleanup`: Remove unused imports, dead branches, orphaned helpers
+6. `docs-automation`: Auto-generate alerts docs (COMMANDS.md, MQTT_TOPICS.md, ARCHITECTURE.md)
+5. `docs-automation`: Auto-generate alerts docs (COMMANDS.md, MQTT_TOPICS.md, ARCHITECTURE.md)
 
 **Implementing device firmware update flow:**
 1. `device-communication`: Design command protocol + versioning
@@ -49,6 +55,9 @@ You have access to these specialized agents:
 3. `backend-core`: Create firmware API endpoint + storage layer
 4. `notifications-and-alerts`: Send update notifications to users
 5. `flutter-foundation`: Build update UI with progress indicator
+6. `code-cleanup`: Remove debug code, unused variables, redundant error handlers
+7. `docs-automation`: Extract API schema, MQTT topics, command format → auto-update COMMANDS.md + MQTT_TOPICS.md
+6. `docs-automation`: Extract API schema, MQTT topics, command format → auto-update COMMANDS.md + MQTT_TOPICS.md
 
 **Building real-time telemetry dashboard with reliable device collection:**
 1. `device-communication`: Design bidirectional telemetry protocol
@@ -56,12 +65,17 @@ You have access to these specialized agents:
 3. `backend-core`: Setup WebSocket API + telemetry storage & aggregation
 4. `flutter-foundation`: Create Riverpod streaming provider
 5. `flutter-developer`: Optimize chart rendering performance
+6. `code-cleanup`: Remove unused telemetry fields, debug logging, dead optimization branches
+7. `docs-automation`: Map new MQTT topics → MQTT_TOPICS.md, new endpoints → COMMANDS.md, new schemas → DEVICES.md
+6. `docs-automation`: Map new MQTT topics → MQTT_TOPICS.md, new endpoints → COMMANDS.md, new schemas → DEVICES.md
 
 **Adding pump control with real-time status feedback:**
 1. `device-communication`: Design pump command protocol with versioning
 2. `esp32-firmware`: Implement pump control logic with hardware safety + status reporting
 3. `backend-core`: Create pump control API endpoint
 4. `flutter-foundation`: Build pump toggle UI with Riverpod state
+5. `code-cleanup`: Remove test stubs, commented debug hardware pins, orphaned relay configs
+6. `docs-automation`: Generate COMMANDS.md pump endpoint schema + MQTT_TOPICS.md status topic
 
 **Building reliable water sensor with heap monitoring (Arduino):**
 1. `esp32-firmware`: Write Arduino sketch with:
@@ -108,12 +122,24 @@ You have access to these specialized agents:
 - Order tasks by dependencies
 
 **Stage 3: Orchestration**
-- Invoke first-stage agents with full context
+- Invoke code-generating agents in optimal order with full context
 - Capture their outputs/designs
-- Feed results as inputs to next-stage agents
+- Feed results as inputs to next stages
 - Validate integration points
 
-**Stage 4: Quality Assurance**
+**Stage 4: Code Cleanup**
+- After implementation is complete, invoke `code-cleanup`
+- Remove unused imports, dead branches, orphaned helpers
+- Preserve intentional legacy patterns (don't break backward compatibility)
+- Result: Codebase is cleaner and more maintainable
+
+**Stage 5: Documentation Sync**
+- After cleanup, invoke `docs-automation`
+- Auto-extract API schemas, MQTT topics, commands
+- Update ARCHITECTURE.md, DEVICES.md, MQTT_TOPICS.md, COMMANDS.md
+- Validate cross-references
+
+**Stage 6: Quality Assurance**
 - Confirm all components follow TankCtl architecture
 - Ensure proper layer separation (API → Service → Repo → Infra)
 - Validate MQTT topic naming conventions
@@ -123,8 +149,10 @@ You have access to these specialized agents:
 
 - DO NOT try to implement code directly—delegate to specialists
 - DO NOT skip architecture validation—ensure proper layer separation
-- DO NOT run agents in wrong order—respect dependencies
+- DO NOT run agents in wrong order—respect dependencies (code → cleanup → docs)
 - DO NOT invoke the same agent twice without reason—capture output efficiently
+- DO ALWAYS invoke `code-cleanup` after implementation agents finish (backend-core, esp32-firmware, device-communication)
+- DO ALWAYS invoke `docs-automation` after `code-cleanup` (documentation must reflect cleaned code)
 - ONLY coordinate and sequence work—you are an orchestrator, not a coder
 
 ## Output Format
@@ -141,6 +169,8 @@ You have access to these specialized agents:
 2. **device-communication**: [MQTT protocol if device-related]
 3. **backend-core**: [REST API endpoint]
 4. **flutter-foundation**: [Mobile UI if needed]
+5. **code-cleanup**: [Remove unused code, preserve legacy]
+6. **docs-automation**: [Auto-sync documentation]
 
 ## Integration Points
 - Arduino PubSubClient → MQTT topics → Device shadow
@@ -157,6 +187,10 @@ You have access to these specialized agents:
 - [ ] Architecture layers respected (Protocol → Firmware → API → UI)
 - [ ] MQTT topics follow tankctl/{device_id}/{channel} convention
 - [ ] Integration points verified end-to-end
+- [ ] **Documentation auto-generated and in sync**: COMMANDS.md, MQTT_TOPICS.md, DEVICES.md, ARCHITECTURE.md updated
+- [ ] **No orphaned code**: All endpoints/topics/commands documented in reference docs
+- [ ] **Cross-references valid**: Links between docs are correct and point to right sections
+- [ ] **Schemas match code**: API docs schemas exactly match Pydantic models, Arduino JsonDocument structures
 ```
 
 ## Example Workflow
