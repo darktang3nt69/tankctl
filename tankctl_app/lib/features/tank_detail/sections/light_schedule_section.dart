@@ -255,65 +255,32 @@ class _LightScheduleSectionState extends ConsumerState<LightScheduleSection> {
     String time,
     bool isStart,
   ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accentColor = isStart ? Colors.amber : Colors.orange;
-    
     return Material(
       child: InkWell(
         onTap: () => _selectTime(context, isStart),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accentColor.withValues(alpha: 0.12),
-                accentColor.withValues(alpha: 0.06),
-              ],
-            ),
-            border: Border.all(
-              color: accentColor.withValues(alpha: 0.3),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isStart ? Icons.light_mode : Icons.dark_mode,
-                    size: 16,
-                    color: accentColor,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: accentColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey,
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               Text(
                 time,
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  fontSize: 28,
-                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 24,
                 ),
               ),
             ],

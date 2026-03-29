@@ -30,10 +30,6 @@
 #define DEVICE_SECRET_MAX_LEN 64
 #define FIRMWARE_VERSION "1.0.0-esp32"
 
-// ===== NVS (Non-Volatile Storage) Keys for Manual Light Override =====
-#define NVS_KEY_MANUAL_LIGHT_STATE "manual_light_state"      // "0" = off, "1" = on, "" = not set
-#define NVS_KEY_MANUAL_CMD_VERSION "manual_cmd_version"      // Command version when manual override was set
-
 // ===== LIBRARIES =====
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -42,8 +38,6 @@
 #include <DallasTemperature.h>
 #include <Preferences.h>
 #include <time.h>
-#include <Update.h>
-#include <HTTPClient.h>
 
 // Random temp range for testing (disable sensor reading)
 #define USE_RANDOM_TEMP 1  // Set to 0 to use real DS18B20 sensor
@@ -94,60 +88,6 @@ void updateStatusLED(bool wifiConnected, bool mqttConnected) {
     digitalWrite(STATUS_LED_PIN, HIGH);  // Could implement pulse pattern here
   } else {
     digitalWrite(STATUS_LED_PIN, LOW);   // Off (no WiFi)
-  }
-}
-
-// ===== BOOT SCHEDULE SYNC WITH MANUAL OVERRIDE =====
-void applyScheduleState() {
-  // Check for manual light command override first
-  String manualState = preferences.getString(NVS_KEY_MANUAL_LIGHT_STATE, "");
-  
-  if (manualState.length() > 0) {
-    // Manual command exists - apply it instead of schedule
-    bool desiredState = (manualState == "1");
-    
-    if (desiredState != lightState) {
-      setLight(desiredState);
-      publishReportedState();
-    }
-    
-    Serial.print("Applied manual light state from NVS: ");
-    Serial.println(desiredState ? "ON" : "OFF");
-    return;  // Don't apply schedule
-  }
-  
-  // No manual override - apply schedule based on current time
-  if (!scheduleEnabled) {
-    Serial.println("Schedule not enabled, skipping boot sync");
-    return;
-  }
-  
-  time_t now = time(nullptr);
-  struct tm* timeinfo = localtime(&now);
-  
-  int currentHour = timeinfo->tm_hour;
-  int currentMinute = timeinfo->tm_min;
-  
-  // Determine if light should be on based on current time
-  bool shouldBeOn = false;
-  
-  if (scheduleOnHour < scheduleOffHour) {
-    // Normal case: e.g., ON at 3:00, OFF at 10:00
-    shouldBeOn = (currentHour > scheduleOnHour || 
-                  (currentHour == scheduleOnHour && currentMinute >= scheduleOnMinute)) &&
-                 (currentHour < scheduleOffHour || 
-                  (currentHour == scheduleOffHour && currentMinute < scheduleOffMinute));
-  } else {
-    // Wrap-around case: e.g., ON at 22:00, OFF at 6:00 (crosses midnight)
-    shouldBeOn = (currentHour > scheduleOnHour || currentHour < scheduleOffHour ||
-                  (currentHour == scheduleOnHour && currentMinute >= scheduleOnMinute));
-  }
-  
-  if (shouldBeOn != lightState) {
-    setLight(shouldBeOn);
-    publishReportedState();
-    Serial.print("Boot schedule sync: set light to ");
-    Serial.println(shouldBeOn ? "ON" : "OFF");
   }
 }
 
@@ -228,10 +168,6 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     connectMQTT();
   }
-  
-  // Apply correct light state after boot based on manual override or schedule
-  Serial.println("Applying initial light state after boot...");
-  applyScheduleState();
   
   Serial.println("TankCtl ESP32 Device Ready\n");
 }
@@ -438,8 +374,6 @@ void handleCommand(JsonDocument& doc) {
     handleSetSchedule(doc);
   } else if (strcmp(command, "reboot_device") == 0) {
     handleRebootDevice();
-  } else if (strcmp(command, "update_firmware") == 0) {
-    handleUpdateFirmware(doc);
   } else {
     Serial.print("Unknown command: ");
     Serial.println(command);
@@ -454,18 +388,9 @@ void handleSetLight(JsonDocument& doc) {
   
   const char* value = doc["value"];
   bool newState = (strcmp(value, "on") == 0);
-  int version = doc.containsKey("version") ? doc["version"] : 0;
   
   setLight(newState);
   publishReportedState();
-  
-  // Save manual command override to NVS
-  preferences.putString(NVS_KEY_MANUAL_LIGHT_STATE, newState ? "1" : "0");
-  if (version > 0) {
-    preferences.putInt(NVS_KEY_MANUAL_CMD_VERSION, version);
-  }
-  Serial.print("Manual light command saved to NVS: ");
-  Serial.println(newState ? "ON" : "OFF");
 }
 
 void handleSetSchedule(JsonDocument& doc) {

@@ -109,8 +109,8 @@ class LightSchedule {
       id: json['id'] ?? 0,
       deviceId: json['device_id'] ?? json['deviceId'] ?? '',
       enabled: json['enabled'] ?? true,
-      startTime: json['on_time'] ?? json['start_time'] ?? json['startTime'] ?? '08:00',
-      endTime: json['off_time'] ?? json['end_time'] ?? json['endTime'] ?? '20:00',
+      startTime: json['start_time'] ?? json['startTime'] ?? '08:00',
+      endTime: json['end_time'] ?? json['endTime'] ?? '20:00',
       createdAt: json['created_at'] ?? json['createdAt'],
       updatedAt: json['updated_at'] ?? json['updatedAt'],
     );
