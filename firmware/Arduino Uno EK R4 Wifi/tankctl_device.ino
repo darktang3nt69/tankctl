@@ -799,38 +799,37 @@ void registerDevice() {
   Serial.print(":");
   Serial.println(REGISTRATION_PORT);
   
-  // Build JSON payload
+  // Build JSON payload using bounded buffer
+  static char payload[256];
   StaticJsonDocument<128> requestDoc;
   requestDoc["device_id"] = tankId;
+  serializeJson(requestDoc, payload, sizeof(payload));
   
-  String payload;
-  serializeJson(requestDoc, payload);
-  
-  // Send HTTP POST request
-  String request = "POST ";
-  request += REGISTRATION_ENDPOINT;
-  request += " HTTP/1.1\r\n";
-  request += "Host: ";
-  request += REGISTRATION_SERVER;
-  request += ":";
-  request += REGISTRATION_PORT;
-  request += "\r\n";
-  request += "Content-Type: application/json\r\n";
-  request += "Content-Length: ";
-  request += payload.length();
-  request += "\r\n";
-  request += "Connection: close\r\n";
-  request += "\r\n";
-  request += payload;
+  // Build HTTP request using snprintf (no String class!)
+  static char request[512];
+  int payloadLen = strlen(payload);
+  snprintf(request, sizeof(request),
+    "POST %s HTTP/1.1\r\n"
+    "Host: %s:%d\r\n"
+    "Content-Type: application/json\r\n"
+    "Content-Length: %d\r\n"
+    "Connection: close\r\n"
+    "\r\n"
+    "%s",
+    REGISTRATION_ENDPOINT,
+    REGISTRATION_SERVER,
+    REGISTRATION_PORT,
+    payloadLen,
+    payload);
   
   Serial.print("[Registration] Sending request... ");
   httpClient.print(request);
   Serial.println("done");
   
-  // Wait for response
+  // Wait for response (bounded buffer, no String fragmentation)
   unsigned long timeout = millis() + 5000;  // 5 second timeout
-  String response = "";
-  String statusLine = "";
+  static char response[2048];
+  int responseLen = 0;
   
   while (httpClient.connected() || httpClient.available()) {
     if (millis() > timeout) {
@@ -838,51 +837,47 @@ void registerDevice() {
       break;
     }
     
-    if (httpClient.available()) {
+    if (httpClient.available() && responseLen < (int)(sizeof(response) - 1)) {
       char c = httpClient.read();
-      response += c;
+      response[responseLen++] = c;
     }
     delay(1);
   }
+  response[responseLen] = '\0';
   
   httpClient.stop();
   
   // Extract HTTP status code from response
   int statusCode = 200;
-  if (response.indexOf("HTTP/1.1") != -1) {
-    int spacePos = response.indexOf(" ");
-    if (spacePos != -1) {
-      String statusStr = response.substring(spacePos + 1, spacePos + 4);
-      statusCode = statusStr.toInt();
-    }
+  const char* statusCodeStr = strstr(response, "HTTP/1.1");
+  if (statusCodeStr != nullptr) {
+    sscanf(statusCodeStr, "HTTP/1.1 %d", &statusCode);
   }
   
   Serial.print("[Registration] HTTP Status: ");
   Serial.println(statusCode);
   
   // Parse response
-  if (response.length() > 0) {
+  if (responseLen > 0) {
     // Find JSON part (skip HTTP headers)
-    int jsonStart = response.indexOf("\r\n\r\n");
-    if (jsonStart != -1) {
+    const char* jsonStart = strstr(response, "\r\n\r\n");
+    if (jsonStart != nullptr) {
       jsonStart += 4;  // Skip "\r\n\r\n"
-      String jsonStr = response.substring(jsonStart);
       
       Serial.print("[Registration] Raw response: ");
-      Serial.println(jsonStr);
+      Serial.println(jsonStart);
       
       StaticJsonDocument<512> responseDoc;
-      DeserializationError error = deserializeJson(responseDoc, jsonStr);
+      DeserializationError error = deserializeJson(responseDoc, jsonStart);
       
       if (!error) {
         if (statusCode == 409) {
           // Device already registered - mark as registered without secret
           Serial.println("[Registration] ✓ Device already registered on backend (409 Conflict)");
           deviceRegistered = true;
-          // Try to load secret from storage in case it exists
         } else if (responseDoc.containsKey("device_secret")) {
-          String secret = responseDoc["device_secret"];
-          strncpy(deviceSecret, secret.c_str(), DEVICE_SECRET_MAX_LEN - 1);
+          const char* secret = responseDoc["device_secret"];
+          strncpy(deviceSecret, secret, DEVICE_SECRET_MAX_LEN - 1);
           deviceSecret[DEVICE_SECRET_MAX_LEN - 1] = 0;
           
           // Save to EEPROM
@@ -891,7 +886,9 @@ void registerDevice() {
           
           Serial.println("[Registration] ✓ Device registered successfully!");
           Serial.print("[Registration] Device Secret (first 16 chars): ");
-          Serial.print(secret.substring(0, 16));
+          for (int i = 0; i < 16 && secret[i] != '\0'; i++) {
+            Serial.print(secret[i]);
+          }
           Serial.println("...");
         } else {
           Serial.println("[Registration] ✗ Unexpected response (no device_secret)");

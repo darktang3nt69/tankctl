@@ -1,8 +1,8 @@
 """
-Health check and status API routes.
+DEPRECATED: This file has been removed as part of dead code cleanup.
+Use src/api/routes/health.py instead.
 """
 
-from fastapi import APIRouter
 
 from api.schemas import HealthResponse
 from infrastructure.mqtt.mqtt_client import mqtt_client

@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
-import '../../domain/event.dart';
-import '../../services/event_correlation_service.dart';
-import '../../widgets/related_events_widget.dart';
+// This file has been deleted as part of dead code cleanup.
+// Use features/events/event_details_sheet.dart instead.
+
 
 /// Enhanced Event Detail Sheet with related events and incident grouping
 class EventDetailSheetEnhanced extends StatelessWidget {

@@ -1,9 +1,7 @@
 """
-FastAPI application setup for TankCtl.
-
-This module is deprecated. Use src/api/main.py instead.
+DEPRECATED: This file has been removed as part of dead code cleanup.
+Use src/api/main.py instead.
 """
 
-from src.api.main import app
 
 __all__ = ["app"]

@@ -273,7 +273,66 @@ It should remain a lightweight device controller.
 
 # Specialized Agents
 
-TankCtl has four specialized agents that automatically activate on relevant files. They are **auto-discovered** based on file patterns and work together to enforce architecture and best practices.
+TankCtl has a **layered agent system** with planning, coordination, and domain expertise agents. They work together to enforce architecture, plan thoroughly, and implement reliably.
+
+## Planning & Orchestration
+
+### 0. planner (Research + Deep Analysis + Planning)
+
+**When to use:** Complex features, multi-layer changes, uncertain implementations, anything touching multiple layers
+
+**Responsibilities:**
+- Research codebase structure and patterns
+- Consult auto-generated documentation (ARCHITECTURE.md, COMMANDS.md, MQTT_TOPICS.md, DEVICES.md)
+- Map dependencies and identify edge cases
+- Create detailed implementation roadmaps with sequencing
+- Recommend which specialized agents to invoke and in what order
+
+**How it works:**
+```
+User: "Add water-level sensor with alerts"
+    ↓
+Planner: Researches codebase + docs
+    ↓ Creates implementation plan with:
+    - Layer analysis (firmware, MQTT, API, UI, DB)
+    - Dependencies (what must be done first)
+    - Risks identified (memory, query perf, alert storms)
+    - Recommended agent sequence
+    ↓
+User: Reviews plan, then invokes orchestrator with plan
+    ↓
+Orchestrator: Coordinates specialized agents per plan
+```
+
+**Example:** `"/planner Add water-level sensor with real-time alerts when water drops below threshold"`
+
+### 1. orchestrator (Multi-Agent Coordination)
+
+**When to use:** Complex multi-step tasks, coordinating across layers, automatic agent sequencing
+
+**Responsibilities:**
+- Analyze task complexity and layers involved
+- Route to appropriate specialized agents
+- Sequence agents based on dependencies
+- Integrate results and validate output
+- Use planner for complex tasks before executing
+
+**How it works:**
+```
+Task: Multi-layer feature
+    ↓
+Orchestrator: Can invoke planner first if complex
+    ↓
+Planner returns: Implementation plan + agent sequence
+    ↓
+Orchestrator: Invokes agents in recommended order
+    ↓
+Result: Implemented, cleaned up, documented
+```
+
+**Example:** `"/orchestrator Build a complete pump control feature (firmware, API, UI)"`
+
+---
 
 ## Backend Agents
 
@@ -392,13 +451,11 @@ Services
 
 ### How Agents Work
 
-1. **User-Invocable**: All 6 agents are explicitly invocable via slash commands
-   - Type `/backend-core` to request backend infrastructure expertise
-   - Type `/device-communication` to request device protocol expertise
-   - Type `/esp32-firmware` to request embedded firmware expertise
-   - Type `/notifications-and-alerts` to request notification expertise
-   - Type `/flutter-foundation` to request Flutter state management expertise
-   - Type `/docs-automation` to request documentation sync and validation
+1. **User-Invocable**: All agents are explicitly invocable via slash commands
+   - **Planning**: Type `/planner` to research, analyze, and create implementation plans
+   - **Orchestration**: Type `/orchestrator` to coordinate multi-layer implementation
+   - **Domain experts**: `/backend-core`, `/device-communication`, `/esp32-firmware`, `/notifications-and-alerts`, `/flutter-foundation`
+   - **Utilities**: `/code-cleanup`, `/docs-automation`
 
 2. **Discovery via Descriptions**: Agent descriptions contain trigger phrases and domain keywords
    - Copilot matches your request to the best agent based on description keywords
@@ -492,7 +549,49 @@ Services
 
 ---
 
-To create additional specialized agents:
+**Scenario: Planning-First Development (Recommended for Complex Features)**
+
+**Goal:** Implement water-level sensor with low-water alerts efficiently
+
+1. **Plan first:**
+   ```
+   /planner Add water-level sensor with real-time alerts when water drops below threshold
+   ```
+   - Returns: Detailed plan showing layers, dependencies, edge cases, risks
+   - Identifies: Memory constraints (Arduino ADC), database performance (telemetry growth), alert storms
+   - Recommends: Specific agent sequence + estimated time
+
+2. **Execute per plan:**
+   ```
+   /orchestrator [Execute the water-level sensor plan from planner]
+   ```
+   - Orchestrator runs agents in recommended sequence:
+     1. esp32-firmware: ADC reading + smoothing
+     2. device-communication: Telemetry topic patterns
+     3. backend-core: Alert service + API endpoints
+     4. flutter-foundation: Water level gauge UI
+     5. code-cleanup: Remove test code
+     6. docs-automation: Update all docs
+
+3. **Result:**
+   - ✅ Plan prevents mistakes before coding
+   - ✅ Clear dependency sequencing (esp32 firmware first, then backend, then UI)
+   - ✅ All edge cases identified and mitigated
+   - ✅ Estimated time accurate and tracked
+   - ✅ Complete end-to-end feature
+
+**When to use Planner:**
+- Multi-layer features (touching firmware, API, UI, database)
+- Uncertain about where to start (planner provides roadmap)
+- Memory-constrained changes (planner identifies limits)
+- Integration with existing systems (planner maps connection points)
+
+**When to skip Planner:**
+- Single-layer changes (e.g., new API endpoint only)
+- Trivial additions (e.g., add a column to UI)
+- Quick bug fixes
+
+---
 
 1. Create `.github/agents/your-agent.agent.md`
 2. Include `applyTo` patterns for relevant files

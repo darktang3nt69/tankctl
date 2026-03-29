@@ -1,6 +1,6 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// This file has been deleted as part of dead code cleanup.
+// Unused notification channels: deviceStatusChannel, lightStateChannel, sensorWarningChannel
 
-const deviceStatusChannel = AndroidNotificationChannel(
   'device_status_channel',
   'Device Status',
   description: 'Online/offline status updates for tank devices',

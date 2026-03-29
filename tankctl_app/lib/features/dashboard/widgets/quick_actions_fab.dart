@@ -96,19 +96,16 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    // Removed unused theme variable
     final devicesAsync = ref.watch(devicesListProvider);
     Color fabColor = Colors.blueAccent;
     IconData fabIcon = AppIcons.flash;
     bool hasWarning = false;
     bool hasOffline = false;
-    bool allHealthy = false;
 
     devicesAsync.whenData((devices) {
       if (devices.isNotEmpty) {
         hasOffline = devices.any((d) => d['status'] == 'offline');
         hasWarning = devices.any((d) => d['status'] == 'highTemp' || d['status'] == 'lowTemp' || d['status'] == 'unknown');
-        allHealthy = devices.every((d) => d['status'] == 'healthy' || d['status'] == 'ok');
       }
     });
 
@@ -118,9 +115,9 @@ class _QuickActionsFabState extends ConsumerState<QuickActionsFab> with SingleTi
     } else if (hasWarning) {
       fabColor = Colors.orangeAccent;
       fabIcon = AppIcons.error;
-    } else if (allHealthy) {
-      fabColor = Colors.green;
-      fabIcon = AppIcons.checkCircle;
+    } else {
+      fabColor = Colors.blueAccent;
+      fabIcon = AppIcons.flash;
     }
 
     return Stack(

@@ -167,37 +167,4 @@ final groupedEventsByDateProvider =
   return grouped;
 });
 
-/// Deduplicated events (Phase 3) — collapses identical events within time window
-final deduplicatedEventsProvider =
-    FutureProvider<List<Event>>((ref) async {
-  final events = await ref.watch(filteredEventsProvider.future);
 
-  // Group events by (tank, category, type) within 10 seconds
-  final dedupMap = <String, List<Event>>{};
-
-  for (final event in events) {
-    final key = '${event.tankId}|${event.category.name}|${event.type}';
-    if (!dedupMap.containsKey(key)) {
-      dedupMap[key] = [];
-    }
-    dedupMap[key]!.add(event);
-  }
-
-  // Flatten back; if group > 5, keep only first and a "group" marker
-  // For now, just return original list; Phase 3 will enhance UI
-  return events;
-});
-
-/// Unread events count (Phase 3)
-final unreadEventCountProvider = FutureProvider<int>((ref) async {
-  final events = await ref.watch(filteredEventsProvider.future);
-  return events.where((e) => !e.isRead).length;
-});
-
-/// Mark event as read (Phase 3)
-final markEventReadProvider =
-    FutureProvider.family<void, String>((ref, eventId) async {
-  final eventService = ref.watch(eventServiceProvider);
-  await eventService.markEventRead(eventId);
-  // Optionally invalidate depending on backend behavior
-});

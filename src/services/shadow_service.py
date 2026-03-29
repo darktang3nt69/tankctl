@@ -97,26 +97,7 @@ class ShadowService:
             logger.error("shadow_reconciliation_failed", device_id=device_id, error=str(e))
             return None
 
-    def reconcile_all_shadows(self) -> dict[str, bool]:
-        """
-        Reconcile all device shadows.
-
-        Returns:
-            Dictionary mapping device_id to reconciliation status
-        """
-        logger.debug("reconciling_all_shadows")
-
-        results = {}
-        try:
-            # This would typically iterate over all devices
-            # Implementation depends on repository having get_all_shadows()
-            logger.info("shadow_reconciliation_complete")
-            return results
-        except Exception as e:
-            logger.error("shadow_reconciliation_all_failed", error=str(e))
-            raise
-
-    def handle_reported_state(
+def handle_reported_state(
         self,
         device_id: str,
         reported_state: dict,

@@ -18,7 +18,6 @@ const _selectedDeviceIdKey = 'selected_device_id_for_fcm';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   // You can show a local notification here if needed
-  // debugPrint('Handling a background message: ${message.messageId}', wrapWidth: 1024);
 }
 
 /// Fetch the first available device from the backend API
@@ -42,7 +41,6 @@ Future<String> _getFirstDeviceId() async {
           ApiConstants.defaultDeviceId;
     }
   } catch (e) {
-    // debugPrint('Failed to fetch first device: $e', wrapWidth: 1024);
     // Fall through to use stored or default device ID
   }
   return ApiConstants.defaultDeviceId;
@@ -63,7 +61,6 @@ Future<String> _getDeviceIdForFcm() async {
     await prefs.setString(_selectedDeviceIdKey, deviceId);
     return deviceId;
   } catch (e) {
-    // debugPrint('Error getting device ID for FCM: $e', wrapWidth: 1024);
     return ApiConstants.defaultDeviceId;
   }
 }
@@ -89,7 +86,6 @@ Future<void> main() async {
 
   // Helper to register FCM token with backend
   Future<void> registerFcmToken(String? token) async {
-    // debugPrint('FCM Token: ${token ?? "(null)"}', wrapWidth: 1024);
     if (token != null) {
       try {
         final backendUrl = '${ApiConstants.baseUrl}/mobile/push-token';
@@ -102,10 +98,8 @@ Future<void> main() async {
           },
           options: Options(headers: {'Content-Type': 'application/json'}),
         );
-        // debugPrint('FCM token registered with backend', wrapWidth: 1024);
         // Show a toast/snackbar for user feedback (if context available)
       } catch (e) {
-        // debugPrint('Failed to register FCM token: $e', wrapWidth: 1024);
         // Optionally show error feedback to user
       }
     }
@@ -122,7 +116,6 @@ Future<void> main() async {
 
   // Foreground message handler
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    // debugPrint('Received FCM message in foreground: ${message.notification?.title}', wrapWidth: 1024);
     // Show a local notification for FCM message
     final data = message.data;
     final deviceId = data['device_id'] ?? ApiConstants.defaultDeviceId;

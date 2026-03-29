@@ -416,46 +416,6 @@ class DeviceService:
             ],
         }
 
-    def set_light_schedule(self, device_id: str, schedule_data: dict):
-        """Create or update light schedule for device."""
-        from src.infrastructure.db.models import LightScheduleModel
-        from datetime import time
-
-        device = self.device_repo.get_by_id(device_id)
-        if not device:
-            return None
-
-        # Parse times
-        on_time = time.fromisoformat(schedule_data["start_time"])
-        off_time = time.fromisoformat(schedule_data["end_time"])
-
-        # Check if schedule exists
-        existing = self.session.query(LightScheduleModel).filter_by(device_id=device_id).first()
-        
-        if existing:
-            existing.enabled = schedule_data.get("enabled", True)
-            existing.on_time = on_time
-            existing.off_time = off_time
-            existing.updated_at = datetime.utcnow()
-            self.session.commit()
-            return existing
-        else:
-            new_schedule = LightScheduleModel(
-                device_id=device_id,
-                enabled=schedule_data.get("enabled", True),
-                on_time=on_time,
-                off_time=off_time,
-            )
-            self.session.add(new_schedule)
-            self.session.commit()
-            return new_schedule
-
-    def get_light_schedule(self, device_id: str):
-        """Get light schedule for device."""
-        from src.infrastructure.db.models import LightScheduleModel
-        
-        return self.session.query(LightScheduleModel).filter_by(device_id=device_id).first()
-
     def create_water_schedule(self, device_id: str, schedule_data: dict):
         """Create water change schedule for device."""
         from src.infrastructure.db.models import WaterScheduleModel

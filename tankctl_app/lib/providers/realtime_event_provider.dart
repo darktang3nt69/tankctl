@@ -9,7 +9,6 @@ import '../domain/event.dart';
 // Placeholder implementation - requires web_socket_channel package
 class RealtimeEventNotifier extends StateNotifier<List<Event>> {
   final String wsUrl; // e.g., 'ws://localhost:8000/events/stream'
-  final bool _isConnected = false;
 
   RealtimeEventNotifier(this.wsUrl) : super([]) {
     // WebSocket connection setup deferred - requires web_socket_channel package
@@ -49,7 +48,6 @@ class RealtimeEventNotifier extends StateNotifier<List<Event>> {
   */
 
   void addEvent(Event event) {
-    if (!_isConnected) return; // Guard against closed state
     try {
       state = [event, ...state];
     } catch (e) {
@@ -58,7 +56,6 @@ class RealtimeEventNotifier extends StateNotifier<List<Event>> {
   }
 
   void replaceAll(List<Event> events) {
-    if (!_isConnected) return; // Guard against closed state
     try {
       state = events;
     } catch (e) {
@@ -69,8 +66,6 @@ class RealtimeEventNotifier extends StateNotifier<List<Event>> {
   void close() {
     // Cleanup
   }
-
-  bool get isConnected => _isConnected;
 
   @override
   void dispose() {
@@ -90,8 +85,4 @@ final realtimeEventProvider = StateNotifierProvider<
   return notifier;
 });
 
-// Provider for checking real-time connection status
-final realtimeConnectionStatusProvider = Provider<bool>((ref) {
-  final notifier = ref.watch(realtimeEventProvider.notifier);
-  return notifier.isConnected;
-});
+

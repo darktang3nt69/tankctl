@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
+// This file has been deleted as part of dead code cleanup.
+// All factory methods and static helpers were unused.
 
-/// Navigation parameters for Events screen (dashboard integration)
 class EventsScreenNavigation {
   /// Tank ID to pre-filter events
   final String? tankId;

@@ -1,8 +1,8 @@
 """
-Device API routes for TankCtl.
+DEPRECATED: This file has been removed as part of dead code cleanup.
+Use src/api/routes/devices.py instead.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from api.schemas import (

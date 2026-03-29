@@ -78,19 +78,3 @@ final dashboardOverviewProvider = FutureProvider<DashboardOverview>((ref) async 
     coldestTemp: coldestTemp,
   );
 });
-
-final dashboardWarningCountProvider = Provider<int>((ref) {
-  final devices = ref.watch(devicesListProvider).valueOrNull;
-  if (devices == null) {
-    return 0;
-  }
-
-  var count = 0;
-  for (final device in devices) {
-    final deviceId = device['device_id'] as String;
-    if (ref.watch(deviceWarningProvider(deviceId)) != null) {
-      count += 1;
-    }
-  }
-  return count;
-});
