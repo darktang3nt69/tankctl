@@ -2,6 +2,7 @@
 name: device-communication
 description: "Specialized agent for TankCtl device communication infrastructure. Use when: designing MQTT topics and publish/subscribe patterns, implementing device shadow state reconciliation, managing device commands and acknowledgments, or handling device protocol versioning. Enforces idempotency, version management, and reliable device-to-backend communication."
 user-invocable: true
+tools: [read, search, edit, vscode, 'docs/*']
 ---
 
 # Device Communication Agent

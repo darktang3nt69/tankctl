@@ -1,7 +1,7 @@
 ---
 description: "Use when: planning complex features before implementation, analyzing requirements and dependencies, researching codebase architecture, identifying edge cases and risks, creating detailed implementation roadmaps. Researches TankCtl architecture and consults auto-generated documentation to create comprehensive implementation plans."
 name: "Planning Agent"
-tools: [read, search, agent]
+tools: [read, search, agent, vscode, 'docs/*', 'basic-memory/*']
 user-invocable: true
 argument-hint: "Describe your feature, bug fix, or task that needs planning..."
 ---

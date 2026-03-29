@@ -1,7 +1,7 @@
 ---
 description: "Use when: complex multi-step tasks, unclear which agent is needed, coordinating across multiple domains (API + MQTT + UI), need automatic agent selection and sequencing. Analyzes requirements, selects specialized agents, orchestrates multi-layer implementations."
 name: "Task Orchestrator"
-tools: [vscode, execute, read, agent, edit, search, web, 'docs/*']
+tools: [vscode, execute, read, agent, edit, search, web, 'docs/*', 'basic-memory/*']
 user-invocable: true
 argument-hint: "Describe your task or goal..."
 ---
