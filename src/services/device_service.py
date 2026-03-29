@@ -446,6 +446,9 @@ class DeviceService:
             schedule_time=schedule_time,
             notes=schedule_data.get("notes"),
             enabled=schedule_data.get("enabled", True),
+            notify_24h=schedule_data.get("notify_24h", True),
+            notify_1h=schedule_data.get("notify_1h", True),
+            notify_on_time=schedule_data.get("notify_on_time", True),
         )
         self.session.add(new_schedule)
         self.session.commit()
@@ -492,6 +495,14 @@ class DeviceService:
             schedule.notes = schedule_data["notes"]
         if "enabled" in schedule_data:
             schedule.enabled = schedule_data["enabled"]
+        
+        # Update notification preferences
+        if "notify_24h" in schedule_data:
+            schedule.notify_24h = schedule_data["notify_24h"]
+        if "notify_1h" in schedule_data:
+            schedule.notify_1h = schedule_data["notify_1h"]
+        if "notify_on_time" in schedule_data:
+            schedule.notify_on_time = schedule_data["notify_on_time"]
 
         self.session.commit()
         return schedule

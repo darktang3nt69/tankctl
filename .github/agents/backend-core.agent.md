@@ -2,7 +2,7 @@
 name: backend-core
 description: "Specialized agent for TankCtl backend core infrastructure. Use when: designing REST APIs with FastAPI, implementing database models and migrations with SQLAlchemy, building repository pattern data access layers, or coordinating backend services. Enforces layered architecture, Pydantic validation, and clean separation between API, service, and repository layers."
 user-invocable: true
-tools: [read, search, edit, vscode, 'docs/*']
+tools: [read, search, edit, vscode, 'docs/*', 'basic-memory/*']
 ---
 
 # Backend Core Agent

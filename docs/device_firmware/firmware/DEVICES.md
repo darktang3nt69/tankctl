@@ -1,3 +1,9 @@
+---
+title: DEVICES
+type: note
+permalink: tankctl/docs/device-firmware/firmware/devices
+---
+
 # TankCtl Device Firmware Specification
 
 All device information extracted directly from firmware source files in `firmware/esp32/tankctl_esp32.ino` and `firmware/Arduino Uno EK R4 Wifi/tankctl_device.ino`.
@@ -165,6 +171,81 @@ void handleCommand(JsonDocument& doc) {
   // ...
 }
 ```
+
+---
+
+# Water Schedule System (Backend-Driven)
+
+## Overview
+
+Water schedules are a **backend-only feature** that require **no firmware changes**. All device types (ESP32, Arduino UNO R4 WiFi) support water schedules automatically.
+
+**Key Characteristics:**
+- Schedules stored entirely in backend database
+- Not synced to device via MQTT (unlike light schedules)
+- Reminders sent via Firebase Cloud Messaging (FCM), not MQTT
+- Timezone-aware (evaluated in app timezone, default IST)
+- Repeatable (weekly recurring or custom one-time schedules)
+
+## Schedule Types
+
+### Weekly Recurring
+```json
+{
+  "schedule_type": "weekly",
+  "days_of_week": [1, 3, 5],  // Monday, Wednesday, Friday
+  "schedule_time": "12:00"    // Noon
+}
+```
+Repeats every week on specified days at specified time.
+
+### Custom Single-Date
+```json
+{
+  "schedule_type": "custom",
+  "schedule_date": "2025-02-28",
+  "schedule_time": "14:30"
+}
+```
+Fires once on specified date at specified time.
+
+## Notification Reminders
+
+Backend evaluates schedules every minute and sends FCM reminders at three pre-defined offsets:
+
+| Reminder Type | Trigger | Condition | Message |
+|---|---|---|---|
+| **24-Hour** | 24 hours before scheduled time | If `notify_24h=true` | "💧 Water Change Tomorrow — {device_name}" |
+| **1-Hour** | 1 hour before scheduled time | If `notify_1h=true` | "💧 Water Change in 1 Hour — {device_name}" |
+| **On-Time** | At exact scheduled time | If `notify_on_time=true` | "🪣 Time to Change Water — {device_name}" |
+
+**Important:** Notifications require device to have registered FCM push tokens via mobile app.
+
+## API Endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/devices/{device_id}/water-schedules` | GET | List all schedules |
+| `/devices/{device_id}/water-schedules` | POST | Create schedule (weekly or custom) |
+| `/devices/{device_id}/water-schedules/{id}` | PUT | Update schedule (partial or full) |
+| `/devices/{device_id}/water-schedules/{id}` | DELETE | Delete schedule |
+
+See `docs/backend/commands/commands.md` for full endpoint specifications and schema.
+
+## Timezone Handling
+
+- All times treated as wall-clock times in **app timezone** (default: `Asia/Kolkata` / IST)
+- No explicit timezone in database (assumes app timezone)
+- Reminder evaluation compares schedule time against `datetime.now(app_tz)`
+- Example: Schedule at `12:00` → reminder fires when local time reaches `12:00` in IST
+
+## No Device Firmware Changes Needed
+
+Water schedules are pure backend feature:
+- Device firmware does **not** need updates
+- No new MQTT topics or commands
+- Existing devices automatically support water schedules
+- Reminders handled entirely by backend scheduler
 
 ---
 

@@ -14,9 +14,27 @@ import 'app/live_event_notification_service.dart';
 
 const _selectedDeviceIdKey = 'selected_device_id_for_fcm';
 
+Future<void> _initializeFirebaseSafely() async {
+  try {
+    // On Android/iOS with native firebase config files, the default app may
+    // already exist. Calling initializeApp() without options reuses it.
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+      await Firebase.initializeApp();
+    } else {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') {
+      rethrow;
+    }
+  }
+}
+
 /// Top-level background message handler for FCM
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await _initializeFirebaseSafely();
   // You can show a local notification here if needed
 }
 
@@ -67,7 +85,7 @@ Future<String> _getDeviceIdForFcm() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _initializeFirebaseSafely();
 
   // Register background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);

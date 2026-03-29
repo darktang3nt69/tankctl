@@ -1,3 +1,9 @@
+---
+title: architecture
+type: note
+permalink: tankctl/docs/backend/architecture/architecture
+---
+
 # TankCtl Architecture
 
 ## Overview
@@ -72,13 +78,21 @@ Located in `src/api/routes/`
 
 ### Schedules Routes (in `devices.py`)
 
+**Light Schedules**
+
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/devices/{device_id}/schedule` | GET | Get light schedule |
 | `/devices/{device_id}/schedule` | POST | Create/update light schedule |
 | `/devices/{device_id}/schedule` | DELETE | Delete light schedule |
+
+**Water Change Schedules**
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
 | `/devices/{device_id}/water-schedules` | GET | List water change schedules |
 | `/devices/{device_id}/water-schedules` | POST | Add water change schedule |
+| `/devices/{device_id}/water-schedules/{schedule_id}` | PUT | Update water change schedule (partial or full) |
 | `/devices/{device_id}/water-schedules/{schedule_id}` | DELETE | Delete water change schedule |
 
 ### Other Routes
@@ -152,7 +166,74 @@ Located in `src/services/`, services contain all business logic and use reposito
 | `update_schedule(device_id, on_time, off_time, enabled)` | Update light schedule |
 | `delete_schedule(device_id)` | Delete light schedule |
 
-### TelemetryService
+### Water Schedule Service Architecture
+
+**Overview:** Water schedules are backend-driven, persistent schedules for device water changes. Unlike light schedules (which sync to device via MQTT), water schedules exist only in the backend database and drive reminder notifications via FCM.
+
+**Components:**
+
+1. **DeviceService** — CRUD operations for water schedules
+   - `create_water_schedule(device_id, schedule_data)` — Create new schedule (weekly or custom date)
+   - `get_water_schedules(device_id)` — List all schedules for device
+   - `update_water_schedule(device_id, schedule_id, schedule_data)` — Partial or full update
+   - `delete_water_schedule(device_id, schedule_id)` — Delete schedule
+
+2. **WaterScheduleReminderService** — Notification reminder evaluation engine
+   - `get_due_reminders(schedules)` → `list[(schedule, reminder_type)]`
+   - Evaluates each schedule against current wall-clock time (app timezone)
+   - Filters by notification preferences: `notify_24h`, `notify_1h`, `notify_on_time`
+   - Implements in-memory sent-cache to prevent duplicate notifications within 2-hour window
+   - Returns reminders that should fire at current moment
+
+3. **Data Flow:**
+   ```
+   Client: PUT /devices/{device_id}/water-schedules/{schedule_id}
+       ↓
+   API Route: Validates WaterScheduleRequest
+       ↓
+   DeviceService.update_water_schedule()
+       ├─ Validates notification preferences (notify_*)
+       ├─ Updates WaterScheduleModel in database
+       └─ Returns WaterScheduleResponse
+   
+   --- Scheduler (background task, runs every minute) ---
+   APScheduler Job: water_schedule_reminder_job
+       ↓
+   Get all water schedules for all devices
+       ↓
+   WaterScheduleReminderService.get_due_reminders()
+       ├─ Evaluate schedule time against current time (IST)
+       ├─ Check: is this reminder type enabled? (notify_24h, notify_1h, notify_on_time)
+       ├─ Check: has this reminder already been sent? (sent-cache)
+       └─ Return list of (schedule, reminder_type) due right now
+       ↓
+   For each due reminder:
+       ├─ Get device's registered FCM tokens
+       ├─ Format notification based on reminder_type
+       ├─ PushNotificationService.send_notification(device_id, title, body)
+       └─ Add to sent-cache for 2-hour cooldown
+   ```
+
+4. **Notification Preferences (Phase 2):**
+   - `notify_24h` — Send FCM reminder 24 hours before scheduled water change
+   - `notify_1h` — Send FCM reminder 1 hour before scheduled water change
+   - `notify_on_time` — Send FCM reminder at exact scheduled time
+   - All default to `True` for backward compatibility
+   - Can be updated independently via PUT endpoint
+
+5. **Timezone Handling:**
+   - All schedule times stored as wall-clock time (no explicit timezone in DB)
+   - Treated as times in configured app timezone (default `Asia/Kolkata` / IST)
+   - Reminders evaluated against current time in app timezone
+   - Prevents duplicate reminders via sent-cache: key = `(schedule_id, reminder_type, iso_date_str)`
+
+6. **Key Design Decisions:**
+   - **Backend-driven, not device-synced** — Water schedules don't sync to device (unlike light schedules)
+   - **FCM-only delivery** — Reminders delivered via Firebase Cloud Messaging, not MQTT
+   - **Timezone-aware** — All times evaluated in configured app timezone
+   - **Duplicate prevention** — In-memory sent-cache per (schedule_id, reminder_type, date)
+   - **Stateless reminders** — Scheduler evaluates every minute; no persistent task queue needed
+   - **Persistent preferences** — Notification preferences stored in database, survive process restart
 **File:** `telemetry_service.py`
 
 | Method | Purpose |

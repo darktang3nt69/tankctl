@@ -1,3 +1,9 @@
+---
+title: commands
+type: note
+permalink: tankctl/docs/backend/commands/commands
+---
+
 # TankCtl API Commands Reference
 
 All API endpoints extracted from `src/api/routes/*.py` with schemas from `src/api/schemas.py`.
@@ -217,8 +223,11 @@ Add water change schedule
   "schedule_type": "weekly",
   "days_of_week": [1, 3, 5],
   "schedule_time": "12:00",
-  "notes": "Water change",
-  "enabled": true
+  "notes": "Optional notes",
+  "enabled": true,
+  "notify_24h": true,
+  "notify_1h": true,
+  "notify_on_time": true
 }
 ```
 
@@ -227,15 +236,96 @@ Add water change schedule
 {
   "schedule_type": "custom",
   "schedule_date": "2025-02-15",
-  "schedule_time": "10:00"
+  "schedule_time": "10:00",
+  "enabled": true,
+  "notify_24h": true,
+  "notify_1h": true,
+  "notify_on_time": true
 }
 ```
+
+**Response (201):**
+```json
+{
+  "id": 42,
+  "device_id": "tank1",
+  "schedule_type": "weekly",
+  "days_of_week": [1, 3, 5],
+  "schedule_time": "12:00",
+  "notes": "Optional notes",
+  "completed": false,
+  "enabled": true,
+  "notify_24h": true,
+  "notify_1h": true,
+  "notify_on_time": true,
+  "created_at": "2025-01-15T10:00:00+00:00",
+  "updated_at": "2025-01-15T10:00:00+00:00"
+}
+```
+
+**Notification Preferences:**
+- `notify_24h` — Send FCM reminder 24 hours before scheduled water change
+- `notify_1h` — Send FCM reminder 1 hour before scheduled water change
+- `notify_on_time` — Send FCM reminder at exact scheduled time
 
 ## GET /devices/{device_id}/water-schedules
 List water change schedules
 
+**Response (200):**
+```json
+[
+  {
+    "id": 42,
+    "device_id": "tank1",
+    "schedule_type": "weekly",
+    "days_of_week": [1, 3, 5],
+    "schedule_time": "12:00",
+    "notes": "Optional notes",
+    "completed": false,
+    "enabled": true,
+    "notify_24h": true,
+    "notify_1h": true,
+    "notify_on_time": true,
+    "created_at": "2025-01-15T10:00:00+00:00",
+    "updated_at": "2025-01-15T10:00:00+00:00"
+  }
+]
+```
+
+## PUT /devices/{device_id}/water-schedules/{schedule_id}
+Update water change schedule
+
+**Request:** Any field can be updated independently (partial updates supported)
+```json
+{
+  "schedule_type": "weekly",
+  "days_of_week": [2, 4, 6],
+  "schedule_time": "14:00",
+  "notes": "Updated notes",
+  "enabled": true,
+  "notify_24h": false,
+  "notify_1h": true,
+  "notify_on_time": true
+}
+```
+
+**Response (200):** Same as POST response with updated fields
+
+**Status Codes:**
+- `200` — Schedule updated successfully
+- `404` — Schedule or device not found
+- `400` — Invalid request (e.g., invalid days_of_week)
+- `500` — Internal server error
+
 ## DELETE /devices/{device_id}/water-schedules/{schedule_id}
 Delete water change schedule
+
+**Response (204)** No Content
+
+**Status Codes:**
+- `204` — Schedule deleted successfully
+- `404` — Schedule not found
+- `500` — Internal server error
 
 ---
 
@@ -311,13 +401,62 @@ Health check (MQTT + DB status)
 
 ---
 
+---
+
+# Water Schedule Endpoint Details
+
+## Schema Fields Reference
+
+### WaterScheduleRequest
+```python
+schedule_type: Literal["weekly", "custom"]  # Required
+days_of_week: Optional[list[int]]  # 0-6 (Sunday-Saturday), required for weekly
+schedule_date: Optional[str]  # YYYY-MM-DD format, required for custom
+schedule_time: str = "12:00"  # HH:MM format (24-hour)
+notes: Optional[str]  # User notes about the water change
+enabled: bool = True  # Device-level schedule enabled flag
+notify_24h: bool = True  # Send reminder 24 hours before
+notify_1h: bool = True  # Send reminder 1 hour before
+notify_on_time: bool = True  # Send reminder at schedule time
+```
+
+### WaterScheduleResponse
+Includes all request fields plus:
+```python
+id: int  # Schedule identifier
+device_id: str  # Associated device
+completed: bool  # Whether schedule has been completed
+created_at: Optional[str]  # ISO 8601 timestamp
+updated_at: Optional[str]  # ISO 8601 timestamp
+```
+
+## Notification Reminder System
+
+Reminders are sent via Firebase Cloud Messaging (FCM) at configured times:
+
+1. **24-hour reminder** (if `notify_24h=True`)
+   - Fires 24 hours before scheduled time
+   - Message: "💧 Water Change Tomorrow — {device_label}"
+
+2. **1-hour reminder** (if `notify_1h=True`)
+   - Fires 1 hour before scheduled time  
+   - Message: "💧 Water Change in 1 Hour — {device_label}"
+
+3. **On-time reminder** (if `notify_on_time=True`)
+   - Fires at exact scheduled time
+   - Message: "🪣 Time to Change Water — {device_label}"
+
+**Important:** Reminders respect user's FCM token registration and are only sent if device has registered push tokens.
+
+---
+
 ## Statistics
 
-- **Total Endpoints:** 30+
+- **Total Endpoints:** 31+
 - **Device Management:** 9
 - **Commands:** 6
 - **Telemetry:** 3
-- **Schedules:** 5
+- **Schedules:** 6 (5 light schedule + 4 water schedule endpoints)
 - **Firmware:** 3
 - **Events:** 2
 - **Push Notifications:** 3

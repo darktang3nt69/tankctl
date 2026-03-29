@@ -2,7 +2,7 @@
 name: flutter-foundation
 description: "Specialized agent for Flutter app foundational systems. Use when: setting up Riverpod providers and state management, writing widget and integration tests, designing navigation with GoRouter, or building reusable UI component libraries with consistent theming. Enforces clean architecture, testability, and Material Design 3 compliance."
 user-invocable: true
-tools: [read, search, edit, vscode]
+tools: [read, search, edit, vscode, 'basic-memory/*']
 ---
 
 # Flutter Foundation Agent

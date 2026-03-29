@@ -155,6 +155,10 @@ class WaterScheduleModel(Base):
     completed = Column(Boolean, default=False)
     enabled = Column(Boolean, default=True)
     last_reminder_sent_at = Column(DateTime, nullable=True)
+    # Notification preferences (Phase 1)
+    notify_24h = Column(Boolean, default=True)  # 24-hour before reminder
+    notify_1h = Column(Boolean, default=True)   # 1-hour before reminder
+    notify_on_time = Column(Boolean, default=True)  # At-time reminder
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

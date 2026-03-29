@@ -12,6 +12,7 @@ GET /devices/{device_id}/schedule - Get light schedule
 DELETE /devices/{device_id}/schedule - Delete light schedule
 GET /devices/{device_id}/water-schedules - List water change schedules
 POST /devices/{device_id}/water-schedules - Add water change schedule
+PUT /devices/{device_id}/water-schedules/{schedule_id} - Update water change schedule
 DELETE /devices/{device_id}/water-schedules/{schedule_id} - Delete water change schedule
 """
 
@@ -596,6 +597,9 @@ def _serialize_water_schedule(schedule) -> WaterScheduleResponse:
         notes=schedule.notes,
         completed=schedule.completed,
         enabled=schedule.enabled,
+        notify_24h=schedule.notify_24h,
+        notify_1h=schedule.notify_1h,
+        notify_on_time=schedule.notify_on_time,
         created_at=schedule.created_at.isoformat() if schedule.created_at else None,
         updated_at=schedule.updated_at.isoformat() if schedule.updated_at else None,
     )
@@ -630,6 +634,37 @@ def create_water_schedule(
         raise
     except Exception as e:
         logger.error("create_water_schedule_error", device_id=device_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/{device_id}/water-schedules/{schedule_id}", response_model=WaterScheduleResponse, status_code=200)
+def update_water_schedule(
+    device_id: str,
+    schedule_id: int,
+    request: WaterScheduleRequest,
+    session: Session = Depends(get_db),
+):
+    """Update a water change schedule.
+    
+    Allows partial updates - send only the fields you want to change.
+    Notification preferences (notify_24h, notify_1h, notify_on_time) can be updated
+    independently of schedule time and type.
+    """
+    try:
+        device_service = DeviceService(session)
+        schedule = device_service.update_water_schedule(device_id, schedule_id, request.model_dump())
+        if not schedule:
+            raise HTTPException(status_code=404, detail=f"Water schedule {schedule_id} not found for device {device_id}")
+        return _serialize_water_schedule(schedule)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "update_water_schedule_error",
+            device_id=device_id,
+            schedule_id=schedule_id,
+            error=str(e)
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

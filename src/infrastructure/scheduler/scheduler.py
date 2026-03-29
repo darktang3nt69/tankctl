@@ -188,6 +188,9 @@ class TankCtlScheduler:
         Runs every 60 seconds.  For each enabled, incomplete water schedule the
         reminder service evaluates whether a 24-h, 1-h, or on-time notification
         should fire right now (wall-clock IST).
+        
+        Respects notification preferences (notify_24h, notify_1h, notify_on_time).
+        Logs skipped reminders due to user preferences.
         """
         try:
             from src.infrastructure.db.models import WaterScheduleModel, DeviceModel
@@ -201,6 +204,28 @@ class TankCtlScheduler:
                 )
 
                 due = self._reminder_service.get_due_reminders(schedules)
+                
+                # Map of reminder_type to preference column name
+                reminder_prefs = {
+                    "day_before": "notify_24h",
+                    "hour_before": "notify_1h",
+                    "on_time": "notify_on_time",
+                }
+                
+                # Log skipped reminders (due to preferences being False)
+                for schedule in schedules:
+                    for reminder_type, pref_name in reminder_prefs.items():
+                        pref_value = getattr(schedule, pref_name, True)
+                        if not pref_value:
+                            logger.info(
+                                "water_reminder_skipped_preference",
+                                device_id=schedule.device_id,
+                                schedule_id=schedule.id,
+                                reminder_type=reminder_type,
+                                preference=pref_name,
+                                reason=f"{pref_name}=False",
+                            )
+                
                 if not due:
                     return
 
@@ -219,9 +244,17 @@ class TankCtlScheduler:
                         title, body = self._reminder_service.build_notification(
                             device_name, schedule.device_id, schedule, reminder_type
                         )
+                        
+                        # Pass reminder_type to FCM payload
+                        data = {
+                            "reminder_type": reminder_type,
+                            "schedule_id": str(schedule.id),
+                            "device_id": schedule.device_id,
+                        }
 
                         sent = push_service.broadcast_fcm(
                             schedule.device_id, title, body,
+                            data=data,
                             notification_type="water_change",
                         )
                         logger.info(
@@ -236,6 +269,7 @@ class TankCtlScheduler:
                             "water_reminder_error",
                             schedule_id=schedule.id,
                             reminder_type=reminder_type,
+                            device_id=schedule.device_id,
                             error=str(e),
                         )
             finally:

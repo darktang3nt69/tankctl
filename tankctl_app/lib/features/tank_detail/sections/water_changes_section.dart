@@ -155,8 +155,11 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
     });
     try {
       final svc = ref.read(deviceDetailServiceProvider);
-      await svc.updateWaterSchedule(widget.deviceId, widget.schedule,
-          enabled: next);
+      await svc.updateWaterSchedule(
+        widget.deviceId,
+        widget.schedule.id,
+        enabled: next,
+      );
       _toast(next ? 'Notifications enabled' : 'Notifications disabled',
           success: true);
       widget.onRefresh();

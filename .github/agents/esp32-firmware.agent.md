@@ -1,7 +1,7 @@
 ---
 description: "Use when: writing ESP32 firmware code in Arduino (C++), optimizing embedded memory usage, improving device stability, handling WiFi/MQTT reliability, power management, or debugging hardware-level issues. Specializes in Arduino-IDE ESP32 development with focus on robustness, memory efficiency, real-time constraints, and PubSubClient/ArduinoJson libraries."
 name: "ESP32 Firmware Specialist"
-tools: [read, search, edit, vscode, execute, 'docs/*']
+tools: [read, search, edit, vscode, execute, 'docs/*', 'basic-memory/*']
 user-invocable: true
 argument-hint: "Describe the ESP32 feature or problem..."
 ---

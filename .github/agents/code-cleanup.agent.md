@@ -1,7 +1,7 @@
 ---
 description: "Use when: unused imports, dead code branches, redundant variables, unreachable code paths, duplicate logic, or code smell cleanup needed after feature implementation. Removes only truly unnecessary code (no dependencies, no legacy compatibility), preserves intentional legacy code."
 name: "Code Cleanup"
-tools: [read, search, edit]
+tools: [read, search, edit, 'basic-memory/*']
 user-invocable: true
 argument-hint: "Describe the code cleanup needed or files to scan..."
 ---

@@ -5,7 +5,7 @@ All schemas use strict validation with type checking and constraints.
 """
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional, Dict, Literal
+from typing import Optional, Literal, Dict
 
 
 # ============================================================================
@@ -390,6 +390,18 @@ class WaterScheduleRequest(BaseModel):
         True,
         description="Enable push notifications for this schedule"
     )
+    notify_24h: bool = Field(
+        True,
+        description="Send reminder 24 hours before scheduled water change"
+    )
+    notify_1h: bool = Field(
+        True,
+        description="Send reminder 1 hour before scheduled water change"
+    )
+    notify_on_time: bool = Field(
+        True,
+        description="Send reminder at the exact time of scheduled water change"
+    )
 
     @model_validator(mode='after')
     def validate_schedule_type(self):
@@ -416,6 +428,9 @@ class WaterScheduleResponse(BaseModel):
     notes: Optional[str] = None
     completed: bool = False
     enabled: bool = True
+    notify_24h: bool = True
+    notify_1h: bool = True
+    notify_on_time: bool = True
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

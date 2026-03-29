@@ -5,12 +5,17 @@ app timezone, default Asia/Kolkata / IST) and returns (schedule, reminder_type)
 pairs that should fire right now.
 
 Three reminder tiers per schedule:
-    day_before  — 24 h before the event
-    hour_before —  1 h before the event
-    on_time     —  at exactly the scheduled time
+    day_before  — 24 h before the event (if notify_24h=True)
+    hour_before —  1 h before the event (if notify_1h=True)
+    on_time     —  at exactly the scheduled time (if notify_on_time=True)
 
 Times are stored in the DB without explicit timezone info and are treated as
 wall-clock times in the configured app timezone (APP_TIMEZONE).
+
+Notification Preferences (Phase 2):
+- Each schedule has notify_24h, notify_1h, notify_on_time boolean flags
+- Reminders are filtered by these preferences before being returned
+- Defaults to True for backward compatibility (all reminders enabled by default)
 """
 
 from datetime import date, datetime, timedelta
@@ -52,7 +57,10 @@ class WaterScheduleReminderService:
     def get_due_reminders(
         self, schedules: list[WaterScheduleModel]
     ) -> list[tuple[WaterScheduleModel, str]]:
-        """Return (schedule, reminder_type) pairs that should fire right now."""
+        """Return (schedule, reminder_type) pairs that should fire right now.
+        
+        Filters by notification preferences (notify_24h, notify_1h, notify_on_time).
+        """
         now = now_in_app_timezone()
         due: list[tuple[WaterScheduleModel, str]] = []
 
@@ -60,6 +68,10 @@ class WaterScheduleReminderService:
             if not schedule.enabled or schedule.completed:
                 continue
             for reminder_type, offset in REMINDER_OFFSETS.items():
+                # Check if this reminder type is enabled in preferences
+                if not self._is_reminder_enabled(schedule, reminder_type):
+                    continue
+                
                 if self._should_fire(schedule, reminder_type, offset, now):
                     due.append((schedule, reminder_type))
 
@@ -68,6 +80,16 @@ class WaterScheduleReminderService:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _is_reminder_enabled(self, schedule: WaterScheduleModel, reminder_type: str) -> bool:
+        """Check if a reminder type is enabled in the schedule's notification preferences."""
+        if reminder_type == "day_before":
+            return schedule.notify_24h
+        elif reminder_type == "hour_before":
+            return schedule.notify_1h
+        elif reminder_type == "on_time":
+            return schedule.notify_on_time
+        return False
 
     def _should_fire(
         self,

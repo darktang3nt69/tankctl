@@ -53,6 +53,10 @@ def weekly_schedule():
     schedule.notes = "Weekly water change"
     schedule.enabled = True
     schedule.completed = False
+    # Notification preferences (Phase 1) - default all enabled
+    schedule.notify_24h = True
+    schedule.notify_1h = True
+    schedule.notify_on_time = True
     return schedule
 
 
@@ -69,6 +73,10 @@ def custom_schedule():
     schedule.notes = "One-time water change"
     schedule.enabled = True
     schedule.completed = False
+    # Notification preferences (Phase 1) - default all enabled
+    schedule.notify_24h = True
+    schedule.notify_1h = True
+    schedule.notify_on_time = True
     return schedule
 
 
@@ -221,6 +229,145 @@ class TestReminderServiceNotificationText:
         )
         assert "tomorrow" in title.lower() or "tomorrow" in body.lower()
         assert "MyTank" in body
+
+
+# ---------------------------------------------------------------------------
+# Notification Preferences Tests (Phase 2)
+# ---------------------------------------------------------------------------
+
+class TestNotificationPreferencesFiltering:
+    """Test filtering reminders based on notification preferences (notify_* columns)."""
+
+    def test_day_before_disabled(self, reminder_service, weekly_schedule, app_tz):
+        """When notify_24h=False, day_before reminder is skipped."""
+        weekly_schedule.notify_24h = False
+        weekly_schedule.notify_1h = True
+        weekly_schedule.notify_on_time = True
+        
+        # Sunday 3:00 PM IST (24 h before Monday 3:00 PM)
+        now = datetime(2026, 3, 15, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        
+        # Should not have day_before reminder
+        assert not any(r[1] == "day_before" for r in due)
+    
+    def test_hour_before_disabled(self, reminder_service, weekly_schedule, app_tz):
+        """When notify_1h=False, hour_before reminder is skipped."""
+        weekly_schedule.notify_24h = True
+        weekly_schedule.notify_1h = False
+        weekly_schedule.notify_on_time = True
+        
+        # Monday 2:00 PM IST (1 h before Monday 3:00 PM)
+        now = datetime(2026, 3, 16, 14, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        
+        # Should not have hour_before reminder
+        assert not any(r[1] == "hour_before" for r in due)
+    
+    def test_on_time_disabled(self, reminder_service, weekly_schedule, app_tz):
+        """When notify_on_time=False, on_time reminder is skipped."""
+        weekly_schedule.notify_24h = True
+        weekly_schedule.notify_1h = True
+        weekly_schedule.notify_on_time = False
+        
+        # Monday 3:00 PM IST
+        now = datetime(2026, 3, 16, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        
+        # Should not have on_time reminder
+        assert not any(r[1] == "on_time" for r in due)
+    
+    def test_all_preferences_disabled(self, reminder_service, weekly_schedule, app_tz):
+        """When all notify_* = False, no reminders fire."""
+        weekly_schedule.notify_24h = False
+        weekly_schedule.notify_1h = False
+        weekly_schedule.notify_on_time = False
+        
+        # Try at all three reminder times
+        # Sunday 3:00 PM (day_before)
+        now = datetime(2026, 3, 15, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        assert len(due) == 0
+        
+        # Monday 2:00 PM (hour_before)
+        now = datetime(2026, 3, 16, 14, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        assert len(due) == 0
+        
+        # Monday 3:00 PM (on_time)
+        now = datetime(2026, 3, 16, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        assert len(due) == 0
+    
+    def test_all_preferences_enabled(self, reminder_service, weekly_schedule, app_tz):
+        """When all notify_* = True, all reminders fire (backward compatibility)."""
+        weekly_schedule.notify_24h = True
+        weekly_schedule.notify_1h = True
+        weekly_schedule.notify_on_time = True
+        
+        # Day before
+        now = datetime(2026, 3, 15, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        assert any(r[1] == "day_before" for r in due)
+        
+        # Hour before (fresh cache for new test)
+        reminder_service_2 = reminder_service.__class__()
+        now = datetime(2026, 3, 16, 14, 0, 0, tzinfo=app_tz)
+        due = reminder_service_2.get_due_reminders([weekly_schedule])
+        assert any(r[1] == "hour_before" for r in due)
+        
+        # On time (fresh cache)
+        reminder_service_3 = reminder_service.__class__()
+        now = datetime(2026, 3, 16, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service_3.get_due_reminders([weekly_schedule])
+        assert any(r[1] == "on_time" for r in due)
+    
+    def test_selective_reminder_filtering(self, reminder_service, weekly_schedule, app_tz):
+        """Only 1h reminder enabled: fires only at hour_before time."""
+        weekly_schedule.notify_24h = False
+        weekly_schedule.notify_1h = True
+        weekly_schedule.notify_on_time = False
+        
+        # Test at day_before time → no reminder
+        now = datetime(2026, 3, 15, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([weekly_schedule])
+        assert len(due) == 0
+        
+        # Test at hour_before time → reminder fires
+        reminder_service_2 = reminder_service.__class__()
+        now = datetime(2026, 3, 16, 14, 0, 0, tzinfo=app_tz)
+        due = reminder_service_2.get_due_reminders([weekly_schedule])
+        assert len(due) == 1
+        assert due[0][1] == "hour_before"
+        
+        # Test at on_time → no reminder
+        reminder_service_3 = reminder_service.__class__()
+        now = datetime(2026, 3, 16, 15, 0, 0, tzinfo=app_tz)
+        due = reminder_service_3.get_due_reminders([weekly_schedule])
+        assert len(due) == 0
+    
+    def test_custom_schedule_with_preferences(self, reminder_service, custom_schedule, app_tz):
+        """Custom schedule respects notification preferences."""
+        custom_schedule.notify_24h = False
+        custom_schedule.notify_1h = True
+        custom_schedule.notify_on_time = True
+        
+        # 24h before: should be skipped
+        now = datetime(2026, 3, 19, 10, 30, 0, tzinfo=app_tz)
+        due = reminder_service.get_due_reminders([custom_schedule])
+        assert not any(r[1] == "day_before" for r in due)
+        
+        # 1h before: should fire
+        reminder_service_2 = reminder_service.__class__()
+        now = datetime(2026, 3, 20, 9, 30, 0, tzinfo=app_tz)
+        due = reminder_service_2.get_due_reminders([custom_schedule])
+        assert any(r[1] == "hour_before" for r in due)
+        
+        # On time: should fire
+        reminder_service_3 = reminder_service.__class__()
+        now = datetime(2026, 3, 20, 10, 30, 0, tzinfo=app_tz)
+        due = reminder_service_3.get_due_reminders([custom_schedule])
+        assert any(r[1] == "on_time" for r in due)
 
 
 # ---------------------------------------------------------------------------

@@ -63,8 +63,8 @@ class TankDetailScreen extends ConsumerWidget {
             LightScheduleSection(device: device, deviceId: deviceId),
             const SizedBox(height: 24),
 
-            // Water Changes
-            WaterChangesSection(deviceId: deviceId),
+            // Water Schedules (Inline form)
+            WaterScheduleSection(deviceId: deviceId),
             const SizedBox(height: 24),
 
             // Recent Events Section

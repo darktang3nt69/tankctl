@@ -138,6 +138,9 @@ class WaterSchedule {
   final String? notes;
   final bool completed;
   final bool enabled;
+  final bool notify24h;
+  final bool notify1h;
+  final bool notifyOnTime;
   final String? createdAt;
   final String? updatedAt;
 
@@ -151,6 +154,9 @@ class WaterSchedule {
     this.notes,
     this.completed = false,
     this.enabled = true,
+    this.notify24h = true,
+    this.notify1h = true,
+    this.notifyOnTime = true,
     this.createdAt,
     this.updatedAt,
   });
@@ -177,6 +183,9 @@ class WaterSchedule {
       notes: json['notes'],
       completed: json['completed'] ?? false,
       enabled: json['enabled'] ?? true,
+      notify24h: json['notify_24h'] ?? true,
+      notify1h: json['notify_1h'] ?? true,
+      notifyOnTime: json['notify_on_time'] ?? true,
       createdAt: json['created_at'] ?? json['createdAt'],
       updatedAt: json['updated_at'] ?? json['updatedAt'],
     );
@@ -192,6 +201,9 @@ class WaterSchedule {
     'notes': notes,
     'completed': completed,
     'enabled': enabled,
+    'notify_24h': notify24h,
+    'notify_1h': notify1h,
+    'notify_on_time': notifyOnTime,
     'created_at': createdAt,
     'updated_at': updatedAt,
   };

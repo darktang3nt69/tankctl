@@ -95,12 +95,18 @@ class DeviceDetailService {
     required String scheduleTime,
     String? notes,
     bool enabled = true,
+    bool notify24h = true,
+    bool notify1h = true,
+    bool notifyOnTime = true,
   }) async {
     try {
       final data = <String, dynamic>{
         'schedule_type': scheduleType,
         'schedule_time': scheduleTime,
         'enabled': enabled,
+        'notify_24h': notify24h,
+        'notify_1h': notify1h,
+        'notify_on_time': notifyOnTime,
       };
       if (daysOfWeek != null && daysOfWeek.isNotEmpty) data['days_of_week'] = daysOfWeek;
       if (scheduleDate != null) data['schedule_date'] = scheduleDate;
@@ -132,32 +138,34 @@ class DeviceDetailService {
   /// Update water schedule (enabled toggle or full edit)
   ///
   /// Requires passing the existing [schedule] so required backend fields are
-  /// always included. Pass [enabled] to override just the notification flag.
+  /// always included. Optional parameters override schedule values.
   Future<WaterSchedule> updateWaterSchedule(
     String deviceId,
-    WaterSchedule schedule, {
-    bool? enabled,
+    int scheduleId, {
+    String? scheduleType,
     List<int>? daysOfWeek,
     String? scheduleDate,
     String? scheduleTime,
     String? notes,
+    bool? enabled,
+    bool? notify24h,
+    bool? notify1h,
+    bool? notifyOnTime,
   }) async {
     try {
-      final data = <String, dynamic>{
-        'schedule_type': schedule.scheduleType,
-        'schedule_time': scheduleTime ?? schedule.scheduleTime,
-        'enabled': enabled ?? schedule.enabled,
-      };
-      if ((daysOfWeek ?? schedule.daysOfWeek).isNotEmpty) {
-        data['days_of_week'] = daysOfWeek ?? schedule.daysOfWeek;
-      }
-      if ((scheduleDate ?? schedule.scheduleDate) != null) {
-        data['schedule_date'] = scheduleDate ?? schedule.scheduleDate;
-      }
-      data['notes'] = notes ?? schedule.notes;
+      final data = <String, dynamic>{};
+      if (scheduleType != null) data['schedule_type'] = scheduleType;
+      if (scheduleTime != null) data['schedule_time'] = scheduleTime;
+      if (enabled != null) data['enabled'] = enabled;
+      if (notify24h != null) data['notify_24h'] = notify24h;
+      if (notify1h != null) data['notify_1h'] = notify1h;
+      if (notifyOnTime != null) data['notify_on_time'] = notifyOnTime;
+      if (daysOfWeek != null) data['days_of_week'] = daysOfWeek;
+      if (scheduleDate != null) data['schedule_date'] = scheduleDate;
+      if (notes != null) data['notes'] = notes;
 
       final response = await dio.put(
-        '/devices/$deviceId/schedule/water/${schedule.id}',
+        '/devices/$deviceId/schedule/water/$scheduleId',
         data: data,
       );
 

@@ -2,7 +2,7 @@
 name: notifications-and-alerts
 description: "Specialized agent for TankCtl notifications and alerting systems. Use when: implementing Firebase Cloud Messaging (FCM) push notifications, designing alert rules and thresholds, building water scheduling reminders, managing user notification preferences, or handling alert acknowledgment flows. Ensures reliable, user-friendly alert delivery across mobile and backend."
 user-invocable: true
-tools: [read, search, edit, vscode]
+tools: [read, search, edit, vscode, 'basic-memory/*']
 ---
 
 # Notifications and Alerts Agent

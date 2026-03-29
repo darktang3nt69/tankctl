@@ -1,7 +1,7 @@
 ---
 description: "Use when: code changes requires documentation updates, API endpoints added/modified, MQTT topics changed, device protocol updated, or architecture decisions documented. Auto-syncs code changes to docs, flags missing documentation, keeps ARCHITECTURE.md/DEVICES.md/MQTT_TOPICS.md/COMMANDS.md in sync."
 name: "Documentation Automation"
-tools: [read, search, edit, 'docs/*']
+tools: [read, search, edit, 'docs/*', 'basic-memory/*']
 user-invocable: true
 argument-hint: "Describe the code change that needs documentation..."
 ---

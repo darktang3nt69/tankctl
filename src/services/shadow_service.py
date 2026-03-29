@@ -97,7 +97,7 @@ class ShadowService:
             logger.error("shadow_reconciliation_failed", device_id=device_id, error=str(e))
             return None
 
-def handle_reported_state(
+    def handle_reported_state(
         self,
         device_id: str,
         reported_state: dict,
