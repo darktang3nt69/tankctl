@@ -322,9 +322,25 @@ TankCtl has four specialized agents that automatically activate on relevant file
 
 **Example:** `"Implement water-low alert thresholds and FCM delivery"`
 
+### 4. esp32-firmware (Embedded C++ + Memory Efficiency + Robustness)
+
+**Triggers on:** `firmware/`, `*.ino`, `embedded/`, `esp32/`
+
+**Responsibilities:**
+- ESP32 embedded firmware development in Arduino/C++
+- Memory optimization (520 KB SRAM, 4 MB Flash constraints)
+- Device stability and crash prevention (watchdog, error handling)
+- WiFi/MQTT reliability with timeout and reconnection logic
+- Power management and real-time constraints
+- Health monitoring and diagnostics
+
+**When active:** You're writing or optimizing ESP32 firmware, debugging device crashes, improving memory usage, or handling WiFi/MQTT reliability issues.
+
+**Example:** `"Optimize the ESP32 firmware to prevent memory leaks and handle WiFi disconnects gracefully"`
+
 ## Frontend Agent
 
-### 4. flutter-foundation (Riverpod + Testing + Navigation + UI)
+### 5. flutter-foundation (Riverpod + Testing + Navigation + UI)
 
 **Triggers on:** `tankctl_app/lib/providers/`, `tankctl_app/lib/features/`, `tankctl_app/test/`
 
@@ -357,9 +373,10 @@ Services
 
 ### How Agents Work
 
-1. **User-Invocable**: All 4 agents are explicitly invocable via slash commands
+1. **User-Invocable**: All 5 agents are explicitly invocable via slash commands
    - Type `/backend-core` to request backend infrastructure expertise
    - Type `/device-communication` to request device protocol expertise
+   - Type `/esp32-firmware` to request embedded firmware expertise
    - Type `/notifications-and-alerts` to request notification expertise
    - Type `/flutter-foundation` to request Flutter state management expertise
 
@@ -369,6 +386,8 @@ Services
 
 3. **Cross-References**: Each agent has coordination notes
    - `backend-core` knows about device-communication and notifications-and-alerts
+   - `device-communication` knows about esp32-firmware for device-side implementation
+   - `esp32-firmware` knows about device-communication for protocol details
    - `flutter-foundation` knows about backend-core
    - They defer to each other for specialized concerns
 
@@ -396,6 +415,28 @@ Services
    - flutter-foundation handles state management and UI coordination
 
 **Result**: Three coordinated layers, each handled by the right specialist agent.
+
+---
+
+**Scenario: Implement reliable device telemetry with WiFi resilience**
+
+1. Define device protocol:
+   - Type `/device-communication Design bidirectional telemetry protocol with acknowledged delivery`
+   - device-communication handles MQTT topic design and versioning
+
+2. Build robust firmware:
+   - Type `/esp32-firmware Implement telemetry collection with WiFi reconnection and memory efficiency`
+   - esp32-firmware handles embedded reliability, memory constraints, and watchdog safety
+
+3. Create backend storage:
+   - Type `/backend-core Design telemetry repository and aggregation queries`
+   - backend-core handles API, database, and telemetry persistence
+
+4. Build monitoring UI:
+   - Type `/flutter-foundation Create real-time telemetry charts with Riverpod streaming`
+   - flutter-foundation handles UI state management and rendering performance
+
+**Result**: End-to-end telemetry pipeline with embedded robustness, reliable transport, and responsive UI.
 
 ---
 
