@@ -34,12 +34,9 @@
 #define EEPROM_ADDR_SCHEDULE_OFF_MINUTE 38
 #define EEPROM_ADDR_SCHEDULE_ENABLED 40
 #define EEPROM_ADDR_INIT_FLAG 41
-#define EEPROM_ADDR_MANUAL_LIGHT_STATE 42
-#define EEPROM_ADDR_MANUAL_COMMAND_VERSION 43
 #define EEPROM_ADDR_DEVICE_SECRET 100
 #define EEPROM_ADDR_DEVICE_REGISTERED 164
 #define EEPROM_INIT_FLAG 0xA5
-#define EEPROM_MANUAL_STATE_NOT_SET 255
 
 #define TANK_ID_MAX_LEN 32
 #define DEVICE_SECRET_MAX_LEN 64
@@ -182,57 +179,6 @@ void showLightStateOnMatrix(bool state) {
   }
 }
 
-// ===== BOOT SCHEDULE SYNC WITH MANUAL OVERRIDE =====
-void applyScheduleState() {
-  // Check for manual light command override first
-  byte manualState = EEPROM.read(EEPROM_ADDR_MANUAL_LIGHT_STATE);
-  
-  if (manualState != EEPROM_MANUAL_STATE_NOT_SET) {
-    // Manual command exists - apply it instead of schedule
-    bool desiredState = (manualState == 1);
-    
-    if (desiredState != lightState) {
-      setLight(desiredState);
-      publishReportedState();
-    }
-    
-    Serial.print("Applied manual light state from EEPROM: ");
-    Serial.println(desiredState ? "ON" : "OFF");
-    return;  // Don't apply schedule
-  }
-  
-  // No manual override - apply schedule based on current time
-  if (!scheduleEnabled) {
-    Serial.println("Schedule not enabled, skipping boot sync");
-    return;
-  }
-  
-  int currentHour = timeClient.getHours();
-  int currentMinute = timeClient.getMinutes();
-  
-  // Determine if light should be on based on current time
-  bool shouldBeOn = false;
-  
-  if (scheduleOnHour < scheduleOffHour) {
-    // Normal case: e.g., ON at 3:00, OFF at 10:00
-    shouldBeOn = (currentHour > scheduleOnHour || 
-                  (currentHour == scheduleOnHour && currentMinute >= scheduleOnMinute)) &&
-                 (currentHour < scheduleOffHour || 
-                  (currentHour == scheduleOffHour && currentMinute < scheduleOffMinute));
-  } else {
-    // Wrap-around case: e.g., ON at 22:00, OFF at 6:00 (crosses midnight)
-    shouldBeOn = (currentHour > scheduleOnHour || currentHour < scheduleOffHour ||
-                  (currentHour == scheduleOnHour && currentMinute >= scheduleOnMinute));
-  }
-  
-  if (shouldBeOn != lightState) {
-    setLight(shouldBeOn);
-    publishReportedState();
-    Serial.print("Boot schedule sync: set light to ");
-    Serial.println(shouldBeOn ? "ON" : "OFF");
-  }
-}
-
 // ===== SETUP =====
 void setup() {
   Serial.begin(9600);
@@ -295,10 +241,6 @@ void setup() {
   } else {
     Serial.println("Skipping MQTT connect: WiFi not connected");
   }
-  
-  // Apply correct light state after boot based on manual override or schedule
-  Serial.println("Applying initial light state after boot...");
-  applyScheduleState();
   
   Serial.println("TankCtl Device Ready");
 }
@@ -538,18 +480,9 @@ void handleSetLight(JsonDocument& doc) {
   
   const char* value = doc["value"];
   bool newState = (strcmp(value, "on") == 0);
-  int version = doc.containsKey("version") ? doc["version"] : 0;
   
   setLight(newState);
   publishReportedState();
-  
-  // Save manual command override to EEPROM
-  EEPROM.write(EEPROM_ADDR_MANUAL_LIGHT_STATE, newState ? 1 : 0);
-  if (version > 0) {
-    EEPROM.write(EEPROM_ADDR_MANUAL_COMMAND_VERSION, version);
-  }
-  Serial.print("Manual light command saved to EEPROM: ");
-  Serial.println(newState ? "ON" : "OFF");
 }
 
 void handleSetSchedule(JsonDocument& doc) {
