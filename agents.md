@@ -268,3 +268,149 @@ TankCtl is **not** intended to be:
 * a vendor-locked system
 
 It should remain a lightweight device controller.
+
+---
+
+# Specialized Agents
+
+TankCtl has four specialized agents that automatically activate on relevant files. They are **auto-discovered** based on file patterns and work together to enforce architecture and best practices.
+
+## Backend Agents
+
+### 1. backend-core (FastAPI + SQLAlchemy + Repository)
+
+**Triggers on:** `src/api/`, `src/repository/`, `src/infrastructure/db/`, `migrations/`
+
+**Responsibilities:**
+- REST API endpoint design with FastAPI
+- Database schema design and migrations with SQLAlchemy
+- Repository pattern implementation
+- Service layer coordination
+- Strict enforcement: `API → Service → Repository → DB`
+
+**When active:** You're designing API endpoints, creating database models, or implementing repository methods.
+
+**Example:** `"Design a new REST endpoint for device firmware updates"`
+
+### 2. device-communication (MQTT + Device Shadow + Commands)
+
+**Triggers on:** `src/infrastructure/mqtt/`, `src/domain/device_shadow.py`, `src/services/shadow_service.py`, `firmware/`
+
+**Responsibilities:**
+- MQTT topic design and pub/sub patterns
+- Device shadow state reconciliation (desired vs reported)
+- Command versioning and idempotency
+- Device-backend protocol reliability
+- Firmware communication patterns
+
+**When active:** You're implementing device protocols, shadow reconciliation, or writing firmware code.
+
+**Example:** `"Implement device shadow reconciliation for light scheduling"`
+
+### 3. notifications-and-alerts (FCM + Alerts + Water Scheduling)
+
+**Triggers on:** `Push notification service`, `alert_service.py`, `water_schedule_reminder_service.py`
+
+**Responsibilities:**
+- Firebase Cloud Messaging (FCM) token management
+- Alert rule evaluation and thresholds
+- Water schedule and recurring reminders
+- User notification preferences and quiet hours
+- Alert acknowledgment workflows
+
+**When active:** You're implementing push notifications, alert rules, or reminder scheduling.
+
+**Example:** `"Implement water-low alert thresholds and FCM delivery"`
+
+## Frontend Agent
+
+### 4. flutter-foundation (Riverpod + Testing + Navigation + UI)
+
+**Triggers on:** `tankctl_app/lib/providers/`, `tankctl_app/lib/features/`, `tankctl_app/test/`
+
+**Responsibilities:**
+- Riverpod state management and providers
+- Widget and integration testing
+- GoRouter navigation and deep linking
+- Material Design 3 theming with Flex Color Scheme
+- MVVM pattern and separation of concerns
+- Reusable component library
+
+**When active:** You're building UI features, setting up state management, or writing tests.
+
+**Example:** `"Create a Riverpod provider for device telemetry with caching"`
+
+## Agent Coordination
+
+These agents **automatically coordinate** through file patterns and shared architecture:
+
+```
+flutter-foundation (UI Layer)
+        ↓ (calls via HTTP)
+backend-core (API Layer)
+        ↓ (delegates to)
+Services
+    ├─→ device-communication (MQTT, shadow, commands)
+    ├─→ notifications-and-alerts (FCM, alerts, reminders)
+    └─→ Repository & Infrastructure
+```
+
+### How Agents Work
+
+1. **User-Invocable**: All 4 agents are explicitly invocable via slash commands
+   - Type `/backend-core` to request backend infrastructure expertise
+   - Type `/device-communication` to request device protocol expertise
+   - Type `/notifications-and-alerts` to request notification expertise
+   - Type `/flutter-foundation` to request Flutter state management expertise
+
+2. **Discovery via Descriptions**: Agent descriptions contain trigger phrases and domain keywords
+   - Copilot matches your request to the best agent based on description keywords
+   - Descriptions include "Use when:" patterns to guide invocation
+
+3. **Cross-References**: Each agent has coordination notes
+   - `backend-core` knows about device-communication and notifications-and-alerts
+   - `flutter-foundation` knows about backend-core
+   - They defer to each other for specialized concerns
+
+### Best Practices for Using Agents
+
+- **Explicit Invocation**: Type `/agent-name` to invoke a specific agent for your task
+- **Match Your Task**: Choose the agent whose description best matches what you're doing
+- **Leverage Specialization**: Each agent has deep domain expertise—use it!
+- **Combine Agents**: For complex multi-layer work, start with one agent then invoke another
+
+### Example Workflow
+
+**Scenario: Add a new device water level alert**
+
+1. Start with backend service design:
+   - Type `/backend-core Design a new alert service method for water-low conditions`
+   - Backend-core handles service layer architecture
+
+2. Add FCM push notification delivery:
+   - Type `/notifications-and-alerts Implement FCM delivery for water-low alert thresholds`
+   - notifications-and-alerts handles notification logic
+
+3. Update UI to display alerts:
+   - Type `/flutter-foundation Create a Riverpod provider for alert state management`
+   - flutter-foundation handles state management and UI coordination
+
+**Result**: Three coordinated layers, each handled by the right specialist agent.
+
+---
+
+## Adding New Agents
+
+To create additional specialized agents:
+
+1. Create `.github/agents/your-agent.agent.md`
+2. Include `applyTo` patterns for relevant files
+3. Add cross-references to related agents
+4. Document when to use (trigger phrases in `description`)
+
+Example trigger phrases for discovery:
+```
+"Use when: doing X, implementing Y, debugging Z"
+```
+
+This helps Copilot decide which agent to activate.
