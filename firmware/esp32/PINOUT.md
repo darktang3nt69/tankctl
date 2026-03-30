@@ -1,3 +1,9 @@
+---
+title: PINOUT
+type: note
+permalink: tankctl/firmware/esp32/pinout
+---
+
 # ESP32 WROOM 32D Pinout Reference
 
 ## Physical Pin Layout (Top View)

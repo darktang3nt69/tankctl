@@ -1,3 +1,9 @@
+---
+title: material3
+type: note
+permalink: tankctl/docs/andriod-app/misc/material3
+---
+
 # material3.md
 
 (moved from docs/material3.md)

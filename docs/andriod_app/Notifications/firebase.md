@@ -1,3 +1,9 @@
+---
+title: firebase
+type: note
+permalink: tankctl/docs/andriod-app/notifications/firebase
+---
+
 I have a Flutter Android app called TankCtl. Right now notifications are unreliable: they come for some time, then stop when the app is backgrounded or closed, and start working again when I reopen the app. The current app likely depends on in-memory lifecycle-bound logic such as WebSocket/MQTT listeners and local notification triggers.
 
 I want to redesign notifications using Firebase Cloud Messaging (FCM) so alerts work reliably even when the app is backgrounded or terminated.

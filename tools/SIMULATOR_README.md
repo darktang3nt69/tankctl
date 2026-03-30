@@ -1,3 +1,9 @@
+---
+title: SIMULATOR_README
+type: note
+permalink: tankctl/tools/simulator-readme
+---
+
 # TankCtl Device Simulator
 
 The device simulator emulates multiple Arduino IoT devices communicating with the TankCtl backend via MQTT. It's used for testing, development, and load testing the backend system.

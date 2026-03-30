@@ -1,3 +1,9 @@
+---
+title: DEVICE_SIMULATOR_QUICKREF
+type: note
+permalink: tankctl/docs/device-firmware/firmware/device-simulator-quickref
+---
+
 # DEVICE_SIMULATOR_QUICKREF.md
 
 (moved from docs/DEVICE_SIMULATOR_QUICKREF.md)

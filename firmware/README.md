@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: tankctl/firmware/readme
+---
+
 # TankCtl Arduino Firmware
 
 Arduino firmware for TankCtl smart aquarium light control system.

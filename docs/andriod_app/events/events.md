@@ -1,3 +1,9 @@
+---
+title: events
+type: note
+permalink: tankctl/docs/andriod-app/events/events
+---
+
 # TankCtl UI Spec: Dashboard, Events, and Settings Tabs
 
 ## Purpose

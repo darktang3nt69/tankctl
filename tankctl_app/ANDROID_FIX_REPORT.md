@@ -1,3 +1,9 @@
+---
+title: ANDROID_FIX_REPORT
+type: note
+permalink: tankctl/tankctl-app/android-fix-report
+---
+
 # Android App Display Fix - Completed
 
 ## Issue Identified

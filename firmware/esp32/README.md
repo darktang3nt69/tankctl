@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: tankctl/firmware/esp32/readme
+---
+
 # TankCtl ESP32 Firmware
 
 Optimized firmware for **ESP32 WROOM 32D** microcontroller.

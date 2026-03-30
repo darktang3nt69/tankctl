@@ -1,3 +1,9 @@
+---
+title: MIGRATION
+type: note
+permalink: tankctl/firmware/esp32/migration
+---
+
 # UNO R4 → ESP32 Migration Guide
 
 Quick reference for upgrading from Arduino UNO R4 WiFi to ESP32 WROOM 32D.

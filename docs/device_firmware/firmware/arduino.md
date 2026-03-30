@@ -1,3 +1,9 @@
+---
+title: arduino
+type: note
+permalink: tankctl/docs/device-firmware/firmware/arduino
+---
+
 # ARDUINO.md
 
 (moved from docs/arduino.md)

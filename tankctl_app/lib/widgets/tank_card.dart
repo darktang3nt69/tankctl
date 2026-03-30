@@ -73,6 +73,13 @@ class TankCard extends ConsumerWidget {
 
     final history = ref.watch(temperatureHistoryProvider(deviceId)).valueOrNull ?? const [];
 
+    // Light state from device shadow (reported.light)
+    final shadowAsync = ref.watch(deviceShadowProvider(deviceId));
+    final shadowReported =
+        shadowAsync.valueOrNull?['reported'] as Map<String, dynamic>?;
+    final lightState = shadowReported?['light'] as String?;
+    final lightOn = lightState == null ? null : lightState == 'on';
+
     // When the device reports a missing sensor, do not surface stale
     // historical values as "current" temperature.
     final latestTemp = deviceWarning == 'sensor_unavailable'
@@ -103,7 +110,7 @@ class TankCard extends ConsumerWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -116,16 +123,17 @@ class TankCard extends ConsumerWidget {
                   onReboot: () => _confirmAndReboot(context, ref),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 const Divider(color: Colors.white10, height: 1),
-                const SizedBox(height: 14),
+                const SizedBox(height: 8),
 
                 TankCardMetricsRow(
                   latestTemp: latestTemp,
                   tempHigh: tempHigh,
+                  lightOn: lightOn,
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
                 TankCardFooter(
                   status: status,

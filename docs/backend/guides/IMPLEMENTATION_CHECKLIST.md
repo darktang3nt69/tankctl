@@ -1,3 +1,9 @@
+---
+title: IMPLEMENTATION_CHECKLIST
+type: note
+permalink: tankctl/docs/backend/guides/implementation-checklist
+---
+
 # IMPLEMENTATION_CHECKLIST.md
 
 (moved from docs/IMPLEMENTATION_CHECKLIST.md)

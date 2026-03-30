@@ -1,3 +1,9 @@
+---
+title: agents
+type: note
+permalink: tankctl/agents
+---
+
 # AGENTS.md
 
 ## Project

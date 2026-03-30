@@ -87,58 +87,32 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _initializeFirebaseSafely();
 
-  // Register background handler
+  // Must be registered before the isolate starts (background handler requirement).
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  // Request notification permission (Android 13+)
+
+  // Render the app immediately — no black screen.
+  runApp(const ProviderScope(child: TankCtlApp()));
+
+  // All non-critical startup work happens after the first frame is on screen.
+  _postRunAppInit();
+}
+
+/// Everything that should NOT block the first frame goes here.
+Future<void> _postRunAppInit() async {
+  // Notification permission (Android 13+) — can happen after first frame.
   if (Platform.isAndroid) {
-    final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission();
+    await FirebaseMessaging.instance.requestPermission();
   }
 
-  // Initialize local notification service
+  // Local notification service initialisation.
   final notificationService = LiveEventNotificationService();
   await notificationService.initialize();
 
-  // Get the device ID to use for this app
-  final deviceIdForFcm = await _getDeviceIdForFcm();
-
-  // Helper to register FCM token with backend
-  Future<void> registerFcmToken(String? token) async {
-    if (token != null) {
-      try {
-        final backendUrl = '${ApiConstants.baseUrl}/mobile/push-token';
-        await Dio().post(
-          backendUrl,
-          data: {
-            'device_id': deviceIdForFcm,
-            'token': token,
-            'platform': 'android',
-          },
-          options: Options(headers: {'Content-Type': 'application/json'}),
-        );
-        // Show a toast/snackbar for user feedback (if context available)
-      } catch (e) {
-        // Optionally show error feedback to user
-      }
-    }
-  }
-
-  // Register current token on startup
-  final token = await FirebaseMessaging.instance.getToken();
-  await registerFcmToken(token);
-
-  // Listen for token refresh and auto-register
-  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-    await registerFcmToken(newToken);
-  });
-
-  // Foreground message handler
+  // Wire up foreground FCM message display.
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    // Show a local notification for FCM message
     final data = message.data;
     final deviceId = data['device_id'] ?? ApiConstants.defaultDeviceId;
     if (message.notification != null) {
-      // Use notification title/body if present
       await notificationService.showSimpleNotification(
         message.notification!.title,
         message.notification!.body,
@@ -148,13 +122,36 @@ Future<void> main() async {
     }
   });
 
-  // Notification tap handler (when app is opened from notification)
+  // Notification tap while app is in background/terminated.
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
     final deviceId = message.data['device_id'] ?? ApiConstants.defaultDeviceId;
     navigatorKey.currentState?.pushNamed('/device/$deviceId');
   });
 
-  runApp(const ProviderScope(child: TankCtlApp()));
+  // FCM token registration — network call, must not block startup.
+  final deviceIdForFcm = await _getDeviceIdForFcm();
+
+  Future<void> registerFcmToken(String? token) async {
+    if (token == null) return;
+    try {
+      await Dio().post(
+        '${ApiConstants.baseUrl}/mobile/push-token',
+        data: {
+          'device_id': deviceIdForFcm,
+          'token': token,
+          'platform': 'android',
+        },
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+    } catch (_) {
+      // Non-critical — token will be re-registered on next launch / refresh.
+    }
+  }
+
+  final token = await FirebaseMessaging.instance.getToken();
+  await registerFcmToken(token);
+
+  FirebaseMessaging.instance.onTokenRefresh.listen(registerFcmToken);
 }
 
 class TankCtlApp extends StatelessWidget {

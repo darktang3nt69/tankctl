@@ -1,3 +1,9 @@
+---
+title: dashboard-improvements
+type: note
+permalink: tankctl/docs/andriod-app/misc/dashboard-improvements
+---
+
 # dashboard-improvements.md
 
 (moved from docs/dashboard-improvements.md)

@@ -1,3 +1,9 @@
+---
+title: ANDROID_RELEASE_BUILD_COMPLETE
+type: note
+permalink: tankctl/tankctl-app/android-release-build-complete
+---
+
 # Android Release Build Complete - Installation Restricted
 
 ## Build Status

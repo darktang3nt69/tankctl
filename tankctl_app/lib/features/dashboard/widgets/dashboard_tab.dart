@@ -78,7 +78,7 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           const TankOverviewCard(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           DashboardListControls(
             showOnlineOnly: _showOnlineOnly,
             onToggleOnlineOnly: (v) => setState(() => _showOnlineOnly = v),

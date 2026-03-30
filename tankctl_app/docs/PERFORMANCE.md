@@ -1,3 +1,9 @@
+---
+title: PERFORMANCE
+type: note
+permalink: tankctl/tankctl-app/docs/performance
+---
+
 # Glassmorphic Performance Guide
 
 ## Overview

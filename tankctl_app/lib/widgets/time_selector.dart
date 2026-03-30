@@ -1,41 +1,41 @@
 import 'package:flutter/material.dart';
 
-/// Inline time selector widget with tap-to-edit and up/down buttons.
+/// A tappable time-picker chip.
 ///
-/// Displays time in HH:MM format with optional spinner buttons for quick
-/// increments/decrements. Tapping the time field opens a time picker dialog.
+/// Shows the current time in HH:MM format and opens the system time-picker
+/// dialog when tapped. No spinners, no text input — clean one-tap experience.
 ///
-/// Validates time format (00:00-23:59) and provides continuous feedback.
+/// All existing call-sites keep working because the public API
+/// (initialTime, onTimeChanged, label, readOnly) is preserved.
+/// The now-unused [showSpinners] and [spinnerIncrement] parameters are kept
+/// as no-ops so nothing breaks.
 class TimeSelector extends StatefulWidget {
-  /// Initial time in HH:MM format (e.g., "14:30").
+  /// Current time in HH:MM format (e.g. "14:30").
   final String initialTime;
 
-  /// Callback: fires when time changes with new HH:MM string.
+  /// Fires whenever the user picks a new time, with the HH:MM string.
   final ValueChanged<String> onTimeChanged;
 
-  /// Optional label to display above the time input.
+  /// Optional label shown above the chip.
   final String? label;
 
-  /// Allow spinner buttons for +/- minute adjustments.
-  /// Defaults to true.
+  /// When true the chip is non-interactive.
+  final bool readOnly;
+
+  /// Kept for backwards-compat — no longer has any effect.
   final bool showSpinners;
 
-  /// Minutes to increment/decrement on spinner click.
-  /// Defaults to 15 minutes.
+  /// Kept for backwards-compat — no longer has any effect.
   final int spinnerIncrement;
-
-  /// If true, input is disabled and appears read-only.
-  /// Defaults to false.
-  final bool readOnly;
 
   const TimeSelector({
     super.key,
     required this.initialTime,
     required this.onTimeChanged,
     this.label,
+    this.readOnly = false,
     this.showSpinners = true,
     this.spinnerIncrement = 15,
-    this.readOnly = false,
   });
 
   @override
@@ -43,188 +43,112 @@ class TimeSelector extends StatefulWidget {
 }
 
 class _TimeSelectorState extends State<TimeSelector> {
-  late TextEditingController _controller;
-  String? _errorText;
+  late String _time;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialTime);
-    _validateTime(widget.initialTime);
+    _time = _normalise(widget.initialTime);
   }
 
   @override
   void didUpdateWidget(TimeSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTime != widget.initialTime) {
-      _controller.text = widget.initialTime;
-      _validateTime(widget.initialTime);
+      setState(() => _time = _normalise(widget.initialTime));
     }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  /// Accept HH:MM or HH:MM:SS; always return HH:MM.
+  static String _normalise(String raw) {
+    if (raw.length == 8 && raw[5] == ':') return raw.substring(0, 5);
+    return raw;
   }
 
-  /// Validate time format HH:MM (00:00 - 23:59).
-  bool _validateTime(String time) {
-    final regex = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$');
-    final isValid = regex.hasMatch(time);
-
-    setState(() {
-      _errorText = isValid ? null : 'Invalid time format (HH:MM)';
-    });
-
-    return isValid;
-  }
-
-  /// Parse HH:MM string into hour and minute integers.
-  List<int> _parseTime(String time) {
-    try {
-      final parts = time.split(':');
-      return [int.parse(parts[0]), int.parse(parts[1])];
-    } catch (_) {
-      return [0, 0];
-    }
-  }
-
-  /// Format hour and minute into HH:MM string.
-  String _formatTime(int hour, int minute) {
-    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-  }
-
-  /// Clamp hour to 0-23 and minute to 0-59.
-  void _updateTime(int hour, int minute) {
-    final h = hour.clamp(0, 23);
-    final m = minute.clamp(0, 59);
-    final newTime = _formatTime(h, m);
-
-    if (newTime != _controller.text) {
-      setState(() => _controller.text = newTime);
-      if (_validateTime(newTime)) {
-        widget.onTimeChanged(newTime);
-      }
-    }
-  }
-
-  /// Open time picker dialog.
-  Future<void> _showTimePicker() async {
+  Future<void> _pick() async {
     if (widget.readOnly) return;
-
-    final [hour, minute] = _parseTime(_controller.text);
+    final parts = _time.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
 
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: hour, minute: minute),
+      initialTime: TimeOfDay(hour: h, minute: m),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
-      final newTime = _formatTime(picked.hour, picked.minute);
-      setState(() => _controller.text = newTime);
-      if (_validateTime(newTime)) {
-        widget.onTimeChanged(newTime);
-      }
+      final newTime =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      setState(() => _time = newTime);
+      widget.onTimeChanged(newTime);
     }
-  }
-
-  /// Increment or decrement time by spinner amount.
-  void _updateBySpinner(int minuteDelta) {
-    final [hour, minute] = _parseTime(_controller.text);
-    final totalMinutes = hour * 60 + minute + minuteDelta;
-
-    // Wrap around day boundary
-    final wrappedMinutes = totalMinutes < 0
-        ? totalMinutes + (24 * 60)
-        : totalMinutes % (24 * 60);
-
-    final newHour = wrappedMinutes ~/ 60;
-    final newMinute = wrappedMinutes % 60;
-
-    _updateTime(newHour, newMinute);
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.label != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              widget.label!,
-              style: Theme.of(context).textTheme.labelLarge,
+        if (widget.label != null) ...[
+          Text(widget.label!, style: textTheme.labelLarge),
+          const SizedBox(height: 8),
+        ],
+        InkWell(
+          onTap: widget.readOnly ? null : _pick,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.readOnly
+                    ? colorScheme.outline.withValues(alpha: 0.25)
+                    : colorScheme.outline.withValues(alpha: 0.6),
+              ),
+              color: colorScheme.surfaceContainerHighest
+                  .withValues(alpha: widget.readOnly ? 0.3 : 0.5),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.schedule_rounded,
+                  size: 18,
+                  color: widget.readOnly
+                      ? colorScheme.onSurface.withValues(alpha: 0.35)
+                      : colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _time,
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                    color: widget.readOnly
+                        ? colorScheme.onSurface.withValues(alpha: 0.4)
+                        : colorScheme.onSurface,
+                  ),
+                ),
+                if (!widget.readOnly) ...[
+                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.edit_rounded,
+                    size: 14,
+                    color: colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ],
+              ],
             ),
           ),
-        Row(
-          children: [
-            // Decrement button
-            if (widget.showSpinners && !widget.readOnly)
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: IconButton(
-                  icon: const Icon(Icons.remove),
-                  onPressed: () =>
-                      _updateBySpinner(-widget.spinnerIncrement),
-                  tooltip: 'Decrease time',
-                  iconSize: 18,
-                ),
-              ),
-
-            // Time input field
-            Expanded(
-              child: GestureDetector(
-                onTap: widget.readOnly ? null : _showTimePicker,
-                child: TextField(
-                  controller: _controller,
-                  readOnly: true,
-                  enabled: !widget.readOnly,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'HH:MM',
-                    errorText: _errorText,
-                    filled: true,
-                    fillColor: widget.readOnly
-                        ? Colors.grey.withValues(alpha: 0.1)
-                        : Colors.transparent,
-                    prefixIcon: const Icon(Icons.schedule),
-                    suffixIcon: _errorText == null
-                        ? const Icon(Icons.check_circle,
-                            color: Colors.green)
-                        : const Icon(Icons.error, color: Colors.red),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Colors.red),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Increment button
-            if (widget.showSpinners && !widget.readOnly)
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () =>
-                      _updateBySpinner(widget.spinnerIncrement),
-                  tooltip: 'Increase time',
-                  iconSize: 18,
-                ),
-              ),
-          ],
         ),
       ],
     );

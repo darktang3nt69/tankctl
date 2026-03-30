@@ -1,3 +1,9 @@
+---
+title: DOCKER_QUICKSTART
+type: note
+permalink: tankctl/docs/backend/docker/docker-quickstart
+---
+
 # DOCKER_QUICKSTART.md
 
 (moved from docs/DOCKER_QUICKSTART.md)

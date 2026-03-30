@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: tankctl/tankctl-app/readme
+---
+
 # tankctl_app
 
 A new Flutter project.

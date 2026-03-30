@@ -1,3 +1,9 @@
+---
+title: CHROME_PERFORMANCE_TESTING
+type: note
+permalink: tankctl/tankctl-app/chrome-performance-testing
+---
+
 # Chrome Performance Testing Guide
 
 ## Quick Start

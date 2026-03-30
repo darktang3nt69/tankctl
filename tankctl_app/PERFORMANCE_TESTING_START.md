@@ -1,3 +1,9 @@
+---
+title: PERFORMANCE_TESTING_START
+type: note
+permalink: tankctl/tankctl-app/performance-testing-start
+---
+
 # Phase 4 Step 3: Performance Testing - Quick Start Guide
 
 ## 🚀 App Status
@@ -214,4 +220,3 @@ Performance achieves optimization goals: [YES/NO]
 **Performance Testing Status**: ✅ Ready to Begin
 
 App is fully built and running. Open http://localhost:54829 and follow the testing procedures above!
-

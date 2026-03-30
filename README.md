@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: tankctl/readme
+---
+
 # TankCtl
 
 ## Overview

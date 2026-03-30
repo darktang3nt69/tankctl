@@ -1,3 +1,9 @@
+---
+title: TELEMETRY_TESTING
+type: note
+permalink: tankctl/docs/backend/telemetry/telemetry-testing
+---
+
 # TELEMETRY_TESTING.md
 
 (moved from docs/TELEMETRY_TESTING.md)

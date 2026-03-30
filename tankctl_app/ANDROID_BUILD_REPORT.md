@@ -1,3 +1,9 @@
+---
+title: ANDROID_BUILD_REPORT
+type: note
+permalink: tankctl/tankctl-app/android-build-report
+---
+
 # Android Debug Build & Deployment Report
 
 ## ✅ Build Status: SUCCESS

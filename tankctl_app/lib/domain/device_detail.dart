@@ -105,12 +105,29 @@ class LightSchedule {
   });
 
   factory LightSchedule.fromJson(Map<String, dynamic> json) {
+    // The backend may return times as "HH:MM:SS" (Python str(time)); normalise
+    // to "HH:MM" so they pass the ScheduleRequest pattern validation on save.
+    // Also accept on_time / off_time for compatibility with ScheduleResponse.
+    String _t(String? raw, String fallback) {
+      final s = raw ?? fallback;
+      // Strip trailing :SS if present (e.g. "08:00:00" → "08:00")
+      if (s.length == 8 && s[5] == ':') return s.substring(0, 5);
+      return s;
+    }
+
+    final rawStart = json['start_time'] as String? ??
+        json['startTime'] as String? ??
+        json['on_time'] as String?;
+    final rawEnd = json['end_time'] as String? ??
+        json['endTime'] as String? ??
+        json['off_time'] as String?;
+
     return LightSchedule(
       id: json['id'] ?? 0,
       deviceId: json['device_id'] ?? json['deviceId'] ?? '',
       enabled: json['enabled'] ?? true,
-      startTime: json['start_time'] ?? json['startTime'] ?? '08:00',
-      endTime: json['end_time'] ?? json['endTime'] ?? '20:00',
+      startTime: _t(rawStart, '08:00'),
+      endTime: _t(rawEnd, '20:00'),
       createdAt: json['created_at'] ?? json['createdAt'],
       updatedAt: json['updated_at'] ?? json['updatedAt'],
     );
@@ -172,14 +189,24 @@ class WaterSchedule {
         daysOfWeek = List<int>.from(doWValue);
       }
     }
-    
+
+    // Strip trailing :SS if backend returns HH:MM:SS (Python str(time))
+    String _normaliseTime(String? raw, String fallback) {
+      final s = raw ?? fallback;
+      if (s.length == 8 && s[5] == ':') return s.substring(0, 5);
+      return s;
+    }
+
     return WaterSchedule(
       id: json['id'] ?? 0,
       deviceId: json['device_id'] ?? json['deviceId'] ?? '',
       scheduleType: json['schedule_type'] ?? json['scheduleType'] ?? 'weekly',
       daysOfWeek: daysOfWeek,
       scheduleDate: json['schedule_date'] ?? json['scheduleDate'],
-      scheduleTime: json['schedule_time'] ?? json['scheduleTime'] ?? '12:00',
+      scheduleTime: _normaliseTime(
+        json['schedule_time'] as String? ?? json['scheduleTime'] as String?,
+        '12:00',
+      ),
       notes: json['notes'],
       completed: json['completed'] ?? false,
       enabled: json['enabled'] ?? true,

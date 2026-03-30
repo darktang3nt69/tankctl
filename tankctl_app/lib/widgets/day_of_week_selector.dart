@@ -1,24 +1,20 @@
 import 'package:flutter/material.dart';
 
-/// Multi-select day-of-week picker widget with Material 3 styling.
+/// Multi-select day-of-week picker rendered as a row of circular pill chips.
 ///
-/// Displays 7 checkboxes in a 4-column grid layout (3 rows) for selecting
-/// combination of days. Days are 0-indexed (0=Sunday, 6=Saturday).
-///
-/// Callback fires whenever selection changes, providing updated list of
-/// selected day indices.
+/// Days are 0-indexed (0=Sunday, 6=Saturday). Displayed Mon → Sun.
+/// Callback fires whenever selection changes with the updated sorted list.
 class DayOfWeekSelector extends StatefulWidget {
-  /// Selected day indices (0=Sun, 1=Mon, ..., 6=Sat).
+  /// Selected day indices (0=Sun, 1=Mon, …, 6=Sat).
   final List<int> selectedDays;
 
-  /// Callback: fires when selection changes with new list of selected days.
+  /// Fires when selection changes with the new sorted list of day indices.
   final ValueChanged<List<int>> onSelectionChanged;
 
-  /// Optional label to display above grid.
+  /// Optional label displayed above the row.
   final String? label;
 
-  /// Whether to show day names ('Sun', 'Mon', etc.) above grid.
-  /// Defaults to true.
+  /// Kept for API compatibility – ignored in the new design.
   final bool showDayNames;
 
   const DayOfWeekSelector({
@@ -36,15 +32,9 @@ class DayOfWeekSelector extends StatefulWidget {
 class _DayOfWeekSelectorState extends State<DayOfWeekSelector> {
   late Set<int> _selected;
 
-  static const List<String> _dayNames = [
-    'Sun',
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat'
-  ];
+  // Display order: Monday first. Index maps to 0-based day (Sun=0).
+  static const _order = [1, 2, 3, 4, 5, 6, 0];
+  static const _labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
   @override
   void initState() {
@@ -60,12 +50,12 @@ class _DayOfWeekSelectorState extends State<DayOfWeekSelector> {
     }
   }
 
-  void _toggleDay(int day) {
+  void _toggle(int dayIndex) {
     setState(() {
-      if (_selected.contains(day)) {
-        _selected.remove(day);
+      if (_selected.contains(dayIndex)) {
+        _selected.remove(dayIndex);
       } else {
-        _selected.add(day);
+        _selected.add(dayIndex);
       }
     });
     widget.onSelectionChanged(_selected.toList()..sort());
@@ -73,30 +63,26 @@ class _DayOfWeekSelectorState extends State<DayOfWeekSelector> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.label != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              widget.label!,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-          ),
-        GridView.count(
-          crossAxisCount: 4,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 1,
-          children: List.generate(7, (index) {
-            return _DayCheckbox(
-              day: index,
-              dayName: _dayNames[index],
-              selected: _selected.contains(index),
-              onChanged: (_) => _toggleDay(index),
+        if (widget.label != null) ...[
+          Text(widget.label!, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(7, (i) {
+            final dayIndex = _order[i];
+            final selected = _selected.contains(dayIndex);
+            return _DayPill(
+              label: _labels[i],
+              selected: selected,
+              onTap: () => _toggle(dayIndex),
+              colorScheme: colorScheme,
             );
           }),
         ),
@@ -105,56 +91,47 @@ class _DayOfWeekSelectorState extends State<DayOfWeekSelector> {
   }
 }
 
-/// Single day checkbox cell for day-of-week selector.
-class _DayCheckbox extends StatelessWidget {
-  final int day;
-  final String dayName;
-  final bool selected;
-  final ValueChanged<bool> onChanged;
-
-  const _DayCheckbox({
-    required this.day,
-    required this.dayName,
+class _DayPill extends StatelessWidget {
+  const _DayPill({
+    required this.label,
     required this.selected,
-    required this.onChanged,
+    required this.onTap,
+    required this.colorScheme,
   });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final ColorScheme colorScheme;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onChanged(!selected),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: selected
-                  ? Theme.of(context).primaryColor
-                  : Colors.grey.withValues(alpha: 0.3),
-              width: selected ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? colorScheme.primary : Colors.transparent,
+          border: Border.all(
             color: selected
-                ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                : Colors.transparent,
+                ? colorScheme.primary
+                : colorScheme.outline.withValues(alpha: 0.45),
+            width: 1.5,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Checkbox(
-                value: selected,
-                onChanged: (value) => onChanged(value ?? false),
-                visualDensity: VisualDensity.compact,
-              ),
-              Text(
-                dayName,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              color: selected
+                  ? colorScheme.onPrimary
+                  : colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),

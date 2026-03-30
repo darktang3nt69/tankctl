@@ -1,3 +1,9 @@
+---
+title: API_TESTING
+type: note
+permalink: tankctl/docs/backend/api/api-testing
+---
+
 # API_TESTING.md
 
 (moved from docs/API_TESTING.md)

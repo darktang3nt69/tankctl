@@ -1,3 +1,9 @@
+---
+title: MQTT_TOPICS
+type: note
+permalink: tankctl/docs/backend/deployment/mqtt-topics
+---
+
 # TankCtl MQTT Topics Reference
 
 All topics extracted from `src/infrastructure/mqtt/mqtt_client.py` and service publish calls.
