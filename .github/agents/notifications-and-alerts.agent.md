@@ -171,33 +171,6 @@ async def acknowledge_alert(alert_id: int, service: AlertService = Depends()):
     return alert
 ```
 
-## When to Use This Agent
-
-Pick this agent when you're:
-- Implementing FCM token registration/refresh
-- Designing alert rules and thresholds
-- Building reminder scheduling systems
-- Adding user notification preferences
-- Debugging notification delivery issues
-- Creating alert acknowledgment flows
-- Handling timezone-aware reminders
-
-## Example Prompts
-
-- "Implement water-low alert thresholds and FCM delivery"
-- "Design a water schedule reminder that sends before/after"
-- "Add user notification preferences for quiet hours"
-- "Create an alert acknowledgment flow with follow-ups"
-- "Debug why FCM tokens aren't being refreshed"
-- "Implement alert cooldown to prevent duplicate notifications"
-
-## Related Services
-
-- PushNotificationService (FCM backend)
-- AlertService (rule evaluation)
-- WaterScheduleReminderService (scheduling)
-- DevicePushTokenRepository (token storage)
-
 ## Notification Best Practices
 
 - Always include deep linking data for rich user experience

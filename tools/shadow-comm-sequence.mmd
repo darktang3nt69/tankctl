@@ -1,0 +1,43 @@
+%%{init: {'theme':'base','themeVariables': {
+  'background':'#f8fafc',
+  'primaryTextColor':'#0f172a',
+  'lineColor':'#334155',
+  'fontFamily':'Segoe UI, Trebuchet MS, Arial',
+  'fontSize':'16px'
+}}}%%
+sequenceDiagram
+    autonumber
+    participant C as Mobile App
+    participant API as FastAPI Routes
+    participant SH as ShadowService
+    participant CMD as CommandService
+    participant DB as PostgreSQL device_shadows and commands
+    participant MQ as Mosquitto Broker
+    participant ESP as ESP32 Firmware
+    participant RX as MQTT Handlers
+    participant TEL as TelemetryService
+    participant TSDB as TimescaleDB
+
+    C->>API: REST request set desired state or command
+    API->>SH: Update desired shadow
+    SH->>DB: Persist desired plus version
+    API->>CMD: Send device command
+    CMD->>DB: Persist command record
+    CMD->>MQ: Publish tankctl device_id command
+    MQ->>ESP: Deliver command
+    Note right of ESP: Idempotency guard rejects stale command versions
+
+    ESP->>MQ: Publish reported state
+    ESP->>MQ: Publish heartbeat
+    ESP->>MQ: Publish telemetry
+
+    MQ->>RX: Route by topic channel
+    RX->>SH: reported or heartbeat updates
+    SH->>DB: Persist reported and reconcile state
+    RX->>TEL: telemetry payload
+    TEL->>TSDB: Store telemetry metric
+
+    loop Background reconcile
+        API->>SH: Scheduler checks desired vs reported
+        SH->>MQ: Re-publish pending command when needed
+    end

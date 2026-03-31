@@ -1,0 +1,100 @@
+%%{init: {'theme':'base','themeVariables': {
+  'background':'#f8fafc',
+  'primaryColor':'#e0f2fe',
+  'primaryTextColor':'#0f172a',
+  'primaryBorderColor':'#0284c7',
+  'lineColor':'#334155',
+  'secondaryColor':'#dcfce7',
+  'tertiaryColor':'#fef3c7',
+  'fontFamily':'Trebuchet MS, Segoe UI, Arial'
+}}}%%
+flowchart LR
+
+  %% Client and API
+  subgraph CLIENT[Client Layer]
+    U[Mobile App or Web Client]
+  end
+
+  subgraph API[API and Services Layer]
+    A1[FastAPI Routes]
+    A2[ShadowService]
+    A3[CommandService]
+    A4[DeviceService]
+    A5[TelemetryService]
+  end
+
+  %% Persistence
+  subgraph DB[Persistence Layer]
+    D1[(PostgreSQL device_shadows)]
+    D2[(PostgreSQL commands)]
+    D3[(TimescaleDB telemetry)]
+  end
+
+  %% MQTT and device
+  subgraph MQTT[MQTT Layer]
+    M1[(Mosquitto Broker)]
+    M2[MqttClient on_message]
+    M3[ReportedStateHandler]
+    M4[HeartbeatHandler]
+    M5[TelemetryHandler]
+  end
+
+  subgraph DEVICE[Device Layer]
+    E1[ESP32 Firmware]
+    E2[Idempotency Guard\nIgnore older command versions]
+  end
+
+  S1[Scheduler Reconcile Job]
+
+  %% Main request path
+  U -->|1. REST calls| A1
+  A1 -->|2a. Update desired shadow| A2
+  A1 -->|2b. Send command| A3
+  A1 -->|2c. Device CRUD| A4
+
+  %% Service to DB and MQTT
+  A2 -->|3. Persist shadow| D1
+  A3 -->|3. Persist command| D2
+  A3 -->|4. Publish command topic| M1
+
+  %% Device receives commands
+  M1 -->|5. tankctl/device_id/command| E1
+  E2 -. protects .-> E1
+
+  %% Device publishes runtime data
+  E1 -->|6a. telemetry| M1
+  E1 -->|6b. reported| M1
+  E1 -->|6c. heartbeat| M1
+
+  %% Broker to handlers
+  M1 --> M2
+  M2 --> M3
+  M2 --> M4
+  M2 --> M5
+
+  %% Handlers to services
+  M3 -->|7a. reported to shadow| A2
+  M4 -->|7b. online status| A4
+  M4 -->|7c. trigger reconcile| A2
+  M5 -->|7d. store telemetry| A5
+
+  %% Service writes
+  A5 --> D3
+
+  %% Background reconcile
+  S1 -->|8. desired vs reported check| A2
+
+  %% Styling
+  classDef client fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a;
+  classDef api fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d;
+  classDef mqtt fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+  classDef db fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
+  classDef device fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#881337;
+  classDef scheduler fill:#e2e8f0,stroke:#334155,stroke-width:2px,color:#0f172a;
+
+  class U client;
+  class A1,A2,A3,A4,A5 api;
+  class M1,M2,M3,M4,M5 mqtt;
+  class D1,D2,D3 db;
+  class E1,E2 device;
+  class S1 scheduler;

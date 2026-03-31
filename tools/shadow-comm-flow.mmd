@@ -1,0 +1,100 @@
+%%{init: {'theme':'base','themeVariables': {
+  'background':'#f5f7fb',
+  'primaryColor':'#e8f3ff',
+  'primaryTextColor':'#0b2239',
+  'primaryBorderColor':'#2b6cb0',
+  'lineColor':'#2d3748',
+  'secondaryColor':'#e8fff4',
+  'tertiaryColor':'#fff8e6',
+  'fontFamily':'Segoe UI, Trebuchet MS, Arial',
+  'fontSize':'16px'
+}}}%%
+flowchart TB
+
+  %% LAYER 1
+  subgraph L1[Client Layer]
+    U[Mobile App or Web Client]
+  end
+
+  %% LAYER 2
+  subgraph L2[API and Service Layer]
+    A[FastAPI Routes]
+    SH[ShadowService]
+    CM[CommandService]
+    DV[DeviceService]
+    TL[TelemetryService]
+    SC[Scheduler Reconcile Job]
+  end
+
+  %% LAYER 3
+  subgraph L3[MQTT Layer]
+    MQ[(Mosquitto Broker)]
+    RX[MqttClient on_message]
+    H1[ReportedStateHandler]
+    H2[HeartbeatHandler]
+    H3[TelemetryHandler]
+  end
+
+  %% LAYER 4
+  subgraph L4[Device Layer]
+    ESP[ESP32 Firmware]
+    IDM[Idempotency Guard\nIgnore stale command versions]
+  end
+
+  %% LAYER 5
+  subgraph L5[Persistence Layer]
+    P1[(PostgreSQL device_shadows)]
+    P2[(PostgreSQL commands)]
+    P3[(TimescaleDB telemetry)]
+  end
+
+  %% REQUEST ENTRY
+  U -->|1. REST requests| A
+
+  %% API BRANCHES
+  A -->|2a. shadow update| SH
+  A -->|2b. command request| CM
+  A -->|2c. device CRUD| DV
+
+  %% WRITE PATHS
+  SH -->|3a. save desired or reported| P1
+  CM -->|3b. save command| P2
+  TL -->|3c. save telemetry| P3
+
+  %% COMMAND PATH
+  CM -->|4. publish command topic| MQ
+  MQ -->|5. tankctl/device_id/command| ESP
+  IDM -. protects .-> ESP
+
+  %% DEVICE UPSTREAM
+  ESP -->|6a. reported| MQ
+  ESP -->|6b. heartbeat| MQ
+  ESP -->|6c. telemetry| MQ
+
+  %% INGEST AND DISPATCH
+  MQ --> RX
+  RX --> H1
+  RX --> H2
+  RX --> H3
+
+  %% HANDLER TO SERVICE
+  H1 -->|7a. update shadow| SH
+  H2 -->|7b. mark online| DV
+  H2 -->|7c. trigger reconcile| SH
+  H3 -->|7d. store metric| TL
+
+  %% BACKGROUND RECONCILE
+  SC -->|8. desired vs reported check| SH
+
+  %% STYLING
+  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0b2239;
+  classDef api fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d;
+  classDef mqtt fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+  classDef device fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#881337;
+  classDef db fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
+
+  class U client;
+  class A,SH,CM,DV,TL,SC api;
+  class MQ,RX,H1,H2,H3 mqtt;
+  class ESP,IDM device;
+  class P1,P2,P3 db;
