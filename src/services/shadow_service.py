@@ -79,7 +79,6 @@ class ShadowService:
                     device_id=device_id,
                     command=command_name,
                     value=command_value,
-                    version=shadow.version,
                 )
 
                 logger.debug(

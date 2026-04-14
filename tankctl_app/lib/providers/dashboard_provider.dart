@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/providers/device_provider.dart';
-import 'package:tankctl_app/providers/telemetry_provider.dart';
 import 'package:tankctl_app/services/telemetry_service.dart';
 
 class DashboardOverview {

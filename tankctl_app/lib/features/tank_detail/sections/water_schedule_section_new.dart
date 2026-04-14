@@ -255,7 +255,7 @@ class _WaterScheduleSectionState extends ConsumerState<WaterScheduleSection> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: schedules.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (_, i) =>
                           _buildScheduleCard(context, schedules[i]),
                     ),

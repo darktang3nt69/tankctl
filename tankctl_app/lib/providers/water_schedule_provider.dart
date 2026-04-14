@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tankctl_app/domain/device_detail.dart';
-import 'package:tankctl_app/services/device_detail_service.dart';
 import 'package:tankctl_app/providers/device_detail_provider.dart';
 
 // ============================================================================

@@ -108,7 +108,7 @@ class LightSchedule {
     // The backend may return times as "HH:MM:SS" (Python str(time)); normalise
     // to "HH:MM" so they pass the ScheduleRequest pattern validation on save.
     // Also accept on_time / off_time for compatibility with ScheduleResponse.
-    String _t(String? raw, String fallback) {
+    String t(String? raw, String fallback) {
       final s = raw ?? fallback;
       // Strip trailing :SS if present (e.g. "08:00:00" → "08:00")
       if (s.length == 8 && s[5] == ':') return s.substring(0, 5);
@@ -126,8 +126,8 @@ class LightSchedule {
       id: json['id'] ?? 0,
       deviceId: json['device_id'] ?? json['deviceId'] ?? '',
       enabled: json['enabled'] ?? true,
-      startTime: _t(rawStart, '08:00'),
-      endTime: _t(rawEnd, '20:00'),
+      startTime: t(rawStart, '08:00'),
+      endTime: t(rawEnd, '20:00'),
       createdAt: json['created_at'] ?? json['createdAt'],
       updatedAt: json['updated_at'] ?? json['updatedAt'],
     );
@@ -191,7 +191,7 @@ class WaterSchedule {
     }
 
     // Strip trailing :SS if backend returns HH:MM:SS (Python str(time))
-    String _normaliseTime(String? raw, String fallback) {
+    String normaliseTime(String? raw, String fallback) {
       final s = raw ?? fallback;
       if (s.length == 8 && s[5] == ':') return s.substring(0, 5);
       return s;
@@ -203,7 +203,7 @@ class WaterSchedule {
       scheduleType: json['schedule_type'] ?? json['scheduleType'] ?? 'weekly',
       daysOfWeek: daysOfWeek,
       scheduleDate: json['schedule_date'] ?? json['scheduleDate'],
-      scheduleTime: _normaliseTime(
+      scheduleTime: normaliseTime(
         json['schedule_time'] as String? ?? json['scheduleTime'] as String?,
         '12:00',
       ),
